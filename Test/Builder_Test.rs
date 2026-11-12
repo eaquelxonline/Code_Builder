@@ -12407,7 +12407,7 @@ public class Walk {
         assert!(outcome.guard.rules_applied >= 7);
         assert!(outcome.signed);
         assert!(outcome.carries_code);
-        assert_eq!(outcome.entries, 4);
+        assert_eq!(outcome.entries, 5);
 
         let mut own = Sink::new();
         let archive = archive::read(&outcome.package, &mut own).expect("it must read back");
@@ -12415,6 +12415,10 @@ public class Walk {
             .entries()
             .iter()
             .any(|entry| entry.name == "classes.dex"));
+        assert!(archive
+            .entries()
+            .iter()
+            .any(|entry| entry.name == crate::baseline::ASSET_PATH));
 
         let directory = temp_directory("builder-engine");
         let path = directory.join("made-by-builder.apk");

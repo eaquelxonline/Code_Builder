@@ -3,7 +3,7 @@ name: Build and verify
 on:
   push:
     branches:
-      - Main
+      - Apk_Builder_Beta
       - "claude/**"
   pull_request:
   workflow_dispatch:
