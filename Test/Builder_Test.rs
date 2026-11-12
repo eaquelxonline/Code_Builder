@@ -8789,7 +8789,7 @@ public final class MainActivity extends Activity {
             let mut builder = ArchiveBuilder::for_android();
             builder.add("classes.dex", vec![7; 64]).unwrap();
             builder
-                .add("lib/arm64-v8a/libcode_builder.so", vec![9; 100])
+                .add("lib/arm64-v8a/libbuilder.so", vec![9; 100])
                 .unwrap();
             builder.finish().unwrap()
         };
@@ -8804,7 +8804,7 @@ public final class MainActivity extends Activity {
             .add("AndroidManifest.xml", b"<manifest/>".to_vec())
             .unwrap();
         builder
-            .add("lib/arm64-v8a/libcode_builder.so", vec![0x7f; 5_000])
+            .add("lib/arm64-v8a/libbuilder.so", vec![0x7f; 5_000])
             .unwrap();
         builder
             .add("lib/arm64-v8a/libcode_builder_bridge.so", vec![0x7f; 3_000])
@@ -9065,7 +9065,7 @@ public final class MainActivity extends Activity {
             .unwrap();
         builder.add("classes.dex", vec![0x64; 1_234]).unwrap();
         builder
-            .add("lib/arm64-v8a/libcode_builder.so", vec![0x7f; 9_999])
+            .add("lib/arm64-v8a/libbuilder.so", vec![0x7f; 9_999])
             .unwrap();
         builder
             .add("res/values/strings.arsc", b"table".to_vec())
@@ -9098,7 +9098,7 @@ public final class MainActivity extends Activity {
             for name in [
                 "AndroidManifest.xml",
                 "classes.dex",
-                "lib/arm64-v8a/libcode_builder.so",
+                "lib/arm64-v8a/libbuilder.so",
                 "res/values/strings.arsc",
             ] {
                 assert!(text.contains(name), "unzip -l did not list {name}:\n{text}");
@@ -9968,7 +9968,7 @@ public final class MainActivity extends Activity {
             .unwrap();
         builder.add("classes.dex", vec![0x2a; 3_000]).unwrap();
         builder
-            .add("lib/arm64-v8a/libcode_builder.so", vec![0x7f; 2_000])
+            .add("lib/arm64-v8a/libbuilder.so", vec![0x7f; 2_000])
             .unwrap();
         std::fs::write(&apk, builder.finish().unwrap()).unwrap();
 
@@ -12149,7 +12149,7 @@ public class Walk {
         let mut builder = ArchiveBuilder::for_android();
         builder.add("AndroidManifest.xml", manifest).unwrap();
         builder
-            .add_aligned("lib/arm64-v8a/libcode_builder.so", vec![0x7f; 4_096], 16_384)
+            .add_aligned("lib/arm64-v8a/libbuilder.so", vec![0x7f; 4_096], 16_384)
             .unwrap();
         let unsigned = builder.finish().unwrap();
 
@@ -12357,10 +12357,7 @@ public class Walk {
         crate::builder::Project {
             manifest: SAFE_PROJECT_MANIFEST.to_string(),
             files: vec![
-                (
-                    "lib/arm64-v8a/libcode_builder.so".to_string(),
-                    vec![0x7f; 2_048],
-                ),
+                ("lib/arm64-v8a/libbuilder.so".to_string(), vec![0x7f; 2_048]),
                 ("assets/notes.txt".to_string(), b"made by builder".to_vec()),
             ],
             code: Vec::new(),
@@ -14301,9 +14298,10 @@ public final class App extends Activity {
         assert_eq!(refused.code, "EU001");
         let refused = crate::debugger::read_host(r#"{"package": "builder"}"#).unwrap_err();
         assert_eq!(refused.code, "EU002");
-        let refused =
-            crate::debugger::read_host(r#"{"package": "com.code.builder", "certificate": "ab:cd"}"#)
-                .unwrap_err();
+        let refused = crate::debugger::read_host(
+            r#"{"package": "com.code.builder", "certificate": "ab:cd"}"#,
+        )
+        .unwrap_err();
         assert_eq!(refused.code, "EU003");
 
         let standing = crate::debugger::read_host("{}").expect("everything has a standing value");
@@ -18347,7 +18345,7 @@ dependencies {
         project.icon = picture.as_ref().map(|path| std::fs::read(path).unwrap());
         project.files = vec![
             (
-                "lib/arm64-v8a/libcode_builder.so".to_string(),
+                "lib/arm64-v8a/libbuilder.so".to_string(),
                 b"\x7fELF".iter().copied().cycle().take(64_000).collect(),
             ),
             (
@@ -18375,7 +18373,7 @@ dependencies {
         }
 
         let library = archive
-            .entry("lib/arm64-v8a/libcode_builder.so")
+            .entry("lib/arm64-v8a/libbuilder.so")
             .expect("the library must be there");
         assert_eq!(
             library.compression,
@@ -21051,8 +21049,9 @@ dependencies {
         assert!(answer.contains("Java/com/tr/yt/Ledger.java"), "{answer}");
 
         let named = std::ffi::CString::new("com.tr.yt.Ledger").unwrap();
-        let where_it_is =
-            read(unsafe { crate::ffi::code_builder_where_written(root_c.as_ptr(), named.as_ptr()) });
+        let where_it_is = read(unsafe {
+            crate::ffi::code_builder_where_written(root_c.as_ptr(), named.as_ptr())
+        });
         assert!(is_structurally_valid(&where_it_is), "{where_it_is}");
         assert!(where_it_is.contains("\"written\":true"), "{where_it_is}");
         assert!(where_it_is.contains("\"line\":3"), "{where_it_is}");
@@ -43296,7 +43295,7 @@ fun main() {
 }
 "####;
 
-    const OMNI_PROGRAM: &str = r####"package omni.sample
+    const IR_PROGRAM: &str = r####"package ir.sample
 
 interface Shape {
     val area: Double
@@ -43363,7 +43362,7 @@ fun main() {
 }
 "####;
 
-    const OMNI_PROGRAM_PRINTS: &str = "Square(side=2.0), Circle(radius=1.0)
+    const IR_PROGRAM_PRINTS: &str = "Square(side=2.0), Circle(radius=1.0)
 7.25
 brown=1,dog=1,end=1,fox=1,jumps=1,lazy=1,over=1,quick=1,the=3
 {the=3, over=1, quick=1, lazy=1, jumps=1, end=1, brown=1, dog=1, fox=1}
@@ -43387,18 +43386,18 @@ false
 ";
 
     #[test]
-    fn a_kotlin_program_runs_on_omni_ir_as_it_runs_on_the_jvm() {
+    fn a_kotlin_program_runs_on_ir_as_it_runs_on_the_jvm() {
         use crate::compilers::compiler_infrastructure::{
             Datum, Finish, Interpreter, Limits, StandardHost,
         };
         let Some((_, library)) = standard_library() else {
-            eprintln!("kotlin omni: no kotlin-stdlib to compile against");
+            eprintln!("kotlin ir: no kotlin-stdlib to compile against");
             return;
         };
-        let kotlin = vec![("Sample.kt".to_string(), OMNI_PROGRAM.to_string())];
+        let kotlin = vec![("Sample.kt".to_string(), IR_PROGRAM.to_string())];
         let options = native_options(&["-target", "linux_x64", "-o", "sample"]).expect("parses");
-        let lowered = native::lower_to_omni(&kotlin, &[], &options, vec![library])
-            .expect("the program lowers to Omni IR");
+        let lowered = native::lower_to_ir(&kotlin, &[], &options, vec![library])
+            .expect("the program lowers to IR");
         let module = &lowered.module;
         module.verify().expect("the module keeps every rule");
         let text = module.to_text();
@@ -43419,11 +43418,11 @@ false
         assert_eq!(finish, Finish::Returned(None));
         assert_eq!(
             String::from_utf8_lossy(interpreter.machine().stdout()),
-            OMNI_PROGRAM_PRINTS
+            IR_PROGRAM_PRINTS
         );
     }
 
-    const OMNI_COPIES: &str = r####"package omni.copies
+    const IR_COPIES: &str = r####"package ir.copies
 
 import java.util.concurrent.ThreadLocalRandom
 
@@ -43455,29 +43454,29 @@ fun main() {
 }
 "####;
 
-    const OMNI_REFUSER: &str = "package omni.copies;\n\npublic class Refuser {\n    public Object copy() throws CloneNotSupportedException {\n        return clone();\n    }\n}\n";
+    const IR_REFUSER: &str = "package ir.copies;\n\npublic class Refuser {\n    public Object copy() throws CloneNotSupportedException {\n        return clone();\n    }\n}\n";
 
-    const OMNI_COPIES_PRINT: &str = "a 3 4 b 30 4 false
-refused omni.copies.Refuser
+    const IR_COPIES_PRINT: &str = "a 3 4 b 30 4 false
+refused ir.copies.Refuser
 RED, GREEN true
 -1170105035 63 -5843495416241995736 false 0.9420735430282128 8 717 0.9033722 -0.8890108504574524 44 1
 5 7
 ";
 
     #[test]
-    fn objects_copy_themselves_and_random_numbers_follow_the_jdk_on_omni_ir() {
+    fn objects_copy_themselves_and_random_numbers_follow_the_jdk_on_ir() {
         use crate::compilers::compiler_infrastructure::{
             Datum, Finish, Interpreter, Limits, StandardHost,
         };
         let Some((_, library)) = standard_library() else {
-            eprintln!("kotlin omni: no kotlin-stdlib to compile against");
+            eprintln!("kotlin ir: no kotlin-stdlib to compile against");
             return;
         };
-        let kotlin = vec![("Copies.kt".to_string(), OMNI_COPIES.to_string())];
-        let java = vec![("Refuser.java".to_string(), OMNI_REFUSER.to_string())];
+        let kotlin = vec![("Copies.kt".to_string(), IR_COPIES.to_string())];
+        let java = vec![("Refuser.java".to_string(), IR_REFUSER.to_string())];
         let options = native_options(&["-target", "linux_x64", "-o", "copies"]).expect("parses");
-        let lowered = native::lower_to_omni(&kotlin, &java, &options, vec![library])
-            .expect("the program lowers to Omni IR");
+        let lowered = native::lower_to_ir(&kotlin, &java, &options, vec![library])
+            .expect("the program lowers to IR");
         lowered
             .module
             .verify()
@@ -43492,12 +43491,12 @@ RED, GREEN true
         assert_eq!(finish, Finish::Returned(None));
         assert_eq!(
             String::from_utf8_lossy(interpreter.machine().stdout()),
-            OMNI_COPIES_PRINT
+            IR_COPIES_PRINT
         );
     }
 
     #[test]
-    fn a_kotlin_program_lowers_to_omni_ir_that_holds_together() {
+    fn a_kotlin_program_lowers_to_ir_that_holds_together() {
         use crate::compilers::compiler_infrastructure::{
             Datum, Finish, GlobalContent, Interpreter, Limits, Linkage, Module, StandardHost,
             Terminator,
@@ -43508,7 +43507,7 @@ RED, GREEN true
         };
         let kotlin = vec![("Shapes.kt".to_string(), NATIVE_PROGRAM.to_string())];
         let options = native_options(&["-target", "linux_x64", "-o", "shapes"]).expect("parses");
-        let lowered = native::lower_to_omni(&kotlin, &[], &options, vec![library.clone()])
+        let lowered = native::lower_to_ir(&kotlin, &[], &options, vec![library.clone()])
             .expect("the program lowers");
         let module = &lowered.module;
         module.verify().expect("the module verifies");
@@ -43621,7 +43620,7 @@ RED, GREEN true
             native_options(&["-target", "linux_x64", "-p", "static", "-o", "shapes"])
                 .expect("parses");
         let library_lowered =
-            native::lower_to_omni(&kotlin, &[], &static_options, vec![library.clone()])
+            native::lower_to_ir(&kotlin, &[], &static_options, vec![library.clone()])
                 .expect("a library lowers");
         assert!(library_lowered.entry.is_none());
         library_lowered
@@ -43646,7 +43645,7 @@ RED, GREEN true
         let archive = crate::archive::read(bytes, &mut sink).expect("the klib is a zip");
         assert!(archive.entry("default/manifest").is_some());
         let stored = archive
-            .entry("default/ir/module.omni")
+            .entry("default/ir/module.ir")
             .expect("the klib carries the module");
         let from = stored.data_offset as usize;
         let held = &bytes[from..from + stored.compressed_size as usize];
@@ -43671,13 +43670,13 @@ RED, GREEN true
         };
         let kotlin = vec![("Lib.kt".to_string(), "fun helper() = 1\n".to_string())];
         let options = native_options(&["-target", "linux_x64"]).expect("parses");
-        let refused = native::lower_to_omni(&kotlin, &[], &options, vec![library.clone()])
+        let refused = native::lower_to_ir(&kotlin, &[], &options, vec![library.clone()])
             .expect_err("no main");
         assert_eq!(refused.code, "EK407");
         let named =
             native_options(&["-target", "linux_x64", "-e", "nowhere.start"]).expect("parses");
         let refused =
-            native::lower_to_omni(&kotlin, &[], &named, vec![library]).expect_err("no such entry");
+            native::lower_to_ir(&kotlin, &[], &named, vec![library]).expect_err("no such entry");
         assert_eq!(refused.code, "EK406");
     }
 
@@ -65249,11 +65248,11 @@ mod reference_checks {
     }
 
     thread_local! {
-        static OMNI_BASE: std::cell::RefCell<Option<crate::compilers::kotlin::native::class_files::ClassFiles>> =
+        static IR_BASE: std::cell::RefCell<Option<crate::compilers::kotlin::native::class_files::ClassFiles>> =
             const { std::cell::RefCell::new(None) };
     }
 
-    fn omni_lowered(
+    fn ir_lowered(
         made: &[(String, Vec<u8>)],
         facade: &str,
         library: &[u8],
@@ -65266,7 +65265,7 @@ mod reference_checks {
     > {
         use crate::compilers::compiler_infrastructure::Layout;
         use crate::compilers::kotlin::native::{class_files::ClassFiles, lowering};
-        let base = OMNI_BASE.with(|held| {
+        let base = IR_BASE.with(|held| {
             let mut held = held.borrow_mut();
             if held.is_none() {
                 let mut fresh = ClassFiles::new();
@@ -65302,14 +65301,14 @@ mod reference_checks {
         Ok((lowered.module, lowered.entries[0]))
     }
 
-    fn omni_answer(
+    fn ir_answer(
         module: &crate::compilers::compiler_infrastructure::Module,
         entry: crate::compilers::compiler_infrastructure::FunctionId,
     ) -> Result<String, String> {
-        omni_answer_and_output(module, entry).map(|(answer, _)| answer)
+        ir_answer_and_output(module, entry).map(|(answer, _)| answer)
     }
 
-    fn omni_answer_and_output(
+    fn ir_answer_and_output(
         module: &crate::compilers::compiler_infrastructure::Module,
         entry: crate::compilers::compiler_infrastructure::FunctionId,
     ) -> Result<(String, Vec<u8>), String> {
@@ -65382,12 +65381,12 @@ mod reference_checks {
 
     #[test]
     #[ignore]
-    fn suite_kotlin_omni() {
+    fn suite_kotlin_ir() {
         let Some((library_path, library)) = super::kotlin::standard_library() else {
-            panic!("the kotlin-omni suite needs a kotlin-stdlib");
+            panic!("the kotlin-ir suite needs a kotlin-stdlib");
         };
         let Some(java) = super::kotlin::find_java() else {
-            panic!("the kotlin-omni suite needs java");
+            panic!("the kotlin-ir suite needs java");
         };
         let names = bundle_names("Test_13");
         let named: Vec<&str> = names.iter().map(String::as_str).collect();
@@ -65397,7 +65396,7 @@ mod reference_checks {
             .into_iter()
             .filter(|path| path.ends_with(".kt"))
             .collect();
-        let folder = repository().join("Tests").join("kotlin-omni");
+        let folder = repository().join("Tests").join("kotlin-ir");
         std::fs::create_dir_all(&folder).expect("a work folder");
         let outcomes = run_parallel(tests, &|path| {
             let Some(bytes) = tree.file(path) else {
@@ -65443,16 +65442,16 @@ mod reference_checks {
                 Some(_) => return Verdict::OutOfScope("the JVM does not answer OK".to_string()),
                 None => return Verdict::OutOfScope("the JVM does not answer in time".to_string()),
             }
-            let answer = omni_lowered(&made, &facade, &library)
-                .and_then(|(module, entry)| omni_answer(&module, entry));
+            let answer = ir_lowered(&made, &facade, &library)
+                .and_then(|(module, entry)| ir_answer(&module, entry));
             match answer {
                 Ok(answer) if answer == "OK" => Verdict::Passed,
-                Ok(answer) => Verdict::Failed(format!("Omni answers {answer}")),
+                Ok(answer) => Verdict::Failed(format!("The IR interpreter answers {answer}")),
                 Err(problem) => Verdict::Failed(problem),
             }
         });
         let report = SuiteReport {
-            name: "kotlin-omni".to_string(),
+            name: "kotlin-ir".to_string(),
             outcomes,
         };
         report.publish();
@@ -65473,16 +65472,16 @@ mod reference_checks {
             .iter()
             .position(|ty| *ty == Type::REFERENCE)
             .ok_or_else(|| "java/lang/String holds no characters".to_string())?;
-        let write = match module.function_named("omni.write_chars") {
+        let write = match module.function_named("ir.write_chars") {
             Some(found) => found,
             None => module.add_function(Function::new(
-                "omni.write_chars",
+                "ir.write_chars",
                 Signature::new(vec![Type::I32, Type::REFERENCE, Type::I32, Type::I32], None),
                 Linkage::Import,
             )),
         };
         let mut main = Function::new(
-            "omni.main",
+            "ir.main",
             Signature::new(Vec::new(), Some(Type::I32)),
             Linkage::Export,
         );
@@ -65517,10 +65516,10 @@ mod reference_checks {
 
     #[test]
     #[ignore]
-    fn suite_kotlin_omni_native() {
+    fn suite_kotlin_ir_native() {
         use crate::compilers::x86_64::codegen;
         let Some((_, library)) = super::kotlin::standard_library() else {
-            panic!("the kotlin-omni-native suite needs a kotlin-stdlib");
+            panic!("the kotlin-ir-native suite needs a kotlin-stdlib");
         };
         let names = bundle_names("Test_13");
         let named: Vec<&str> = names.iter().map(String::as_str).collect();
@@ -65563,10 +65562,10 @@ mod reference_checks {
             let Ok(Ok(made)) = made else {
                 return Verdict::OutOfScope("our compiler does not build it yet".to_string());
             };
-            let Ok((mut module, entry)) = omni_lowered(&made, &facade, &library) else {
-                return Verdict::OutOfScope("it does not lower to Omni IR yet".to_string());
+            let Ok((mut module, entry)) = ir_lowered(&made, &facade, &library) else {
+                return Verdict::OutOfScope("it does not lower to IR yet".to_string());
             };
-            let printed = match omni_answer_and_output(&module, entry) {
+            let printed = match ir_answer_and_output(&module, entry) {
                 Ok((answer, printed)) if answer == "OK" => printed,
                 _ => return Verdict::OutOfScope("the interpreter does not answer OK".to_string()),
             };
@@ -65575,8 +65574,7 @@ mod reference_checks {
             }
             if std::env::var_os("CODE_BUILDER_NATIVE_ARM32").is_some() {
                 let program = match crate::compilers::x86_64::armv7::native::build_executable(
-                    &module,
-                    "omni.main",
+                    &module, "ir.main",
                 ) {
                     Ok(program) => program,
                     Err(problem) if problem.code == "EI500" => {
@@ -65598,7 +65596,7 @@ mod reference_checks {
                 if emulated.exit == Some(135) {
                     if let Some(missing) = String::from_utf8_lossy(&emulated.stderr)
                         .lines()
-                        .find_map(|line| line.strip_prefix("omni: missing function "))
+                        .find_map(|line| line.strip_prefix("runtime: missing function "))
                     {
                         return Verdict::OutOfScope(format!(
                             "native code: the runtime function {missing}"
@@ -65616,7 +65614,7 @@ mod reference_checks {
                     ))
                 };
             }
-            let program = match codegen::build_executable(&module, "omni.main") {
+            let program = match codegen::build_executable(&module, "ir.main") {
                 Ok(program) => program,
                 Err(problem) if problem.code == "EI500" => {
                     let feature = problem
@@ -65655,7 +65653,7 @@ mod reference_checks {
             if code == Some(135) {
                 if let Some(missing) = complained
                     .lines()
-                    .find_map(|line| line.strip_prefix("omni: missing function "))
+                    .find_map(|line| line.strip_prefix("runtime: missing function "))
                 {
                     return Verdict::OutOfScope(format!(
                         "native code: the runtime function {missing}"
@@ -65673,7 +65671,7 @@ mod reference_checks {
             }
         });
         let report = SuiteReport {
-            name: "kotlin-omni-native".to_string(),
+            name: "kotlin-ir-native".to_string(),
             outcomes,
         };
         super::table_gen::publish_with_scope(&report);
@@ -66425,10 +66423,10 @@ fun box(): String {
                 "{name} on the JVM: {jvm} {}",
                 String::from_utf8_lossy(&done.stderr)
             );
-            let (mut module, entry) = omni_lowered(&made, &facade, &library)
-                .unwrap_or_else(|problem| panic!("{name} does not lower to Omni IR: {problem}"));
+            let (mut module, entry) = ir_lowered(&made, &facade, &library)
+                .unwrap_or_else(|problem| panic!("{name} does not lower to IR: {problem}"));
             if name != "heavy" {
-                let (answer, printed) = omni_answer_and_output(&module, entry)
+                let (answer, printed) = ir_answer_and_output(&module, entry)
                     .unwrap_or_else(|problem| panic!("{name} fails in the interpreter: {problem}"));
                 assert_eq!(answer, "OK", "{name} in the interpreter");
                 assert_eq!(
@@ -66438,13 +66436,12 @@ fun box(): String {
                 );
             }
             native_main(&mut module, entry).expect("the entry is wrapped");
-            let program =
-                codegen::build_executable(&module, "omni.main").unwrap_or_else(|problem| {
-                    panic!(
-                        "{name} does not build natively: {} {:?}",
-                        problem.message, problem.context
-                    )
-                });
+            let program = codegen::build_executable(&module, "ir.main").unwrap_or_else(|problem| {
+                panic!(
+                    "{name} does not build natively: {} {:?}",
+                    problem.message, problem.context
+                )
+            });
             let native_started = std::time::Instant::now();
             let Some((code, said, complained)) = super::native_x86_64::run_native(&program, name)
             else {
@@ -66470,14 +66467,13 @@ fun box(): String {
             if name == "heavy" {
                 continue;
             }
-            let arm =
-                crate::compilers::x86_64::armv8::native::build_executable(&module, "omni.main")
-                    .unwrap_or_else(|problem| {
-                        panic!(
-                            "{name} does not build for arm64: {} {:?}",
-                            problem.message, problem.context
-                        )
-                    });
+            let arm = crate::compilers::x86_64::armv8::native::build_executable(&module, "ir.main")
+                .unwrap_or_else(|problem| {
+                    panic!(
+                        "{name} does not build for arm64: {} {:?}",
+                        problem.message, problem.context
+                    )
+                });
             let emulated = super::arm_emulator::run(&arm);
             assert_eq!(emulated.exit, Some(0), "{name} on arm64");
             assert_eq!(
@@ -66661,7 +66657,7 @@ mod compiler_infrastructure {
     }
 
     fn module_text(name: &str, body: &str) -> String {
-        format!("omni 1\nmodule \"{name}\"\nlayout lp64\n{body}")
+        format!("ir 1\nmodule \"{name}\"\nlayout lp64\n{body}")
     }
 
     fn module(body: &str) -> Module {
@@ -66716,7 +66712,7 @@ mod compiler_infrastructure {
         Datum::integer(ty, value)
     }
 
-    const CORPUS: &str = r#"omni 1
+    const CORPUS: &str = r#"ir 1
 module "corpus"
 layout lp64
 file "corpus.c"
@@ -66840,7 +66836,7 @@ block5(%e: ref, %original: i32):
 
     fn coverage_text() -> String {
         let mut out = String::from(
-            "omni 1\nmodule \"coverage\"\nlayout lp64\nfile \"coverage.c\"\nstring \"text\"\n\
+            "ir 1\nmodule \"coverage\"\nlayout lp64\nfile \"coverage.c\"\nstring \"text\"\n\
              struct %pair { i32, i64 }\n\
              class %Base abstract { fields [i32] methods [-] }\n\
              class %Face interface { fields [] methods [-] }\n\
@@ -67103,7 +67099,7 @@ block5(%e: ref, %original: i32):
         ));
         assert_eq!(
             read.to_text(),
-            "omni 1\nmodule \"golden\"\nlayout lp64\nfunction @add(i32, i32) -> i32 export {\nblock0(%0: i32, %1: i32):\n    %2: i32 = add %0, %1\n    return %2\n}\n"
+            "ir 1\nmodule \"golden\"\nlayout lp64\nfunction @add(i32, i32) -> i32 export {\nblock0(%0: i32, %1: i32):\n    %2: i32 = add %0, %1\n    return %2\n}\n"
         );
     }
 
@@ -67291,11 +67287,11 @@ block5(%e: ref, %original: i32):
                 );
             }
         }
-        let error = Module::from_text("omni 2\nmodule \"m\"\nlayout lp64\n").expect_err("version");
+        let error = Module::from_text("ir 2\nmodule \"m\"\nlayout lp64\n").expect_err("version");
         assert!(error
             .context
             .contains(&"Reason: unknown-version".to_string()));
-        let error = Module::from_text("omni 1\nmodule \"m\"\nlayout lp128\n").expect_err("layout");
+        let error = Module::from_text("ir 1\nmodule \"m\"\nlayout lp128\n").expect_err("layout");
         assert!(error.context.contains(&"Found: lp128".to_string()));
     }
 
@@ -67303,7 +67299,7 @@ block5(%e: ref, %original: i32):
     fn the_binary_reader_refuses_what_it_cannot_trust() {
         let corpus = parse(CORPUS);
         let binary = corpus.to_binary();
-        assert_eq!(&binary[..4], b"OMNI");
+        assert_eq!(&binary[..4], b"CBIR");
         let reason = |bytes: &[u8]| -> String {
             let error = Module::from_binary(bytes).expect_err("refused");
             assert_eq!(error.code, "EI002");
@@ -67319,17 +67315,17 @@ block5(%e: ref, %original: i32):
                 .to_string()
         };
         assert_eq!(reason(b"ELF\x7f"), "not-intermediate-binary");
-        assert_eq!(reason(b"OMNI\x02"), "unknown-version");
+        assert_eq!(reason(b"CBIR\x02"), "unknown-version");
         let mut trailing = binary.clone();
         trailing.push(0);
         assert_eq!(reason(&trailing), "trailing-bytes");
-        let mut overlong = b"OMNI".to_vec();
+        let mut overlong = b"CBIR".to_vec();
         overlong.extend_from_slice(&[0x81, 0x00]);
         assert_eq!(reason(&overlong), "overlong-number");
-        let mut huge = b"OMNI\x01".to_vec();
+        let mut huge = b"CBIR\x01".to_vec();
         huge.extend_from_slice(&[0xff; 11]);
         assert_eq!(reason(&huge), "number-too-large");
-        let mut counted = b"OMNI\x01\x01m\x00".to_vec();
+        let mut counted = b"CBIR\x01\x01m\x00".to_vec();
         counted.extend_from_slice(&[0xff, 0xff, 0x03]);
         assert_eq!(reason(&counted), "count-too-large");
         for cut in 0..binary.len() {
@@ -68151,7 +68147,7 @@ function @putchar(i32) -> i32 import
 function @exit(i32) import
 function @abort() import
 function @missing() -> i32 import
-function @omni.print_line(ref) import
+function @ir.print_line(ref) import
 function @Identified.id(ref) -> i32 internal {
 block0(%self: ref):
     %v: i32 = const 77
@@ -68391,7 +68387,7 @@ block0:
     %bang: i32 = const 33
     %s: i32 = call @putchar(%bang)
     %t: ref = string 0
-    call @omni.print_line(%t)
+    call @ir.print_line(%t)
     return %r
 }
 function @write_constant() export {
@@ -68915,7 +68911,7 @@ block0:
     #[test]
     fn a_thirty_two_bit_layout_keeps_pointers_in_four_bytes() {
         let narrow = parse(
-            "omni 1\nmodule \"narrow\"\nlayout ilp32\n\
+            "ir 1\nmodule \"narrow\"\nlayout ilp32\n\
              global @slot size 4 align 4 internal bytes \"00000000\" relocate 0 function @seven 0\n\
              function @seven() -> i32 internal {\nblock0:\n    %v: i32 = const 7\n    return %v\n}\n\
              function @f() -> i32 export {\nblock0:\n    %g: ptr = global_address @slot\n    %p: ptr = load align 4 %g\n    %r: i32 = call_indirect () -> i32 %p()\n    %w: i32 = ptrtoint %g\n    %s: ptr = stack_slot size 8 align 4\n    %v: i64 = ptrtoint %s\n    %high: i64 = const 32\n    %top: i64 = lshr %v, %high\n    %t: i32 = trunc %top\n    %sum: i32 = add %r, %t\n    return %sum\n}\n",
@@ -70805,7 +70801,7 @@ finish:
         .size finish, .-finish
         .section .rodata.str1.1,"aMS",@progbits,1
 message:
-        .asciz "hello from omni\n"
+        .asciz "hello from code\n"
         .data
         .p2align 3
 length:
@@ -71212,7 +71208,7 @@ far_function:
         let reference = Command::new(&theirs).output().expect("the reference runs");
         assert_eq!(run.status.code(), Some(35));
         assert_eq!(run.status.code(), reference.status.code());
-        assert_eq!(run.stdout, b"hello from omni\n");
+        assert_eq!(run.stdout, b"hello from code\n");
         assert_eq!(run.stdout, reference.stdout);
         if std::env::var_os("CODE_BUILDER_KEEP_LINKER_WORK").is_none() {
             finish(&folder);
@@ -71285,15 +71281,15 @@ pointers:
         compare_with_lld(
             &folder,
             std::slice::from_ref(&library),
-            &["-shared", "-soname", "libomni.so"],
+            &["-shared", "-soname", "libir.so"],
             "shared",
         );
-        let shared = folder.join("libomni.so").to_string_lossy().to_string();
+        let shared = folder.join("libir.so").to_string_lossy().to_string();
         assert!(reference_link(&[
             library,
             "-shared".to_string(),
             "-soname".to_string(),
-            "libomni.so".to_string(),
+            "libir.so".to_string(),
             "-o".to_string(),
             shared.clone(),
         ]));
@@ -71518,7 +71514,7 @@ pointers:
 
     const HELLO_SOURCE: &str = "#include <stdio.h>\nint main(int count, char **values) { printf(\"hello %d %s\\n\", count, values[0] ? \"there\" : \"nobody\"); return 3; }\n";
 
-    const SHARED_SOURCE: &str = "int counter = 5;\n__thread int local_tls = 3;\nstatic int hidden_helper(int value) { return value * 3; }\nint shared_add(int value) { counter += value; local_tls += 1; return hidden_helper(counter) + local_tls; }\nconst char *shared_name(void) { return \"omni-library\"; }\n";
+    const SHARED_SOURCE: &str = "int counter = 5;\n__thread int local_tls = 3;\nstatic int hidden_helper(int value) { return value * 3; }\nint shared_add(int value) { counter += value; local_tls += 1; return hidden_helper(counter) + local_tls; }\nconst char *shared_name(void) { return \"ir-library\"; }\n";
 
     const USER_SOURCE: &str = "#include <stdio.h>\nextern int counter;\nint shared_add(int);\nconst char *shared_name(void);\nint main(void) { int result = shared_add(2); printf(\"%s %d %d\\n\", shared_name(), result, counter); return result & 0xff; }\n";
 
@@ -71681,7 +71677,7 @@ pointers:
         library_arguments.extend([
             "-shared".to_string(),
             "-soname".to_string(),
-            "libomni.so".to_string(),
+            "libir.so".to_string(),
             initial.clone(),
             begin_shared.clone(),
             shared,
@@ -71689,18 +71685,15 @@ pointers:
         library_arguments.extend(libraries.iter().cloned());
         library_arguments.extend([end_shared.clone(), final_part.clone()]);
         run_pair("library", &library_arguments, None);
-        std::fs::copy(
-            folder.join("library-ours"),
-            ours_libraries.join("libomni.so"),
-        )
-        .expect("the library is placed");
+        std::fs::copy(folder.join("library-ours"), ours_libraries.join("libir.so"))
+            .expect("the library is placed");
         std::fs::copy(
             folder.join("library-theirs"),
-            theirs_libraries.join("libomni.so"),
+            theirs_libraries.join("libir.so"),
         )
         .expect("the library is placed");
         let ours_library = ours_libraries
-            .join("libomni.so")
+            .join("libir.so")
             .to_string_lossy()
             .to_string();
         for (label, start_file, begin_file, end_file, pie, object) in [
@@ -71729,7 +71722,7 @@ pointers:
             assert_eq!(code, Some(25), "{label}");
             assert_eq!(
                 String::from_utf8_lossy(&output),
-                "omni-library 25 7\n",
+                "ir-library 25 7\n",
                 "{label}"
             );
         }
@@ -75490,7 +75483,8 @@ mod x86_assembly {
         if !cfg!(all(target_os = "linux", target_arch = "x86_64")) {
             return;
         }
-        let path = std::env::temp_dir().join(format!("code_builder_project_{}", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("code_builder_project_{}", std::process::id()));
         std::fs::write(&path, program).expect("the program is written");
         {
             use std::os::unix::fs::PermissionsExt;
@@ -78123,17 +78117,17 @@ mod native_x86_64 {
 
     fn format_program(doubles: &[u64], floats: &[u32]) -> String {
         let mut text = String::from(
-            "omni 1\nmodule \"formats\"\nlayout lp64\nclass %Chars array i16 { fields [] methods [] }\nfunction @omni.format_double(f64, ref) -> i32 import\nfunction @omni.format_float(f32, ref) -> i32 import\nfunction @omni.write_chars(i32, ref, i32, i32) import\nfunction @omni.main() -> i32 export {\nblock0:\n    %size: i32 = const 64\n    %chars: ref = allocate_array %Chars %size\n    %one: i32 = const 1\n    %zero: i32 = const 0\n    %newline: ref = allocate_array %Chars %one\n    %ten: i16 = const 10\n    store_element i16 %newline, %zero, %ten\n",
+            "ir 1\nmodule \"formats\"\nlayout lp64\nclass %Chars array i16 { fields [] methods [] }\nfunction @ir.format_double(f64, ref) -> i32 import\nfunction @ir.format_float(f32, ref) -> i32 import\nfunction @ir.write_chars(i32, ref, i32, i32) import\nfunction @ir.main() -> i32 export {\nblock0:\n    %size: i32 = const 64\n    %chars: ref = allocate_array %Chars %size\n    %one: i32 = const 1\n    %zero: i32 = const 0\n    %newline: ref = allocate_array %Chars %one\n    %ten: i16 = const 10\n    store_element i16 %newline, %zero, %ten\n",
         );
         for (index, bits) in doubles.iter().enumerate() {
             text.push_str(&format!(
-                "    %d{index}: i64 = const {}\n    %v{index}: f64 = bitcast %d{index}\n    %n{index}: i32 = call @omni.format_double(%v{index}, %chars)\n    call @omni.write_chars(%one, %chars, %zero, %n{index})\n    call @omni.write_chars(%one, %newline, %zero, %one)\n",
+                "    %d{index}: i64 = const {}\n    %v{index}: f64 = bitcast %d{index}\n    %n{index}: i32 = call @ir.format_double(%v{index}, %chars)\n    call @ir.write_chars(%one, %chars, %zero, %n{index})\n    call @ir.write_chars(%one, %newline, %zero, %one)\n",
                 *bits as i64
             ));
         }
         for (index, bits) in floats.iter().enumerate() {
             text.push_str(&format!(
-                "    %e{index}: i32 = const {}\n    %w{index}: f32 = bitcast %e{index}\n    %m{index}: i32 = call @omni.format_float(%w{index}, %chars)\n    call @omni.write_chars(%one, %chars, %zero, %m{index})\n    call @omni.write_chars(%one, %newline, %zero, %one)\n",
+                "    %e{index}: i32 = const {}\n    %w{index}: f32 = bitcast %e{index}\n    %m{index}: i32 = call @ir.format_float(%w{index}, %chars)\n    call @ir.write_chars(%one, %chars, %zero, %m{index})\n    call @ir.write_chars(%one, %newline, %zero, %one)\n",
                 *bits as i32
             ));
         }
@@ -78157,7 +78151,7 @@ mod native_x86_64 {
             -100_000_000_000_000_000_000,
         ];
         let mut text = String::from(
-            "omni 1\nmodule \"wide\"\nlayout lp64\nfunction @mix(i128, i128) -> i128 internal {\nblock0(%a: i128, %b: i128):\n    %s: i128 = add %a, %b\n    %m: i128 = mul %s, %b\n    %c: i128 = const 17\n    %x: i128 = xor %m, %c\n    return %x\n}\nfunction @omni.main() -> i32 export {\nblock0:\n    %slot: ptr = stack_slot size 16 align 16\n    %acc0: i128 = const 7\n    %prime: i128 = const 1000003\n",
+            "ir 1\nmodule \"wide\"\nlayout lp64\nfunction @mix(i128, i128) -> i128 internal {\nblock0(%a: i128, %b: i128):\n    %s: i128 = add %a, %b\n    %m: i128 = mul %s, %b\n    %c: i128 = const 17\n    %x: i128 = xor %m, %c\n    return %x\n}\nfunction @ir.main() -> i32 export {\nblock0:\n    %slot: ptr = stack_slot size 16 align 16\n    %acc0: i128 = const 7\n    %prime: i128 = const 1000003\n",
         );
         let mut accumulator = String::from("acc0");
         let mut serial = 0;
@@ -78429,7 +78423,7 @@ mod native_x86_64 {
             }
             agree(
                 &wide_program(sections),
-                "omni.main",
+                "ir.main",
                 &format!("wide{sections}"),
             );
         }
@@ -78462,10 +78456,10 @@ mod native_x86_64 {
             ));
         }
         let text = format!(
-            "omni 1\nmodule \"scan\"\nlayout lp64\nfunction @hb32(i32) -> i64 internal noinline {{\nblock0(%x: i32):\n    %c: i32 = clz %x\n    %k: i32 = const 31\n    %a: i32 = sub %k, %c\n    %b: i32 = xor %c, %k\n    %az: i64 = zext %a\n    %bz: i64 = zext %b\n    %sh: i64 = const 32\n    %hi: i64 = shl %bz, %sh\n    %r: i64 = or %hi, %az\n    return %r\n}}\nfunction @hb64(i64) -> i64 internal noinline {{\nblock0(%x: i64):\n    %c: i64 = clz %x\n    %k: i64 = const 63\n    %a: i64 = sub %k, %c\n    %b: i64 = xor %k, %c\n    %r: i64 = add %a, %b\n    return %r\n}}\nfunction @omni.main() -> i32 export {{\nblock0:\n    %acc0: i64 = const 7\n    %mixer: i64 = const 1000003\n{calls}    %small: i64 = const 255\n    %masked: i64 = and %acc{count}, %small\n    %narrow: i32 = trunc %masked\n    return %narrow\n}}\n",
+            "ir 1\nmodule \"scan\"\nlayout lp64\nfunction @hb32(i32) -> i64 internal noinline {{\nblock0(%x: i32):\n    %c: i32 = clz %x\n    %k: i32 = const 31\n    %a: i32 = sub %k, %c\n    %b: i32 = xor %c, %k\n    %az: i64 = zext %a\n    %bz: i64 = zext %b\n    %sh: i64 = const 32\n    %hi: i64 = shl %bz, %sh\n    %r: i64 = or %hi, %az\n    return %r\n}}\nfunction @hb64(i64) -> i64 internal noinline {{\nblock0(%x: i64):\n    %c: i64 = clz %x\n    %k: i64 = const 63\n    %a: i64 = sub %k, %c\n    %b: i64 = xor %k, %c\n    %r: i64 = add %a, %b\n    return %r\n}}\nfunction @ir.main() -> i32 export {{\nblock0:\n    %acc0: i64 = const 7\n    %mixer: i64 = const 1000003\n{calls}    %small: i64 = const 255\n    %masked: i64 = and %acc{count}, %small\n    %narrow: i32 = trunc %masked\n    return %narrow\n}}\n",
             count = samples.len()
         );
-        agree(&text, "omni.main", "bit_scan");
+        agree(&text, "ir.main", "bit_scan");
     }
 
     #[test]
@@ -78479,24 +78473,24 @@ mod native_x86_64 {
             .map(|byte| format!("{byte:02x}"))
             .collect();
         let text = format!(
-            "omni 1\nmodule \"indexed\"\nlayout lp64\nglobal @table size 64 align 4 mutable internal bytes \"{bytes}\"\nfunction @walk(ptr, i64) -> i64 internal noinline {{\nblock0(%base: ptr, %n: i64):\n    %zero: i64 = const 0\n    jump block1(%zero, %zero)\nblock1(%i: i64, %acc: i64):\n    %done: bool = icmp uge %i, %n\n    branch %done, block3(%acc), block2\nblock2:\n    %p: ptr = element_address i32 %base, %i\n    %v: i32 = load align 4 %p\n    %vz: i64 = zext %v\n    %eight: i64 = const 8\n    %two: i64 = const 2\n    %i2: i64 = add %i, %two\n    %e: ptr = element_address i32 %base, %i2\n    %e8: ptr = offset %e, %eight\n    %x: i32 = load align 4 %e8\n    %xz: i64 = zext %x\n    %it: i32 = trunc %i\n    %w: i32 = add %v, %it\n    %one: i64 = const 1\n    %i1: i64 = add %i, %one\n    %q: ptr = element_address i32 %base, %i1\n    store align 4 %w, %q\n    %sum0: i64 = add %acc, %vz\n    %sum1: i64 = add %sum0, %xz\n    %sum2: i64 = mul %sum1, %xz\n    %next: i64 = add %i, %one\n    jump block1(%next, %sum2)\nblock3(%result: i64):\n    return %result\n}}\nfunction @omni.main() -> i32 export {{\nblock0:\n    %t: ptr = global_address @table\n    %n: i64 = const 6\n    %a: i64 = call @walk(%t, %n)\n    %b: i64 = call @walk(%t, %n)\n    %c: i64 = add %a, %b\n    %small: i64 = const 255\n    %masked: i64 = and %c, %small\n    %narrow: i32 = trunc %masked\n    return %narrow\n}}\n"
+            "ir 1\nmodule \"indexed\"\nlayout lp64\nglobal @table size 64 align 4 mutable internal bytes \"{bytes}\"\nfunction @walk(ptr, i64) -> i64 internal noinline {{\nblock0(%base: ptr, %n: i64):\n    %zero: i64 = const 0\n    jump block1(%zero, %zero)\nblock1(%i: i64, %acc: i64):\n    %done: bool = icmp uge %i, %n\n    branch %done, block3(%acc), block2\nblock2:\n    %p: ptr = element_address i32 %base, %i\n    %v: i32 = load align 4 %p\n    %vz: i64 = zext %v\n    %eight: i64 = const 8\n    %two: i64 = const 2\n    %i2: i64 = add %i, %two\n    %e: ptr = element_address i32 %base, %i2\n    %e8: ptr = offset %e, %eight\n    %x: i32 = load align 4 %e8\n    %xz: i64 = zext %x\n    %it: i32 = trunc %i\n    %w: i32 = add %v, %it\n    %one: i64 = const 1\n    %i1: i64 = add %i, %one\n    %q: ptr = element_address i32 %base, %i1\n    store align 4 %w, %q\n    %sum0: i64 = add %acc, %vz\n    %sum1: i64 = add %sum0, %xz\n    %sum2: i64 = mul %sum1, %xz\n    %next: i64 = add %i, %one\n    jump block1(%next, %sum2)\nblock3(%result: i64):\n    return %result\n}}\nfunction @ir.main() -> i32 export {{\nblock0:\n    %t: ptr = global_address @table\n    %n: i64 = const 6\n    %a: i64 = call @walk(%t, %n)\n    %b: i64 = call @walk(%t, %n)\n    %c: i64 = add %a, %b\n    %small: i64 = const 255\n    %masked: i64 = and %c, %small\n    %narrow: i32 = trunc %masked\n    return %narrow\n}}\n"
         );
-        agree(&text, "omni.main", "indexed");
+        agree(&text, "ir.main", "indexed");
     }
 
     #[test]
     fn loop_invariants_move_out_but_a_guarded_division_stays_in() {
-        let text = "omni 1\nmodule \"licm\"\nlayout lp64\nfunction @walk(i64, i64, i64) -> i64 internal noinline {\nblock0(%n: i64, %a: i64, %b: i64):\n    %zero: i64 = const 0\n    jump block1(%zero, %zero)\nblock1(%i: i64, %acc: i64):\n    %done: bool = icmp uge %i, %n\n    branch %done, block5(%acc), block2\nblock2:\n    %inv: i64 = mul %a, %b\n    %inv2: i64 = add %inv, %a\n    %sh: i64 = const 3\n    %inv3: i64 = shl %inv2, %sh\n    %t0: i64 = add %acc, %inv3\n    %nz: bool = icmp ne %b, %zero\n    branch %nz, block3, block4(%t0)\nblock3:\n    %q: i64 = udiv %a, %b\n    %t1: i64 = add %t0, %q\n    jump block4(%t1)\nblock4(%t: i64):\n    %one: i64 = const 1\n    %next: i64 = add %i, %one\n    jump block1(%next, %t)\nblock5(%result: i64):\n    return %result\n}\nfunction @omni.main() -> i32 export {\nblock0:\n    %n: i64 = const 5\n    %a: i64 = const 7\n    %z: i64 = const 0\n    %b: i64 = const 3\n    %r0: i64 = call @walk(%n, %a, %z)\n    %r1: i64 = call @walk(%n, %a, %b)\n    %r2: i64 = call @walk(%z, %a, %z)\n    %s0: i64 = add %r0, %r1\n    %s1: i64 = add %s0, %r2\n    %small: i64 = const 255\n    %masked: i64 = and %s1, %small\n    %narrow: i32 = trunc %masked\n    return %narrow\n}\n";
-        agree(text, "omni.main", "licm");
+        let text = "ir 1\nmodule \"licm\"\nlayout lp64\nfunction @walk(i64, i64, i64) -> i64 internal noinline {\nblock0(%n: i64, %a: i64, %b: i64):\n    %zero: i64 = const 0\n    jump block1(%zero, %zero)\nblock1(%i: i64, %acc: i64):\n    %done: bool = icmp uge %i, %n\n    branch %done, block5(%acc), block2\nblock2:\n    %inv: i64 = mul %a, %b\n    %inv2: i64 = add %inv, %a\n    %sh: i64 = const 3\n    %inv3: i64 = shl %inv2, %sh\n    %t0: i64 = add %acc, %inv3\n    %nz: bool = icmp ne %b, %zero\n    branch %nz, block3, block4(%t0)\nblock3:\n    %q: i64 = udiv %a, %b\n    %t1: i64 = add %t0, %q\n    jump block4(%t1)\nblock4(%t: i64):\n    %one: i64 = const 1\n    %next: i64 = add %i, %one\n    jump block1(%next, %t)\nblock5(%result: i64):\n    return %result\n}\nfunction @ir.main() -> i32 export {\nblock0:\n    %n: i64 = const 5\n    %a: i64 = const 7\n    %z: i64 = const 0\n    %b: i64 = const 3\n    %r0: i64 = call @walk(%n, %a, %z)\n    %r1: i64 = call @walk(%n, %a, %b)\n    %r2: i64 = call @walk(%z, %a, %z)\n    %s0: i64 = add %r0, %r1\n    %s1: i64 = add %s0, %r2\n    %small: i64 = const 255\n    %masked: i64 = and %s1, %small\n    %narrow: i32 = trunc %masked\n    return %narrow\n}\n";
+        agree(text, "ir.main", "licm");
     }
 
     #[test]
     fn thread_local_globals_live_in_the_thread_block() {
         let initial = "2a000000000000000500000000000000";
         let text = format!(
-            "omni 1\nmodule \"tls\"\nlayout lp64\nglobal @counter size 8 align 8 mutable thread_local internal zero\nglobal @seeded size 16 align 8 mutable thread_local internal bytes \"{initial}\"\nglobal @plain size 8 align 8 mutable internal zero\nfunction @bump(i64) -> i64 internal {{\nblock0(%by: i64):\n    %c: ptr = global_address @counter\n    %old: i64 = load align 8 %c\n    %new: i64 = add %old, %by\n    store align 8 %new, %c\n    return %new\n}}\nfunction @omni.main() -> i32 export {{\nblock0:\n    %one: i64 = const 1\n    %seven: i64 = const 7\n    %a: i64 = call @bump(%one)\n    %b: i64 = call @bump(%seven)\n    %s: ptr = global_address @seeded\n    %s0: i64 = load align 8 %s\n    %eight: i64 = const 8\n    %s1p: ptr = offset %s, %eight\n    %s1: i64 = load align 8 %s1p\n    %hundred: i64 = const 100\n    store align 8 %hundred, %s1p\n    %s2: i64 = load align 8 %s1p\n    %p: ptr = global_address @plain\n    store align 8 %s0, %p\n    %p0: i64 = load align 8 %p\n    %t0: i64 = add %a, %b\n    %t1: i64 = add %t0, %s0\n    %t2: i64 = add %t1, %s1\n    %t3: i64 = add %t2, %s2\n    %t4: i64 = add %t3, %p0\n    %narrow: i32 = trunc %t4\n    return %narrow\n}}\n"
+            "ir 1\nmodule \"tls\"\nlayout lp64\nglobal @counter size 8 align 8 mutable thread_local internal zero\nglobal @seeded size 16 align 8 mutable thread_local internal bytes \"{initial}\"\nglobal @plain size 8 align 8 mutable internal zero\nfunction @bump(i64) -> i64 internal {{\nblock0(%by: i64):\n    %c: ptr = global_address @counter\n    %old: i64 = load align 8 %c\n    %new: i64 = add %old, %by\n    store align 8 %new, %c\n    return %new\n}}\nfunction @ir.main() -> i32 export {{\nblock0:\n    %one: i64 = const 1\n    %seven: i64 = const 7\n    %a: i64 = call @bump(%one)\n    %b: i64 = call @bump(%seven)\n    %s: ptr = global_address @seeded\n    %s0: i64 = load align 8 %s\n    %eight: i64 = const 8\n    %s1p: ptr = offset %s, %eight\n    %s1: i64 = load align 8 %s1p\n    %hundred: i64 = const 100\n    store align 8 %hundred, %s1p\n    %s2: i64 = load align 8 %s1p\n    %p: ptr = global_address @plain\n    store align 8 %s0, %p\n    %p0: i64 = load align 8 %p\n    %t0: i64 = add %a, %b\n    %t1: i64 = add %t0, %s0\n    %t2: i64 = add %t1, %s1\n    %t3: i64 = add %t2, %s2\n    %t4: i64 = add %t3, %p0\n    %narrow: i32 = trunc %t4\n    return %narrow\n}}\n"
         );
-        agree_with(&text, "omni.main", "thread_locals", false);
+        agree_with(&text, "ir.main", "thread_locals", false);
     }
 
     #[test]
@@ -78504,7 +78498,7 @@ mod native_x86_64 {
         let (doubles, floats) = number_samples();
         agree_with(
             &format_program(&doubles, &floats),
-            "omni.main",
+            "ir.main",
             "format_all",
             false,
         );
@@ -78517,7 +78511,7 @@ mod native_x86_64 {
         let few_floats: Vec<u32> = floats.iter().step_by(29).copied().collect();
         agree(
             &format_program(&few_doubles, &few_floats),
-            "omni.main",
+            "ir.main",
             "format_few",
         );
     }
@@ -78648,7 +78642,7 @@ mod native_x86_64 {
 
     fn parse_program(texts: &[String]) -> String {
         let mut text = String::from(
-            "omni 1\nmodule \"parses\"\nlayout lp64\nclass %Chars array i16 { fields [] methods [] }\nfunction @omni.format_double(f64, ref) -> i32 import\nfunction @omni.parse_double(ref, i32) -> f64 import\nfunction @omni.write_chars(i32, ref, i32, i32) import\nfunction @omni.main() -> i32 export {\nblock0:\n    %size: i32 = const 64\n    %chars: ref = allocate_array %Chars %size\n    %one: i32 = const 1\n    %zero: i32 = const 0\n    %newline: ref = allocate_array %Chars %one\n    %ten: i16 = const 10\n    store_element i16 %newline, %zero, %ten\n",
+            "ir 1\nmodule \"parses\"\nlayout lp64\nclass %Chars array i16 { fields [] methods [] }\nfunction @ir.format_double(f64, ref) -> i32 import\nfunction @ir.parse_double(ref, i32) -> f64 import\nfunction @ir.write_chars(i32, ref, i32, i32) import\nfunction @ir.main() -> i32 export {\nblock0:\n    %size: i32 = const 64\n    %chars: ref = allocate_array %Chars %size\n    %one: i32 = const 1\n    %zero: i32 = const 0\n    %newline: ref = allocate_array %Chars %one\n    %ten: i16 = const 10\n    store_element i16 %newline, %zero, %ten\n",
         );
         for (index, source) in texts.iter().enumerate() {
             let units: Vec<u16> = source.encode_utf16().collect();
@@ -78663,7 +78657,7 @@ mod native_x86_64 {
                 ));
             }
             text.push_str(&format!(
-                "    %p{index}: f64 = call @omni.parse_double(%a{index}, %l{index})\n    %n{index}: i32 = call @omni.format_double(%p{index}, %chars)\n    call @omni.write_chars(%one, %chars, %zero, %n{index})\n    call @omni.write_chars(%one, %newline, %zero, %one)\n"
+                "    %p{index}: f64 = call @ir.parse_double(%a{index}, %l{index})\n    %n{index}: i32 = call @ir.format_double(%p{index}, %chars)\n    call @ir.write_chars(%one, %chars, %zero, %n{index})\n    call @ir.write_chars(%one, %newline, %zero, %one)\n"
             ));
         }
         text.push_str("    return %zero\n}\n");
@@ -78674,7 +78668,7 @@ mod native_x86_64 {
     fn native_number_parsing_matches_the_interpreter() {
         agree_with(
             &parse_program(&parse_samples()),
-            "omni.main",
+            "ir.main",
             "parse_all",
             false,
         );
@@ -78683,7 +78677,7 @@ mod native_x86_64 {
     #[test]
     fn emulated_number_parsing_matches_the_interpreter() {
         let texts: Vec<String> = parse_samples().into_iter().step_by(11).collect();
-        agree(&parse_program(&texts), "omni.main", "parse_few");
+        agree(&parse_program(&texts), "ir.main", "parse_few");
     }
 
     const MATH_NAMES: [&str; 18] = [
@@ -78907,7 +78901,7 @@ mod native_x86_64 {
     fn math_program(name: &str, inputs: &[(f64, f64)]) -> String {
         let binary = matches!(name, "atan2" | "hypot" | "pow");
         let mut text = format!(
-            "omni 1\nmodule \"maths\"\nlayout lp64\nclass %Chars array i16 {{ fields [] methods [] }}\nfunction @omni.format_double(f64, ref) -> i32 import\nfunction @omni.write_chars(i32, ref, i32, i32) import\nfunction @omni.math.{name}({}) -> f64 import\nfunction @omni.main() -> i32 export {{\nblock0:\n    %size: i32 = const 64\n    %chars: ref = allocate_array %Chars %size\n    %one: i32 = const 1\n    %zero: i32 = const 0\n    %newline: ref = allocate_array %Chars %one\n    %ten: i16 = const 10\n    store_element i16 %newline, %zero, %ten\n",
+            "ir 1\nmodule \"maths\"\nlayout lp64\nclass %Chars array i16 {{ fields [] methods [] }}\nfunction @ir.format_double(f64, ref) -> i32 import\nfunction @ir.write_chars(i32, ref, i32, i32) import\nfunction @ir.math.{name}({}) -> f64 import\nfunction @ir.main() -> i32 export {{\nblock0:\n    %size: i32 = const 64\n    %chars: ref = allocate_array %Chars %size\n    %one: i32 = const 1\n    %zero: i32 = const 0\n    %newline: ref = allocate_array %Chars %one\n    %ten: i16 = const 10\n    store_element i16 %newline, %zero, %ten\n",
             if binary { "f64, f64" } else { "f64" }
         );
         for (index, (x, y)) in inputs.iter().enumerate() {
@@ -78917,16 +78911,16 @@ mod native_x86_64 {
             ));
             if binary {
                 text.push_str(&format!(
-                    "    %b{index}: i64 = const {}\n    %y{index}: f64 = bitcast %b{index}\n    %r{index}: f64 = call @omni.math.{name}(%x{index}, %y{index})\n",
+                    "    %b{index}: i64 = const {}\n    %y{index}: f64 = bitcast %b{index}\n    %r{index}: f64 = call @ir.math.{name}(%x{index}, %y{index})\n",
                     y.to_bits() as i64
                 ));
             } else {
                 text.push_str(&format!(
-                    "    %r{index}: f64 = call @omni.math.{name}(%x{index})\n"
+                    "    %r{index}: f64 = call @ir.math.{name}(%x{index})\n"
                 ));
             }
             text.push_str(&format!(
-                "    %n{index}: i32 = call @omni.format_double(%r{index}, %chars)\n    call @omni.write_chars(%one, %chars, %zero, %n{index})\n    call @omni.write_chars(%one, %newline, %zero, %one)\n"
+                "    %n{index}: i32 = call @ir.format_double(%r{index}, %chars)\n    call @ir.write_chars(%one, %chars, %zero, %n{index})\n    call @ir.write_chars(%one, %newline, %zero, %one)\n"
             ));
         }
         text.push_str("    return %zero\n}\n");
@@ -78961,7 +78955,7 @@ mod native_x86_64 {
     fn native_lines(program: &str, name: &str) -> Vec<f64> {
         let module = Module::from_text(program).expect("the program reads");
         module.verify().expect("the program keeps every rule");
-        let bytes = codegen::build_executable(&module, "omni.main")
+        let bytes = codegen::build_executable(&module, "ir.main")
             .unwrap_or_else(|problem| panic!("{} {:?}", problem.message, problem.context));
         let Some(run) = run_native(&bytes, name) else {
             return Vec::new();
@@ -79011,18 +79005,17 @@ mod native_x86_64 {
                 .take(3)
                 .collect();
             let program = math_program(name, &inputs);
-            agree(&program, "omni.main", &format!("math_emulated_{name}"));
+            agree(&program, "ir.main", &format!("math_emulated_{name}"));
         }
     }
 
     #[test]
     fn an_arm32_clock_reads_the_32_bit_timespec() {
-        let text = "omni 1\nmodule \"clock\"\nlayout lp64\nfunction @omni.clock() -> i64 import\nfunction @omni.main() -> i32 export {\nblock0:\n    %now: i64 = call @omni.clock()\n    %want: i64 = const 1700000000123456789\n    %same: bool = icmp eq %now, %want\n    %zero: i32 = const 0\n    %one: i32 = const 1\n    %code: i32 = select %same, %zero, %one\n    return %code\n}\n";
+        let text = "ir 1\nmodule \"clock\"\nlayout lp64\nfunction @ir.clock() -> i64 import\nfunction @ir.main() -> i32 export {\nblock0:\n    %now: i64 = call @ir.clock()\n    %want: i64 = const 1700000000123456789\n    %same: bool = icmp eq %now, %want\n    %zero: i32 = const 0\n    %one: i32 = const 1\n    %code: i32 = select %same, %zero, %one\n    return %code\n}\n";
         let module = Module::from_text(text).expect("the program reads");
         module.verify().expect("the program keeps every rule");
-        let program =
-            crate::compilers::x86_64::armv7::native::build_executable(&module, "omni.main")
-                .unwrap_or_else(|problem| panic!("{} {:?}", problem.message, problem.context));
+        let program = crate::compilers::x86_64::armv7::native::build_executable(&module, "ir.main")
+            .unwrap_or_else(|problem| panic!("{} {:?}", problem.message, problem.context));
         let outcome = super::arm32_emulator::run(&program);
         assert_eq!(
             outcome.exit,
@@ -79054,7 +79047,7 @@ mod native_x86_64 {
     #[test]
     fn the_optimizer_keeps_what_the_interpreter_computes_and_removes_memory_traffic() {
         use crate::compilers::compiler_infrastructure::optimizer;
-        let text = r#"omni 1
+        let text = r#"ir 1
 module "opt"
 layout lp64
 function @sum(i64) -> i64 export {
@@ -79099,7 +79092,7 @@ block2:
     %bad: i32 = const 99
     return %bad
 }
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %ten: i64 = const 10
     %r: i64 = call @sum(%ten)
@@ -79111,14 +79104,14 @@ block0:
 "#;
         let module = Module::from_text(text).expect("the program reads");
         module.verify().expect("the program keeps every rule");
-        let before = interpreted(&module, "omni.main");
+        let before = interpreted(&module, "ir.main");
         let mut report = optimizer::Report::logging();
         let mut optimized = module.clone();
         optimizer::optimize_module(&mut optimized, &mut report);
         optimized
             .verify()
             .expect("the optimized program keeps every rule");
-        assert_eq!(interpreted(&optimized, "omni.main"), before);
+        assert_eq!(interpreted(&optimized, "ir.main"), before);
         assert_eq!(before.0, Some(90 + 8));
         let (_, memory, slots) = optimizer_counts(&optimized);
         assert_eq!(memory, 0, "no load or store is left");
@@ -79128,7 +79121,7 @@ block0:
         assert!(!report.log.is_empty(), "the proof log names every rewrite");
         let (checked, _, fine) = optimizer::checked(&module);
         assert!(fine);
-        assert_eq!(interpreted(&checked, "omni.main"), before);
+        assert_eq!(interpreted(&checked, "ir.main"), before);
     }
 
     #[test]
@@ -79147,7 +79140,7 @@ block0:
         assert!(after_memory * 2 < memory, "most memory traffic is gone");
     }
 
-    const THREADING_PROGRAM: &str = r#"omni 1
+    const THREADING_PROGRAM: &str = r#"ir 1
 module "threading"
 layout lp64
 function @input() -> i32 internal noinline {
@@ -79155,7 +79148,7 @@ block0:
     %v: i32 = const 7
     return %v
 }
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %x: i32 = call @input()
     %zero: i32 = const 0
@@ -79178,11 +79171,11 @@ block5:
 }
 "#;
 
-    const FRESH_ARRAY_PROGRAM: &str = r#"omni 1
+    const FRESH_ARRAY_PROGRAM: &str = r#"ir 1
 module "fresh"
 layout lp64
 class %Bytes array i8 { fields [] methods [] }
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %n: i32 = const 4
     %a: ref = allocate_array %Bytes %n
@@ -79198,7 +79191,7 @@ block0:
 }
 "#;
 
-    const THREE_WAY_PROGRAM: &str = r#"omni 1
+    const THREE_WAY_PROGRAM: &str = r#"ir 1
 module "threeway"
 layout lp64
 function @input() -> i64 internal noinline {
@@ -79206,7 +79199,7 @@ block0:
     %v: i64 = const 100
     return %v
 }
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %a: i64 = call @input()
     %b: i64 = const 100
@@ -79256,14 +79249,14 @@ block2:
         use crate::compilers::compiler_infrastructure::optimizer;
         let module = Module::from_text(THREADING_PROGRAM).expect("the program reads");
         module.verify().expect("the program keeps every rule");
-        let before = interpreted(&module, "omni.main");
+        let before = interpreted(&module, "ir.main");
         assert_eq!(before.0, Some(20));
         let (optimized, report, fine) = optimizer::checked(&module);
         assert!(fine);
-        assert_eq!(interpreted(&optimized, "omni.main"), before);
+        assert_eq!(interpreted(&optimized, "ir.main"), before);
         assert!(report.count("jump-threaded") > 0, "{:?}", report.rules());
         assert_eq!(
-            operations_named(&optimized, "omni.main", "compare"),
+            operations_named(&optimized, "ir.main", "compare"),
             1,
             "only the sign test is left"
         );
@@ -79274,18 +79267,18 @@ block2:
         use crate::compilers::compiler_infrastructure::optimizer;
         let module = Module::from_text(FRESH_ARRAY_PROGRAM).expect("the program reads");
         module.verify().expect("the program keeps every rule");
-        let before = interpreted(&module, "omni.main");
+        let before = interpreted(&module, "ir.main");
         assert_eq!(before.0, Some(2));
         let (optimized, report, fine) = optimizer::checked(&module);
         assert!(fine);
-        assert_eq!(interpreted(&optimized, "omni.main"), before);
+        assert_eq!(interpreted(&optimized, "ir.main"), before);
         assert!(
             report.count("pattern-simplified") >= 2,
             "{:?}",
             report.rules()
         );
-        assert_eq!(operations_named(&optimized, "omni.main", "compare"), 0);
-        assert_eq!(operations_named(&optimized, "omni.main", "instance_of"), 0);
+        assert_eq!(operations_named(&optimized, "ir.main", "compare"), 0);
+        assert_eq!(operations_named(&optimized, "ir.main", "instance_of"), 0);
     }
 
     #[test]
@@ -79293,18 +79286,18 @@ block2:
         use crate::compilers::compiler_infrastructure::optimizer;
         let module = Module::from_text(THREE_WAY_PROGRAM).expect("the program reads");
         module.verify().expect("the program keeps every rule");
-        let before = interpreted(&module, "omni.main");
+        let before = interpreted(&module, "ir.main");
         assert_eq!(before.0, Some(1));
         let (optimized, report, fine) = optimizer::checked(&module);
         assert!(fine);
-        assert_eq!(interpreted(&optimized, "omni.main"), before);
+        assert_eq!(interpreted(&optimized, "ir.main"), before);
         assert!(
             report.count("pattern-simplified") >= 1,
             "{:?}",
             report.rules()
         );
-        assert_eq!(operations_named(&optimized, "omni.main", "compare"), 1);
-        assert_eq!(operations_named(&optimized, "omni.main", "subtract"), 0);
+        assert_eq!(operations_named(&optimized, "ir.main", "compare"), 1);
+        assert_eq!(operations_named(&optimized, "ir.main", "subtract"), 0);
     }
 
     fn calls_in(module: &Module, name: &str) -> usize {
@@ -79326,7 +79319,7 @@ block2:
             .sum()
     }
 
-    const INLINING_PROGRAM: &str = r#"omni 1
+    const INLINING_PROGRAM: &str = r#"ir 1
 module "inline"
 layout lp64
 function @square(i32) -> i32 internal {
@@ -79359,7 +79352,7 @@ block0(%x: i32):
     %y: i32 = add %x, %one
     return %y
 }
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %three: i32 = const 3
     %t: i32 = call @twice(%three)
@@ -79375,7 +79368,7 @@ block0:
         use crate::compilers::compiler_infrastructure::optimizer;
         let module = Module::from_text(INLINING_PROGRAM).expect("the program reads");
         module.verify().expect("the program keeps every rule");
-        let before = interpreted(&module, "omni.main");
+        let before = interpreted(&module, "ir.main");
         assert_eq!(before.0, Some(81 + 7));
         let calls_before = total_calls(&module);
         assert_eq!(calls_before, 6);
@@ -79385,11 +79378,11 @@ block0:
         optimized
             .verify()
             .expect("the optimized program keeps every rule");
-        assert_eq!(interpreted(&optimized, "omni.main"), before);
+        assert_eq!(interpreted(&optimized, "ir.main"), before);
         assert_eq!(calls_in(&optimized, "twice"), 0, "twice no longer calls");
         assert_eq!(calls_in(&optimized, "fact"), 1, "recursion is left alone");
         assert_eq!(
-            calls_in(&optimized, "omni.main"),
+            calls_in(&optimized, "ir.main"),
             2,
             "only the recursive and the noinline calls are left"
         );
@@ -79398,12 +79391,12 @@ block0:
         assert!(report.log.iter().any(|entry| entry.rule == "inlined"));
         let (checked, _, fine) = optimizer::checked(&module);
         assert!(fine);
-        assert_eq!(interpreted(&checked, "omni.main"), before);
+        assert_eq!(interpreted(&checked, "ir.main"), before);
     }
 
     #[test]
     fn inlined_programs_run_the_same_natively_and_in_the_emulators() {
-        agree(INLINING_PROGRAM, "omni.main", "inlining");
+        agree(INLINING_PROGRAM, "ir.main", "inlining");
     }
 
     #[test]
@@ -79418,20 +79411,20 @@ block0:
             }
             body.push_str(&format!("    return {previous}\n"));
             format!(
-                "omni 1\nmodule \"hint\"\nlayout lp64\nfunction @wide(i32) -> i32 internal{hint} {{\n{body}}}\nfunction @omni.main() -> i32 export {{\nblock0:\n    %two: i32 = const 2\n    %a: i32 = call @wide(%two)\n    %b: i32 = call @wide(%two)\n    %c: i32 = call @wide(%two)\n    %d: i32 = call @wide(%two)\n    %ab: i32 = add %a, %b\n    %cd: i32 = add %c, %d\n    %r: i32 = add %ab, %cd\n    return %r\n}}\n"
+                "ir 1\nmodule \"hint\"\nlayout lp64\nfunction @wide(i32) -> i32 internal{hint} {{\n{body}}}\nfunction @ir.main() -> i32 export {{\nblock0:\n    %two: i32 = const 2\n    %a: i32 = call @wide(%two)\n    %b: i32 = call @wide(%two)\n    %c: i32 = call @wide(%two)\n    %d: i32 = call @wide(%two)\n    %ab: i32 = add %a, %b\n    %cd: i32 = add %c, %d\n    %r: i32 = add %ab, %cd\n    return %r\n}}\n"
             )
         };
         for (hint, opened) in [("", false), (" inline", true)] {
             let module = Module::from_text(&build(hint)).expect("the program reads");
             module.verify().expect("the program keeps every rule");
-            let before = interpreted(&module, "omni.main");
+            let before = interpreted(&module, "ir.main");
             assert_eq!(before.0, Some(248));
             let mut optimized = module.clone();
             optimizer::optimize_module(&mut optimized, &mut optimizer::Report::default());
             optimized.verify().expect("the optimized program is valid");
-            assert_eq!(interpreted(&optimized, "omni.main"), before);
+            assert_eq!(interpreted(&optimized, "ir.main"), before);
             assert_eq!(
-                calls_in(&optimized, "omni.main") == 0,
+                calls_in(&optimized, "ir.main") == 0,
                 opened,
                 "hint {hint:?}"
             );
@@ -79449,20 +79442,20 @@ block0:
         }
         body.push_str(&format!("    return {previous}\n"));
         let text = format!(
-            "omni 1\nmodule \"single\"\nlayout lp64\nfunction @wide(i32) -> i32 internal {{\n{body}}}\nfunction @omni.main() -> i32 export {{\nblock0:\n    %two: i32 = const 2\n    %r: i32 = call @wide(%two)\n    return %r\n}}\n"
+            "ir 1\nmodule \"single\"\nlayout lp64\nfunction @wide(i32) -> i32 internal {{\n{body}}}\nfunction @ir.main() -> i32 export {{\nblock0:\n    %two: i32 = const 2\n    %r: i32 = call @wide(%two)\n    return %r\n}}\n"
         );
         let module = Module::from_text(&text).expect("the program reads");
         module.verify().expect("the program keeps every rule");
-        let before = interpreted(&module, "omni.main");
+        let before = interpreted(&module, "ir.main");
         assert_eq!(before.0, Some(62));
         let mut optimized = module.clone();
         optimizer::optimize_module(&mut optimized, &mut optimizer::Report::default());
         optimized.verify().expect("the optimized program is valid");
-        assert_eq!(interpreted(&optimized, "omni.main"), before);
-        assert_eq!(calls_in(&optimized, "omni.main"), 0);
+        assert_eq!(interpreted(&optimized, "ir.main"), before);
+        assert_eq!(calls_in(&optimized, "ir.main"), 0);
     }
 
-    const PACKING_PROGRAM: &str = r#"omni 1
+    const PACKING_PROGRAM: &str = r#"ir 1
 module "pack"
 layout lp64
 string "same"
@@ -79500,7 +79493,7 @@ block0:
     %total: i32 = add %t, %w
     return %total
 }
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %r: i32 = call @helper()
     return %r
@@ -79522,7 +79515,7 @@ block0:
             }
         }
         module.verify().expect("the program keeps every rule");
-        let before = interpreted(&module, "omni.main");
+        let before = interpreted(&module, "ir.main");
         assert_eq!(before.0, Some(7 + 7 + 9 + 5 + 6));
         let mut packed = module.clone();
         let mut report = optimizer::Report::logging();
@@ -79530,7 +79523,7 @@ block0:
         packed
             .verify()
             .expect("the packed program keeps every rule");
-        assert_eq!(interpreted(&packed, "omni.main"), before);
+        assert_eq!(interpreted(&packed, "ir.main"), before);
         assert_eq!(module.globals.len(), 5);
         assert_eq!(packed.globals.len(), 4, "the two equal constants share one");
         assert_eq!(report.count("constant-merged"), 1);
@@ -79548,7 +79541,7 @@ block0:
             "writable data is never merged"
         );
         for function in &packed.functions {
-            if function.name != "omni.main" {
+            if function.name != "ir.main" {
                 assert!(function.name.starts_with(".f"), "{}", function.name);
             }
             assert!(function.instructions.iter().all(|item| item.spot.is_none()));
@@ -79556,7 +79549,7 @@ block0:
         assert!(packed
             .functions
             .iter()
-            .any(|function| function.name == "omni.main"));
+            .any(|function| function.name == "ir.main"));
         assert!(packed.files.is_empty());
         assert!(report.count("symbol-stripped") >= 3);
         assert!(report.count("debug-dropped") > 0);
@@ -79569,10 +79562,10 @@ block0:
             optimizer::build_fingerprint(&reread),
             optimizer::build_fingerprint(&packed)
         );
-        agree(&packed.to_text(), "omni.main", "packing");
+        agree(&packed.to_text(), "ir.main", "packing");
         let (released, _, fine) = optimizer::release(&module);
         assert!(fine);
-        assert_eq!(interpreted(&released, "omni.main"), before);
+        assert_eq!(interpreted(&released, "ir.main"), before);
         assert!(optimizer_counts(&released).0 <= optimizer_counts(&module).0);
     }
 
@@ -79591,7 +79584,7 @@ block0:
         assert_eq!(reference(b""), 0xcbf29ce484222325);
         let make = |name: &str, constant: i32| {
             format!(
-                "omni 1\nmodule \"print\"\nlayout lp64\nfunction @omni.main() -> i32 export {{\nblock0:\n    %{name}: i32 = const {constant}\n    %{name}2: i32 = add %{name}, %{name}\n    return %{name}2\n}}\n"
+                "ir 1\nmodule \"print\"\nlayout lp64\nfunction @ir.main() -> i32 export {{\nblock0:\n    %{name}: i32 = const {constant}\n    %{name}2: i32 = add %{name}, %{name}\n    return %{name}2\n}}\n"
             )
         };
         let one = Module::from_text(&make("x", 21)).expect("reads");
@@ -79653,7 +79646,7 @@ block0:
         assert!(released.globals.len() <= runtime.globals.len());
     }
 
-    const PRESSURE_PROGRAM: &str = r#"omni 1
+    const PRESSURE_PROGRAM: &str = r#"ir 1
 module "pressure"
 layout lp64
 function @seed(i64) -> i64 internal noinline {
@@ -79666,7 +79659,7 @@ block0(%a: i64, %b: i64):
     %y: i64 = add %x, %a
     return %y
 }
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %k1: i64 = const 3
     %k2: i64 = const 5
@@ -79711,14 +79704,14 @@ block3:
 }
 "#;
 
-    const SWAPPING_PROGRAM: &str = r#"omni 1
+    const SWAPPING_PROGRAM: &str = r#"ir 1
 module "swapping"
 layout lp64
 function @seed(i64) -> i64 internal noinline {
 block0(%x: i64):
     return %x
 }
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %p: i64 = const 3
     %q: i64 = const 8
@@ -79743,14 +79736,14 @@ block3:
 }
 "#;
 
-    const NARROWING_PROGRAM: &str = r#"omni 1
+    const NARROWING_PROGRAM: &str = r#"ir 1
 module "narrowing"
 layout lp64
 function @seed(i64) -> i64 internal noinline {
 block0(%x: i64):
     return %x
 }
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %a: i64 = const 200
     %b: i64 = const 40000
@@ -79800,7 +79793,7 @@ block0:
         use crate::compilers::compiler_infrastructure::optimizer;
         let module = Module::from_text(PRESSURE_PROGRAM).expect("the program reads");
         module.verify().expect("the program keeps every rule");
-        let expected = interpreted(&module, "omni.main");
+        let expected = interpreted(&module, "ir.main");
         assert!(expected.0.is_some());
         let (optimized, _, fine) = optimizer::checked(&module);
         assert!(fine);
@@ -79816,32 +79809,32 @@ block0:
             );
         }
         let values = optimized.functions[optimized
-            .function_named("omni.main")
+            .function_named("ir.main")
             .expect("it exists")
             .index()]
         .value_types
         .len() as i64;
-        let frame = frame_bytes(&assembly, "omni.main").expect("the frame is sized");
+        let frame = frame_bytes(&assembly, "ir.main").expect("the frame is sized");
         assert!(
             frame < 16 * values,
             "{frame} bytes of frame for {values} values"
         );
-        agree(PRESSURE_PROGRAM, "omni.main", "pressure");
+        agree(PRESSURE_PROGRAM, "ir.main", "pressure");
     }
 
     #[test]
     fn values_swapped_between_loop_iterations_are_copied_in_parallel() {
         let module = Module::from_text(SWAPPING_PROGRAM).expect("the program reads");
-        assert_eq!(interpreted(&module, "omni.main").0, Some(8 * 10 + 3));
-        agree(SWAPPING_PROGRAM, "omni.main", "swapping");
+        assert_eq!(interpreted(&module, "ir.main").0, Some(8 * 10 + 3));
+        agree(SWAPPING_PROGRAM, "ir.main", "swapping");
     }
 
     #[test]
     fn narrow_signed_values_and_bit_patterns_survive_being_held_in_registers() {
         let module = Module::from_text(NARROWING_PROGRAM).expect("the program reads");
         module.verify().expect("the program keeps every rule");
-        assert!(interpreted(&module, "omni.main").0.is_some());
-        agree(NARROWING_PROGRAM, "omni.main", "narrowing");
+        assert!(interpreted(&module, "ir.main").0.is_some());
+        agree(NARROWING_PROGRAM, "ir.main", "narrowing");
     }
 
     #[test]
@@ -79867,10 +79860,10 @@ block0:
         assert!(after < before, "{after} bytes against {before}");
     }
 
-    const LOOPING_PROGRAM: &str = r#"omni 1
+    const LOOPING_PROGRAM: &str = r#"ir 1
 module "looping"
 layout lp64
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %zero: i64 = const 0
     jump block1(%zero, %zero)
@@ -79903,10 +79896,10 @@ block3:
         &rest[..rest.find(".size").unwrap_or(rest.len())]
     }
 
-    const FLOAT_LOOP_PROGRAM: &str = r#"omni 1
+    const FLOAT_LOOP_PROGRAM: &str = r#"ir 1
 module "floatloop"
 layout lp64
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %zero: i64 = const 0
     %fzero: f64 = fconst 0x0000000000000000
@@ -79947,7 +79940,7 @@ block3:
         let (optimized, _, fine) = optimizer::checked(&module);
         assert!(fine);
         let assembly = codegen::emit_assembly(&optimized).expect("the program assembles");
-        let text = function_assembly(&assembly, "omni.main");
+        let text = function_assembly(&assembly, "ir.main");
         assert!(text.contains("%xmm8"), "a float lives in xmm8: {text}");
         assert!(
             text.contains("%xmm9"),
@@ -79957,7 +79950,7 @@ block3:
             text.matches("ucomisd").count() <= 6,
             "only values that leave arithmetic are made canonical: {text}"
         );
-        agree_on_64_bit_targets(FLOAT_LOOP_PROGRAM, "omni.main", "float_loop");
+        agree_on_64_bit_targets(FLOAT_LOOP_PROGRAM, "ir.main", "float_loop");
     }
 
     #[test]
@@ -79968,7 +79961,7 @@ block3:
         let (optimized, _, fine) = optimizer::checked(&module);
         assert!(fine);
         let assembly = codegen::emit_assembly(&optimized).expect("the program assembles");
-        let text = function_assembly(&assembly, "omni.main");
+        let text = function_assembly(&assembly, "ir.main");
         assert!(
             text.contains("cmpq $1000, %"),
             "the limit is an immediate: {text}"
@@ -79986,7 +79979,7 @@ block3:
             text.contains("shrq $3, %"),
             "a constant shift count is an immediate"
         );
-        agree(LOOPING_PROGRAM, "omni.main", "looping");
+        agree(LOOPING_PROGRAM, "ir.main", "looping");
     }
 
     #[test]
@@ -79995,18 +79988,18 @@ block3:
         let module = Module::from_text(SWAPPING_PROGRAM).expect("the program reads");
         let (optimized, _, _) = optimizer::checked(&module);
         let assembly = codegen::emit_assembly(&optimized).expect("the program assembles");
-        let text = function_assembly(&assembly, "omni.main");
+        let text = function_assembly(&assembly, "ir.main");
         assert!(
             text.contains("pushq"),
             "a swap needs the parallel copy: {text}"
         );
-        agree(SWAPPING_PROGRAM, "omni.main", "swapping_again");
+        agree(SWAPPING_PROGRAM, "ir.main", "swapping_again");
     }
 
     #[test]
     fn calls_that_can_never_throw_are_not_followed_by_an_exception_check() {
         use crate::compilers::compiler_infrastructure::optimizer;
-        let safe = r#"omni 1
+        let safe = r#"ir 1
 module "safe"
 layout lp64
 function @twice(i64) -> i64 internal noinline {
@@ -80014,7 +80007,7 @@ block0(%x: i64):
     %y: i64 = add %x, %x
     return %y
 }
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %one: i64 = const 21
     %r: i64 = call @twice(%one)
@@ -80022,7 +80015,7 @@ block0:
     return %o
 }
 "#;
-        let throwing = r#"omni 1
+        let throwing = r#"ir 1
 module "throwing"
 layout lp64
 string "boom"
@@ -80031,7 +80024,7 @@ block0:
     %s: ref = string 0
     throw %s
 }
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %r: i64 = call @boom()
     %o: i32 = trunc %r
@@ -80044,16 +80037,16 @@ block0:
             let (optimized, _, fine) = optimizer::checked(&module);
             assert!(fine);
             let assembly = codegen::emit_assembly(&optimized).expect("the program assembles");
-            let body = function_assembly(&assembly, "omni.main");
+            let body = function_assembly(&assembly, "ir.main");
             assert_eq!(
-                body.contains("__omni_pending"),
+                body.contains("__ir_pending"),
                 checked_for_exceptions,
                 "{body}"
             );
         }
     }
 
-    const SMASHING_PROGRAM: &str = r#"omni 1
+    const SMASHING_PROGRAM: &str = r#"ir 1
 module "smashing"
 layout lp64
 function @fill(i32) -> i32 internal noinline ssp {
@@ -80066,7 +80059,7 @@ block0(%length: i32):
     %result: i32 = zext %first
     return %result
 }
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %length: i32 = const LENGTH
     %answer: i32 = call @fill(%length)
@@ -80079,8 +80072,8 @@ block0:
         let text = SMASHING_PROGRAM.replace("LENGTH", "8");
         let module = Module::from_text(&text).expect("the program reads");
         module.verify().expect("the program keeps every rule");
-        assert_eq!(interpreted(&module, "omni.main").0, Some(65));
-        let program = codegen::build_executable(&module, "omni.main").expect("it builds");
+        assert_eq!(interpreted(&module, "ir.main").0, Some(65));
+        let program = codegen::build_executable(&module, "ir.main").expect("it builds");
         let Some(run) = run_native(&program, "canary_intact") else {
             return;
         };
@@ -80092,13 +80085,13 @@ block0:
         let text = SMASHING_PROGRAM.replace("LENGTH", "400");
         let module = Module::from_text(&text).expect("the program reads");
         module.verify().expect("the program keeps every rule");
-        let program = codegen::build_executable(&module, "omni.main").expect("it builds");
+        let program = codegen::build_executable(&module, "ir.main").expect("it builds");
         let Some(run) = run_native(&program, "canary_smashed") else {
             return;
         };
         assert_eq!(run.0, Some(134), "the trap ends the program");
         assert!(
-            String::from_utf8_lossy(&run.2).contains("omni: trap 13"),
+            String::from_utf8_lossy(&run.2).contains("runtime: trap 13"),
             "{}",
             String::from_utf8_lossy(&run.2)
         );
@@ -80112,7 +80105,7 @@ block0:
         assert!(fine);
         let assembly = crate::compilers::x86_64::armv8::native::emit_assembly(&optimized)
             .expect("the program assembles");
-        let body = function_assembly(&assembly, "omni.main");
+        let body = function_assembly(&assembly, "ir.main");
         let signed = body
             .find("paciasp")
             .expect("the entry signs the return address");
@@ -80126,32 +80119,27 @@ block0:
             body.matches("\tret").count(),
             "every return authenticates first: {body}"
         );
-        agree_on_64_bit_targets(LOOPING_PROGRAM, "omni.main", "pac_loop");
+        agree_on_64_bit_targets(LOOPING_PROGRAM, "ir.main", "pac_loop");
     }
 
     #[test]
     fn arm64_protected_functions_run_normally_and_stop_when_a_write_runs_past_the_buffer() {
         let intact = SMASHING_PROGRAM.replace("LENGTH", "8");
         let module = Module::from_text(&intact).expect("the program reads");
-        let program =
-            crate::compilers::x86_64::armv8::native::build_executable(&module, "omni.main")
-                .expect("it builds");
+        let program = crate::compilers::x86_64::armv8::native::build_executable(&module, "ir.main")
+            .expect("it builds");
         let run = super::arm_emulator::run(&program);
         assert_eq!(run.exit, Some(65), "the canary stays intact");
         let smashed = SMASHING_PROGRAM.replace("LENGTH", "400");
         let module = Module::from_text(&smashed).expect("the program reads");
-        let program =
-            crate::compilers::x86_64::armv8::native::build_executable(&module, "omni.main")
-                .expect("it builds");
+        let program = crate::compilers::x86_64::armv8::native::build_executable(&module, "ir.main")
+            .expect("it builds");
         let run = super::arm_emulator::run(&program);
         assert_eq!(run.exit, Some(134), "the trap ends the program");
         let assembly = crate::compilers::x86_64::armv8::native::emit_assembly(&module)
             .expect("the program assembles");
-        let body = function_assembly(&assembly, "__omni_f0");
-        assert!(
-            body.contains("ldr x16, [x16, :lo12:__omni_canary]"),
-            "{body}"
-        );
+        let body = function_assembly(&assembly, "__ir_f0");
+        assert!(body.contains("ldr x16, [x16, :lo12:__ir_canary]"), "{body}");
         assert!(body.contains("b.ne .LF0S"), "{body}");
     }
 
@@ -80163,19 +80151,19 @@ block0:
         let module = Module::from_text(&plain).expect("the program reads");
         let assembly = codegen::emit_assembly(&module).expect("the program assembles");
         assert!(
-            !assembly.contains("__omni_canary"),
+            !assembly.contains("__ir_canary"),
             "no function asked for one"
         );
         let guarded = SMASHING_PROGRAM.replace("LENGTH", "8");
         let module = Module::from_text(&guarded).expect("the program reads");
         let assembly = codegen::emit_assembly(&module).expect("the program assembles");
-        let body = function_assembly(&assembly, "__omni_f0");
-        assert!(body.contains("movq __omni_canary(%rip), %rax"));
-        assert!(body.contains("cmpq __omni_canary(%rip), %rcx"));
-        let without_buffer = r#"omni 1
+        let body = function_assembly(&assembly, "__ir_f0");
+        assert!(body.contains("movq __ir_canary(%rip), %rax"));
+        assert!(body.contains("cmpq __ir_canary(%rip), %rcx"));
+        let without_buffer = r#"ir 1
 module "bare"
 layout lp64
-function @omni.main() -> i32 export ssp {
+function @ir.main() -> i32 export ssp {
 block0:
     %seven: i32 = const 7
     return %seven
@@ -80184,7 +80172,7 @@ block0:
         let module = Module::from_text(without_buffer).expect("the program reads");
         let assembly = codegen::emit_assembly(&module).expect("the program assembles");
         assert!(
-            !assembly.contains("__omni_canary"),
+            !assembly.contains("__ir_canary"),
             "a function without a buffer needs no canary"
         );
     }
@@ -80207,7 +80195,7 @@ block0:
         assert!(fine);
         let assembly = crate::compilers::x86_64::armv8::native::emit_assembly(&optimized)
             .expect("the program assembles");
-        let body = function_assembly(&assembly, "omni.main");
+        let body = function_assembly(&assembly, "ir.main");
         assert!(body.contains("d24"), "a float lives in d24: {body}");
         assert!(body.contains("d25"), "a second float lives in d25: {body}");
         assert!(
@@ -80224,7 +80212,7 @@ block0:
         assert!(fine);
         let assembly = crate::compilers::x86_64::armv8::native::emit_assembly(&optimized)
             .expect("the program assembles");
-        let body = function_assembly(&assembly, "omni.main");
+        let body = function_assembly(&assembly, "ir.main");
         for held in 19..=28 {
             assert!(
                 body.contains(&format!("stur x{held}, [x29")),
@@ -80236,19 +80224,19 @@ block0:
             );
         }
         let values = optimized.functions[optimized
-            .function_named("omni.main")
+            .function_named("ir.main")
             .expect("it exists")
             .index()]
         .value_types
         .len() as i64;
-        let frame = arm64_frame_bytes(&assembly, "omni.main").expect("the frame is sized");
+        let frame = arm64_frame_bytes(&assembly, "ir.main").expect("the frame is sized");
         assert!(
             frame < 16 * values,
             "{frame} bytes of frame for {values} values"
         );
-        agree(PRESSURE_PROGRAM, "omni.main", "arm64_pressure");
-        agree(SWAPPING_PROGRAM, "omni.main", "arm64_swapping");
-        agree(NARROWING_PROGRAM, "omni.main", "arm64_narrowing");
+        agree(PRESSURE_PROGRAM, "ir.main", "arm64_pressure");
+        agree(SWAPPING_PROGRAM, "ir.main", "arm64_swapping");
+        agree(NARROWING_PROGRAM, "ir.main", "arm64_narrowing");
     }
 
     #[test]
@@ -80283,7 +80271,7 @@ block0:
         assert!(fine);
         let assembly = crate::compilers::x86_64::armv8::native::emit_assembly(&optimized)
             .expect("the program assembles");
-        let text = function_assembly(&assembly, "omni.main");
+        let text = function_assembly(&assembly, "ir.main");
         assert!(text.contains("b.ge"), "the flags feed the branch: {text}");
         assert!(!text.contains("cset"), "no boolean is materialized: {text}");
         assert!(
@@ -80294,7 +80282,7 @@ block0:
             text.contains("lsr x"),
             "a constant shift count is an immediate"
         );
-        agree(LOOPING_PROGRAM, "omni.main", "arm64_looping");
+        agree(LOOPING_PROGRAM, "ir.main", "arm64_looping");
     }
 
     #[test]
@@ -80304,18 +80292,18 @@ block0:
         let (optimized, _, _) = optimizer::checked(&module);
         let assembly = crate::compilers::x86_64::armv8::native::emit_assembly(&optimized)
             .expect("the program assembles");
-        let text = function_assembly(&assembly, "omni.main");
+        let text = function_assembly(&assembly, "ir.main");
         assert!(
             text.contains("str x9, [sp, #-16]!"),
             "a swap needs the parallel copy: {text}"
         );
-        agree(SWAPPING_PROGRAM, "omni.main", "arm64_swapping_again");
+        agree(SWAPPING_PROGRAM, "ir.main", "arm64_swapping_again");
     }
 
-    const WORD_PROGRAM: &str = r#"omni 1
+    const WORD_PROGRAM: &str = r#"ir 1
 module "words"
 layout lp64
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %zero: i32 = const 0
     jump block1(%zero, %zero)
@@ -80352,7 +80340,7 @@ block3:
         assert!(fine);
         let assembly = crate::compilers::x86_64::armv8::native::emit_assembly(&optimized)
             .expect("the program assembles");
-        let text = function_assembly(&assembly, "omni.main");
+        let text = function_assembly(&assembly, "ir.main");
         for form in ["cmp w", "mul w", "add w", "lsr w", "eor w"] {
             assert!(
                 text.contains(form),
@@ -80368,7 +80356,7 @@ block3:
             }),
             "a 32-bit result needs no masking: {text}"
         );
-        agree(WORD_PROGRAM, "omni.main", "arm64_words");
+        agree(WORD_PROGRAM, "ir.main", "arm64_words");
     }
 
     #[test]
@@ -80378,7 +80366,7 @@ block3:
         let (optimized, _, fine) = optimizer::checked(&module);
         assert!(fine);
         let assembly = codegen::emit_assembly(&optimized).expect("the program assembles");
-        let text = function_assembly(&assembly, "omni.main");
+        let text = function_assembly(&assembly, "ir.main");
         for form in ["cmpl ", "imull ", "addl ", "shrl ", "xorl %"] {
             assert!(
                 text.contains(form),
@@ -80394,7 +80382,7 @@ block3:
             }),
             "a 32-bit result needs no masking: {text}"
         );
-        agree(WORD_PROGRAM, "omni.main", "x86_words");
+        agree(WORD_PROGRAM, "ir.main", "x86_words");
     }
 
     fn agree_on_64_bit_targets(text: &str, entry: &str, name: &str) {
@@ -80414,7 +80402,7 @@ block3:
         );
     }
 
-    const DYNAMIC_PROGRAM: &str = r#"omni 1
+    const DYNAMIC_PROGRAM: &str = r#"ir 1
 module "dynamic"
 layout lp64
 function @sum(i64) -> i64 internal noinline {
@@ -80452,7 +80440,7 @@ block6:
     stack_restore %saved
     return %total
 }
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %zero: i64 = const 0
     jump block1(%zero, %zero)
@@ -80480,18 +80468,18 @@ block3:
         let module = Module::from_text(DYNAMIC_PROGRAM).expect("the program reads");
         module.verify().expect("the program keeps every rule");
         assert_eq!(
-            interpreted(&module, "omni.main").0,
+            interpreted(&module, "ir.main").0,
             Some((499500i64 * 3000 % 256) as i32)
         );
-        agree_on_64_bit_targets(DYNAMIC_PROGRAM, "omni.main", "dynamic");
+        agree_on_64_bit_targets(DYNAMIC_PROGRAM, "ir.main", "dynamic");
     }
 
     #[test]
     fn dynamic_stack_memory_honors_alignment_and_refuses_absurd_sizes() {
-        let aligned = r#"omni 1
+        let aligned = r#"ir 1
 module "aligned"
 layout lp64
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %size: i64 = const 100
     %memory: ptr = dynamic_stack_slot align 64 %size
@@ -80504,12 +80492,12 @@ block0:
 "#;
         let module = Module::from_text(aligned).expect("the program reads");
         module.verify().expect("the program keeps every rule");
-        assert_eq!(interpreted(&module, "omni.main").0, Some(0));
-        agree_on_64_bit_targets(aligned, "omni.main", "dynamic_aligned");
-        let absurd = r#"omni 1
+        assert_eq!(interpreted(&module, "ir.main").0, Some(0));
+        agree_on_64_bit_targets(aligned, "ir.main", "dynamic_aligned");
+        let absurd = r#"ir 1
 module "absurd"
 layout lp64
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %size: i64 = const 4000000000
     %memory: ptr = dynamic_stack_slot align 8 %size
@@ -80520,14 +80508,14 @@ block0:
 }
 "#;
         let module = Module::from_text(absurd).expect("the program reads");
-        let program = codegen::build_executable(&module, "omni.main").expect("it builds");
+        let program = codegen::build_executable(&module, "ir.main").expect("it builds");
         if let Some(run) = run_native(&program, "dynamic_absurd") {
             assert_eq!(run.0, Some(134), "the request is refused, not obeyed");
-            assert!(String::from_utf8_lossy(&run.2).contains("omni: trap 6"));
+            assert!(String::from_utf8_lossy(&run.2).contains("runtime: trap 6"));
         }
     }
 
-    const VARIADIC_PROGRAM: &str = r#"omni 1
+    const VARIADIC_PROGRAM: &str = r#"ir 1
 module "variadic"
 layout lp64
 function @sum_ints(i32) -> i64 variadic internal noinline {
@@ -80599,7 +80587,7 @@ block0(%count: i32):
     %both: i64 = add %first, %second
     return %both
 }
-function @omni.main() -> i32 export {
+function @ir.main() -> i32 export {
 block0:
     %a: i64 = const 1
     %b: i64 = const 20
@@ -80640,8 +80628,8 @@ block0:
         let mixed = (5.0 + 1.5) + (7.0 + 2.5);
         let relayed = 2 * (1 + 20 + 300);
         let expected = (ints3 + ints8 + mixed as i64 + relayed) & 255;
-        assert_eq!(interpreted(&module, "omni.main").0, Some(expected as i32));
-        agree_on_64_bit_targets(VARIADIC_PROGRAM, "omni.main", "variadic");
+        assert_eq!(interpreted(&module, "ir.main").0, Some(expected as i32));
+        agree_on_64_bit_targets(VARIADIC_PROGRAM, "ir.main", "variadic");
     }
 
     struct Randomness(u64);
@@ -80712,7 +80700,9 @@ block0:
             ));
         }
         jump.push_str(")\n");
-        let mut text = String::from("omni 1\nmodule \"fuzz\"\nlayout lp64\nfunction @omni.main() -> i32 export {\nblock0:\n");
+        let mut text = String::from(
+            "ir 1\nmodule \"fuzz\"\nlayout lp64\nfunction @ir.main() -> i32 export {\nblock0:\n",
+        );
         text.push_str(&entry);
         text.push_str(&jump);
         text.push_str("block1(%n: i64");
@@ -80859,7 +80849,7 @@ block0:
         ];
         let mut random = Randomness(seed.wrapping_mul(0x9e3779b97f4a7c15).wrapping_add(11));
         let mut text = String::from(
-            "omni 1\nmodule \"floats\"\nlayout lp64\nfunction @omni.main() -> i32 export {\nblock0:\n",
+            "ir 1\nmodule \"floats\"\nlayout lp64\nfunction @ir.main() -> i32 export {\nblock0:\n",
         );
         let mut doubles: Vec<String> = Vec::new();
         let mut singles: Vec<String> = Vec::new();
@@ -80973,7 +80963,7 @@ block0:
                 );
             }
             let result = std::panic::catch_unwind(|| {
-                agree_on_64_bit_targets(&text, "omni.main", &format!("float_fuzz_{seed}"));
+                agree_on_64_bit_targets(&text, "ir.main", &format!("float_fuzz_{seed}"));
             });
             if result.is_err() {
                 panic!("seed {seed} disagrees\n{text}");
@@ -80988,11 +80978,11 @@ block0:
         let mut random = Randomness(seed.wrapping_mul(0x9e3779b97f4a7c15).wrapping_add(11));
         let stages = 2 + random.below(5);
         let mut text = String::from(
-            "omni 1\nmodule \"branching\"\nlayout lp64\nfunction @input() -> i32 internal noinline {\nblock0:\n",
+            "ir 1\nmodule \"branching\"\nlayout lp64\nfunction @input() -> i32 internal noinline {\nblock0:\n",
         );
         let start = (random.next() % 200) as i64 - 100;
         text.push_str(&format!("    %v: i32 = const {start}\n    return %v\n}}\n"));
-        text.push_str("function @omni.main() -> i32 export {\nblock0:\n");
+        text.push_str("function @ir.main() -> i32 export {\nblock0:\n");
         text.push_str("    %x0: i32 = call @input()\n    %zero: i32 = const 0\n    %one: i32 = const 1\n    %two: i32 = const 2\n");
         text.push_str("    jump block1(%x0)\n");
         for stage in 0..stages {
@@ -81052,16 +81042,16 @@ block0:
             module
                 .verify()
                 .unwrap_or_else(|problem| panic!("seed {seed}: {:?}\n{text}", problem.context));
-            let before = interpreted(&module, "omni.main");
+            let before = interpreted(&module, "ir.main");
             let (optimized, report, fine) = optimizer::checked(&module);
             assert!(fine, "seed {seed} breaks a rule\n{text}");
             assert_eq!(
-                interpreted(&optimized, "omni.main"),
+                interpreted(&optimized, "ir.main"),
                 before,
                 "seed {seed} changes its answer\n{text}"
             );
             threaded += report.count("jump-threaded");
-            agree_on_64_bit_targets(&text, "omni.main", &format!("branching_{seed}"));
+            agree_on_64_bit_targets(&text, "ir.main", &format!("branching_{seed}"));
         }
         assert!(threaded > 0, "the generator never threads a jump");
     }
@@ -81088,7 +81078,7 @@ block0:
                 );
             }
             let result = std::panic::catch_unwind(|| {
-                agree_on_64_bit_targets(&text, "omni.main", &format!("fuzz_{seed}"));
+                agree_on_64_bit_targets(&text, "ir.main", &format!("fuzz_{seed}"));
             });
             if result.is_err() {
                 panic!("seed {seed} disagrees\n{text}");
@@ -81105,7 +81095,7 @@ block0:
             (32, "i32", Type::I32),
             (64, "i64", Type::I64),
         ];
-        let mut text = String::from("omni 1\nmodule \"powers\"\nlayout lp64\n");
+        let mut text = String::from("ir 1\nmodule \"powers\"\nlayout lp64\n");
         let mut cases: Vec<(String, Type, u32)> = Vec::new();
         for (bits, name, ty) in widths {
             for shift in 1..bits - 1 {
@@ -81214,7 +81204,7 @@ block0:
             9223372036854775807,
         ];
         let widths: [(u32, &str, Type); 2] = [(32, "i32", Type::I32), (64, "i64", Type::I64)];
-        let mut text = String::from("omni 1\nmodule \"constants\"\nlayout lp64\n");
+        let mut text = String::from("ir 1\nmodule \"constants\"\nlayout lp64\n");
         let mut cases: Vec<(String, Type, u32, i128)> = Vec::new();
         for (bits, name, ty) in widths {
             for divisor in divisors {
@@ -81333,7 +81323,7 @@ block0:
         if !cfg!(all(target_os = "linux", target_arch = "x86_64")) {
             return;
         }
-        let text = r#"omni 1
+        let text = r#"ir 1
 module "library"
 layout lp64
 global @counter size 4 align 4 mutable export zero
@@ -81381,7 +81371,7 @@ block0(%step: i32):
 
     #[test]
     fn a_shared_library_keeps_thread_local_globals_per_thread() {
-        let text = "omni 1\nmodule \"threads\"\nlayout lp64\nglobal @seeded size 8 align 8 mutable thread_local internal bytes \"2a00000000000000\"\nglobal @zeroed size 8 align 8 mutable thread_local internal zero\nfunction @seeded_add(i64) -> i64 export {\nblock0(%by: i64):\n    %c: ptr = global_address @seeded\n    %old: i64 = load align 8 %c\n    %new: i64 = add %old, %by\n    store align 8 %new, %c\n    return %new\n}\nfunction @zeroed_add(i64) -> i64 export {\nblock0(%by: i64):\n    %c: ptr = global_address @zeroed\n    %old: i64 = load align 8 %c\n    %new: i64 = add %old, %by\n    store align 8 %new, %c\n    return %new\n}\n";
+        let text = "ir 1\nmodule \"threads\"\nlayout lp64\nglobal @seeded size 8 align 8 mutable thread_local internal bytes \"2a00000000000000\"\nglobal @zeroed size 8 align 8 mutable thread_local internal zero\nfunction @seeded_add(i64) -> i64 export {\nblock0(%by: i64):\n    %c: ptr = global_address @seeded\n    %old: i64 = load align 8 %c\n    %new: i64 = add %old, %by\n    store align 8 %new, %c\n    return %new\n}\nfunction @zeroed_add(i64) -> i64 export {\nblock0(%by: i64):\n    %c: ptr = global_address @zeroed\n    %old: i64 = load align 8 %c\n    %new: i64 = add %old, %by\n    store align 8 %new, %c\n    return %new\n}\n";
         let module = Module::from_text(text).expect("the library reads");
         module.verify().expect("the library keeps every rule");
         let library = codegen::build_shared_library(&module)
@@ -81424,7 +81414,7 @@ block0(%step: i32):
     fn a_shared_library_with_protected_functions_seeds_its_canary_when_it_loads() {
         let text = SMASHING_PROGRAM
             .replace("LENGTH", "8")
-            .replace("function @omni.main()", "function @probe()");
+            .replace("function @ir.main()", "function @probe()");
         let module = Module::from_text(&text).expect("the library reads");
         module.verify().expect("the library keeps every rule");
         let library = codegen::build_shared_library(&module)
@@ -81438,7 +81428,7 @@ block0(%step: i32):
         let name = std::ffi::CString::new(path.to_str().expect("a text path")).expect("a path");
         let handle = unsafe { loader::dlopen(name.as_ptr(), 2) };
         assert!(!handle.is_null(), "the system loader accepts the library");
-        let canary = unsafe { loader::dlsym(handle, c"__omni_canary".as_ptr()) };
+        let canary = unsafe { loader::dlsym(handle, c"__ir_canary".as_ptr()) };
         assert!(!canary.is_null(), "the canary is exported");
         let value = unsafe { *(canary as *const u64) };
         assert_ne!(value, 0, "the constructor filled the canary");
@@ -81450,7 +81440,7 @@ block0(%step: i32):
         let _ = std::fs::remove_file(&path);
     }
 
-    const LIBC_PROGRAM: &str = r#"omni 1
+    const LIBC_PROGRAM: &str = r#"ir 1
 module "libc_user"
 layout lp64
 global @greeting size 6 align 1 internal bytes "68656c6c6f00"
@@ -81515,7 +81505,7 @@ block0(%number: i32):
 
     #[test]
     fn an_arm64_shared_library_exports_and_runs_as_the_interpreter_does() {
-        let text = r#"omni 1
+        let text = r#"ir 1
 module "library"
 layout lp64
 global @counter size 4 align 4 mutable export zero
@@ -81550,7 +81540,7 @@ block0(%step: i32):
 
     #[test]
     fn an_arm32_shared_library_exports_and_runs_as_the_interpreter_does() {
-        let text = r#"omni 1
+        let text = r#"ir 1
 module "library"
 layout lp64
 global @counter size 4 align 4 mutable export zero
@@ -81629,7 +81619,7 @@ block0(%value: i64):
 "#;
 
     fn program(body: &str) -> String {
-        format!("omni 1\nmodule \"native\"\nlayout lp64\n{PRINTER}{body}")
+        format!("ir 1\nmodule \"native\"\nlayout lp64\n{PRINTER}{body}")
     }
 
     #[test]
@@ -83503,8 +83493,8 @@ mod armv8_assembly {
     fn armv7_debug_line() {
         use crate::compilers::x86_64::{assemble_source, AssemblerOptions, OutputKind};
         let source = std::env::var("CODE_BUILDER_LINE").unwrap_or_default();
-        let triple =
-            std::env::var("CODE_BUILDER_TRIPLE").unwrap_or_else(|_| "armv7a-linux-gnueabihf".into());
+        let triple = std::env::var("CODE_BUILDER_TRIPLE")
+            .unwrap_or_else(|_| "armv7a-linux-gnueabihf".into());
         let mut options = AssemblerOptions::new(&triple);
         options.output = OutputKind::Assembly;
         options.show_encoding = true;
@@ -83532,8 +83522,8 @@ mod armv8_assembly {
         use crate::compilers::x86_64::{assemble_source, render_messages, AssemblerOptions};
         let path = std::env::var("CODE_BUILDER_FILE").unwrap_or_default();
         let source = std::fs::read(&path).expect("the file reads");
-        let triple =
-            std::env::var("CODE_BUILDER_TRIPLE").unwrap_or_else(|_| "armv7a-linux-gnueabihf".into());
+        let triple = std::env::var("CODE_BUILDER_TRIPLE")
+            .unwrap_or_else(|_| "armv7a-linux-gnueabihf".into());
         let mut options = AssemblerOptions::new(&triple);
         options.show_encoding = std::env::var("CODE_BUILDER_PRESERVE").is_err();
         options.preserve_comments = std::env::var("CODE_BUILDER_PRESERVE").is_ok();
@@ -92112,7 +92102,7 @@ __attribute__((weak)) float fabsf(float x) { return x < 0 ? -x : x; }
 
     fn missing_function(printed: &str) -> Option<String> {
         printed.lines().find_map(|line| {
-            line.split_once("omni: missing function ")
+            line.split_once("runtime: missing function ")
                 .map(|(_, name)| name.trim().to_string())
                 .filter(|name| !name.is_empty())
         })

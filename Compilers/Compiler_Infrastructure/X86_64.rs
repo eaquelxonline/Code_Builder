@@ -10213,7 +10213,7 @@ impl AssemblyContext {
         let base = if self.named_temporaries {
             format!("{}tmp", self.private_prefix())
         } else {
-            format!("{}omni_tmp", self.private_prefix())
+            format!("{}ir_tmp", self.private_prefix())
         };
         self.renamable_symbol(&base, true, true)
     }
@@ -32301,9 +32301,9 @@ pub mod codegen {
     pub const ARRAY_LENGTH_OFFSET: u32 = 16;
     pub const ARRAY_HEADER: u32 = 24;
 
-    pub(super) const INTRINSIC_SYSCALL: &str = "omni.machine.syscall";
-    pub(super) const INTRINSIC_ADDRESS: &str = "omni.machine.address";
-    pub(super) const INTRINSIC_REFERENCE: &str = "omni.machine.reference";
+    pub(super) const INTRINSIC_SYSCALL: &str = "ir.machine.syscall";
+    pub(super) const INTRINSIC_ADDRESS: &str = "ir.machine.address";
+    pub(super) const INTRINSIC_REFERENCE: &str = "ir.machine.reference";
 
     pub fn unsupported(feature: &str) -> Diagnostic {
         fail(
@@ -32345,9 +32345,9 @@ pub mod codegen {
                 .bytes()
                 .map(|byte| format!("{byte:02x}"))
                 .collect();
-            format!("__omni_n_{hex}")
+            format!("__ir_n_{hex}")
         } else {
-            format!("__omni_f{}", id.0)
+            format!("__ir_f{}", id.0)
         }
     }
 
@@ -32361,9 +32361,9 @@ pub mod codegen {
                 .bytes()
                 .map(|byte| format!("{byte:02x}"))
                 .collect();
-            format!("__omni_n_{hex}")
+            format!("__ir_n_{hex}")
         } else {
-            format!("__omni_g{index}")
+            format!("__ir_g{index}")
         }
     }
 
@@ -34795,7 +34795,7 @@ pub mod codegen {
         fn trap(&mut self, code: i64) {
             self.line(&format!("movl ${code}, %edi"));
             self.line("xorl %esi, %esi");
-            self.line("call __omni_trap");
+            self.line("call __ir_trap");
         }
 
         fn trap_unless_nonzero(&mut self, register: &str, code: i64) {
@@ -34929,10 +34929,10 @@ pub mod codegen {
             }
             self.line(".bss");
             self.line(".p2align 6");
-            self.line(".type __omni_tls_area, @object");
-            self.label("__omni_tls_area");
+            self.line(".type __ir_tls_area, @object");
+            self.label("__ir_tls_area");
             self.line(".zero 65536");
-            self.line(".size __omni_tls_area, 65536");
+            self.line(".size __ir_tls_area, 65536");
             let mut copies = String::new();
             for index in locals {
                 let global = &self.module.globals[index];
@@ -34947,18 +34947,18 @@ pub mod codegen {
                 data.resize(global.size as usize, 0);
                 self.line(".section .rodata");
                 self.line(".p2align 3");
-                self.label(&format!("__omni_tlsinit{index}"));
+                self.label(&format!("__ir_tlsinit{index}"));
                 self.emit_bytes(&data);
                 copies.push_str(&format!(
-                    "\tmovq {symbol}@GOTTPOFF(%rip), %rax\n\tleaq (%r8,%rax), %rdi\n\tleaq __omni_tlsinit{index}(%rip), %rsi\n\tmovl ${}, %ecx\n\trep movsb\n",
+                    "\tmovq {symbol}@GOTTPOFF(%rip), %rax\n\tleaq (%r8,%rax), %rdi\n\tleaq __ir_tlsinit{index}(%rip), %rsi\n\tmovl ${}, %ecx\n\trep movsb\n",
                     data.len()
                 ));
             }
             self.line(".text");
-            self.line(".globl __omni_tls_init");
-            self.line(".type __omni_tls_init, @function");
-            self.label("__omni_tls_init");
-            self.line("leaq __omni_tls_area+65472(%rip), %r8");
+            self.line(".globl __ir_tls_init");
+            self.line(".type __ir_tls_init, @function");
+            self.label("__ir_tls_init");
+            self.line("leaq __ir_tls_area+65472(%rip), %r8");
             self.line("movq %r8, (%r8)");
             self.out.push_str(&copies);
             self.line("movl $158, %eax");
@@ -35056,8 +35056,8 @@ pub mod codegen {
             for index in 0..self.module.strings.len() {
                 let text = self.module.strings[index].clone();
                 self.line(".p2align 3");
-                self.label(&format!("__omni_s{index}"));
-                self.line(".quad __omni_text_descriptor");
+                self.label(&format!("__ir_s{index}"));
+                self.line(".quad __ir_text_descriptor");
                 self.line(".quad 0");
                 self.line(&format!(".quad {}", text.len()));
                 self.emit_bytes(text.as_bytes());
@@ -35076,20 +35076,20 @@ pub mod codegen {
                 let methods: Vec<Option<FunctionId>> = self.module.classes[index].methods.clone();
                 let interfaces = interface_tables(self.module, class);
                 self.line(".p2align 3");
-                self.label(&format!("__omni_c{index}"));
+                self.label(&format!("__ir_c{index}"));
                 self.line(&format!(".quad {index}"));
-                self.line(&format!(".quad __omni_ca{index}"));
+                self.line(&format!(".quad __ir_ca{index}"));
                 self.line(&format!(".quad {}", ancestors.len()));
-                self.line(&format!(".quad __omni_cv{index}"));
+                self.line(&format!(".quad __ir_cv{index}"));
                 self.line(&format!(".quad {}", methods.len()));
-                self.line(&format!(".quad __omni_ci{index}"));
+                self.line(&format!(".quad __ir_ci{index}"));
                 self.line(&format!(".quad {}", interfaces.len()));
-                self.label(&format!("__omni_ca{index}"));
+                self.label(&format!("__ir_ca{index}"));
                 for ancestor in &ancestors {
                     self.line(&format!(".long {ancestor}"));
                 }
                 self.line(".p2align 3");
-                self.label(&format!("__omni_cv{index}"));
+                self.label(&format!("__ir_cv{index}"));
                 for method in &methods {
                     match method {
                         Some(function) => {
@@ -35099,14 +35099,14 @@ pub mod codegen {
                         None => self.line(".quad 0"),
                     }
                 }
-                self.label(&format!("__omni_ci{index}"));
+                self.label(&format!("__ir_ci{index}"));
                 for (position, (interface, slots)) in interfaces.iter().enumerate() {
                     self.line(&format!(".quad {interface}"));
-                    self.line(&format!(".quad __omni_cis{index}_{position}"));
+                    self.line(&format!(".quad __ir_cis{index}_{position}"));
                     self.line(&format!(".quad {}", slots.len()));
                 }
                 for (position, (_, slots)) in interfaces.iter().enumerate() {
-                    self.label(&format!("__omni_cis{index}_{position}"));
+                    self.label(&format!("__ir_cis{index}_{position}"));
                     for slot in slots {
                         match slot {
                             Some(function) => {
@@ -35263,7 +35263,7 @@ pub mod codegen {
                 self.line(&format!("movq %{}, {at}(%rbp)", HELD_REGISTERS[*held][0]));
             }
             if protected {
-                self.line("movq __omni_canary(%rip), %rax");
+                self.line("movq __ir_canary(%rip), %rax");
                 self.line("movq %rax, -8(%rbp)");
             }
             let parameters = function.blocks[0].parameters.clone();
@@ -35307,7 +35307,7 @@ pub mod codegen {
             self.label(&format!(".LF{}R", id.0));
             if protected {
                 self.line("movq -8(%rbp), %rcx");
-                self.line("cmpq __omni_canary(%rip), %rcx");
+                self.line("cmpq __ir_canary(%rip), %rcx");
                 self.line(&format!("jne .LF{}S", id.0));
             }
             for (held, at) in &saved {
@@ -35319,7 +35319,7 @@ pub mod codegen {
             self.line("xorl %eax, %eax");
             if protected {
                 self.line("movq -8(%rbp), %rcx");
-                self.line("cmpq __omni_canary(%rip), %rcx");
+                self.line("cmpq __ir_canary(%rip), %rcx");
                 self.line(&format!("jne .LF{}S", id.0));
             }
             for (held, at) in &saved {
@@ -35724,7 +35724,7 @@ pub mod codegen {
                 Terminator::Throw(value) => {
                     self.load(*value, "rax");
                     self.trap_unless_nonzero("rax", TRAP_NULL_REFERENCE);
-                    self.line("movq %rax, __omni_pending(%rip)");
+                    self.line("movq %rax, __ir_pending(%rip)");
                     self.line(&format!("jmp .LF{}O", frame.function.0));
                 }
                 Terminator::Invoke {
@@ -35735,12 +35735,12 @@ pub mod codegen {
                     self.emit_call(function, call)?;
                     if self.may_throw(call) {
                         let caught = self.fresh();
-                        self.line("movq __omni_pending(%rip), %rax");
+                        self.line("movq __ir_pending(%rip), %rax");
                         self.line("testq %rax, %rax");
                         self.line(&format!("jne {caught}"));
                         self.edge(frame, function, normal, false);
                         self.label(&caught);
-                        self.line("movq $0, __omni_pending(%rip)");
+                        self.line("movq $0, __ir_pending(%rip)");
                         self.edge(frame, function, unwind, true);
                     } else {
                         self.edge(frame, function, normal, false);
@@ -35810,7 +35810,7 @@ pub mod codegen {
                     self.store_result("rax", result);
                 }
                 Operation::StringConstant(index) => {
-                    self.line(&format!("leaq __omni_s{index}(%rip), %rax"));
+                    self.line(&format!("leaq __ir_s{index}(%rip), %rax"));
                     self.store_result("rax", result);
                 }
                 Operation::Binary(op) => {
@@ -36353,15 +36353,15 @@ pub mod codegen {
                 Operation::Call(_) | Operation::CallIndirect(_) => {
                     self.emit_call(function, instruction)?;
                     if self.may_throw(instruction) {
-                        self.line("cmpq $0, __omni_pending(%rip)");
+                        self.line("cmpq $0, __ir_pending(%rip)");
                         self.line(&format!("jne .LF{}O", frame.function.0));
                     }
                 }
                 Operation::Allocate(class) => {
                     let (_, size) = self.field_layout(*class);
                     self.constant(u64::from(size), "rdi");
-                    self.line(&format!("leaq __omni_c{}(%rip), %rsi", class.0));
-                    self.line("call __omni_allocate");
+                    self.line(&format!("leaq __ir_c{}(%rip), %rsi", class.0));
+                    self.line("call __ir_allocate");
                     self.store_result("rax", result);
                 }
                 Operation::AllocateArray(class) => {
@@ -36372,8 +36372,8 @@ pub mod codegen {
                     let bits = type_bits(argument_type(0));
                     self.load_signed(arguments[0], "rdi", bits);
                     self.constant(u64::from(size), "rsi");
-                    self.line(&format!("leaq __omni_c{}(%rip), %rdx", class.0));
-                    self.line("call __omni_allocate_array");
+                    self.line(&format!("leaq __ir_c{}(%rip), %rdx", class.0));
+                    self.line("call __ir_allocate_array");
                     self.store_result("rax", result);
                 }
                 Operation::LoadField(class, field) | Operation::StoreField(class, field) => {
@@ -36517,7 +36517,7 @@ pub mod codegen {
                 Operation::Trap(code) => {
                     self.line(&format!("movl ${TRAP_EXPLICIT}, %edi"));
                     self.line(&format!("movl ${code}, %esi"));
-                    self.line("call __omni_trap");
+                    self.line("call __ir_trap");
                 }
             }
             Ok(())
@@ -37535,7 +37535,7 @@ pub mod codegen {
         Ok(emitter.out)
     }
 
-    const CANARY_CONSTRUCTOR: &str = "\t.text\n\t.type __omni_init_canary, @function\n__omni_init_canary:\n\tleaq __omni_canary(%rip), %rdi\n\tmovl $8, %esi\n\txorl %edx, %edx\n\tmovl $318, %eax\n\tsyscall\n\tret\n\t.section .init_array,\"aw\",@init_array\n\t.p2align 3\n\t.quad __omni_init_canary\n";
+    const CANARY_CONSTRUCTOR: &str = "\t.text\n\t.type __ir_init_canary, @function\n__ir_init_canary:\n\tleaq __ir_canary(%rip), %rdi\n\tmovl $8, %esi\n\txorl %edx, %edx\n\tmovl $318, %eax\n\tsyscall\n\tret\n\t.section .init_array,\"aw\",@init_array\n\t.p2align 3\n\t.quad __ir_init_canary\n";
 
     pub fn start_assembly(entry: &str, protected: bool) -> String {
         start_assembly_with(entry, protected, false)
@@ -37543,17 +37543,17 @@ pub mod codegen {
 
     pub fn start_assembly_with(entry: &str, protected: bool, threads: bool) -> String {
         let setup = if threads {
-            "\tcall __omni_tls_init\n"
+            "\tcall __ir_tls_init\n"
         } else {
             ""
         };
         let canary = if protected {
-            "\tleaq __omni_canary(%rip), %rdi\n\tmovl $8, %esi\n\txorl %edx, %edx\n\tmovl $318, %eax\n\tsyscall\n"
+            "\tleaq __ir_canary(%rip), %rdi\n\tmovl $8, %esi\n\txorl %edx, %edx\n\tmovl $318, %eax\n\tsyscall\n"
         } else {
             ""
         };
         format!(
-            "\t.text\n\t.globl _start\n\t.type _start, @function\n_start:\n\txorl %ebp, %ebp\n\tandq $-16, %rsp\n{setup}{canary}\tcall {entry}\n\tcmpq $0, __omni_pending(%rip)\n\tje .Lstart_exit\n\tcall __omni_uncaught\n.Lstart_exit:\n\tmovl %eax, %edi\n\tmovl $231, %eax\n\tsyscall\n\thlt\n"
+            "\t.text\n\t.globl _start\n\t.type _start, @function\n_start:\n\txorl %ebp, %ebp\n\tandq $-16, %rsp\n{setup}{canary}\tcall {entry}\n\tcmpq $0, __ir_pending(%rip)\n\tje .Lstart_exit\n\tcall __ir_uncaught\n.Lstart_exit:\n\tmovl %eax, %edi\n\tmovl $231, %eax\n\tsyscall\n\thlt\n"
         )
     }
 
@@ -37781,7 +37781,7 @@ pub mod codegen {
             {
                 let symbol = function_symbol(module, FunctionId(index as u32));
                 stubs.push_str(&format!(
-                    "\t.text\n\t.globl {symbol}\n{symbol}:\n\tleaq .Lmissing{index}(%rip), %rdi\n\tmovl ${}, %esi\n\tcall __omni_missing\n\t.section .rodata\n.Lmissing{index}:\n",
+                    "\t.text\n\t.globl {symbol}\n{symbol}:\n\tleaq .Lmissing{index}(%rip), %rdi\n\tmovl ${}, %esi\n\tcall __ir_missing\n\t.section .rodata\n.Lmissing{index}:\n",
                     function.name.len()
                 ));
                 for chunk in function.name.as_bytes().chunks(16) {
@@ -37815,7 +37815,7 @@ pub mod codegen {
             &[
                 "-shared",
                 "-Bsymbolic",
-                "-soname=libomni.so",
+                "-soname=libir.so",
                 "-o",
                 "program",
                 "program.o",
@@ -37872,29 +37872,29 @@ pub mod codegen {
             .ok_or_else(|| link_failed("the linker wrote no program"))
     }
 
-    pub const RUNTIME: &str = r#"omni 1
-module "omni.runtime"
+    pub const RUNTIME: &str = r#"ir 1
+module "ir.runtime"
 layout lp64
-global @__omni_pending size 8 align 8 mutable export zero
-global @__omni_canary size 8 align 8 mutable export zero
-global @__omni_heap_next size 8 align 8 mutable internal zero
-global @__omni_heap_end size 8 align 8 mutable internal zero
-global @__omni_identity size 8 align 8 mutable internal zero
-global @__omni_text_descriptor size 56 align 8 export bytes "ffffffffffffffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-global @__omni_trap_text size 11 align 1 internal bytes "6f6d6e693a207472617020"
-global @__omni_uncaught_text size 25 align 1 internal bytes "6f6d6e693a20756e63617567687420657863657074696f6e0a"
-global @__omni_missing_text size 23 align 1 internal bytes "6f6d6e693a206d697373696e672066756e6374696f6e20"
-function @omni.machine.syscall(i64, i64, i64, i64, i64, i64, i64) -> i64 import
-function @omni.machine.address(ref) -> ptr import
-function @omni.machine.reference(ptr) -> ref import
-function @__omni_exit(i64) internal noreturn {
+global @__ir_pending size 8 align 8 mutable export zero
+global @__ir_canary size 8 align 8 mutable export zero
+global @__ir_heap_next size 8 align 8 mutable internal zero
+global @__ir_heap_end size 8 align 8 mutable internal zero
+global @__ir_identity size 8 align 8 mutable internal zero
+global @__ir_text_descriptor size 56 align 8 export bytes "ffffffffffffffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+global @__ir_trap_text size 14 align 1 internal bytes "72756e74696d653a207472617020"
+global @__ir_uncaught_text size 28 align 1 internal bytes "72756e74696d653a20756e63617567687420657863657074696f6e0a"
+global @__ir_missing_text size 26 align 1 internal bytes "72756e74696d653a206d697373696e672066756e6374696f6e20"
+function @ir.machine.syscall(i64, i64, i64, i64, i64, i64, i64) -> i64 import
+function @ir.machine.address(ref) -> ptr import
+function @ir.machine.reference(ptr) -> ref import
+function @__ir_exit(i64) internal noreturn {
 block0(%code: i64):
     %number: i64 = const 231
     %zero: i64 = const 0
-    %ignored: i64 = call @omni.machine.syscall(%number, %code, %zero, %zero, %zero, %zero, %zero)
+    %ignored: i64 = call @ir.machine.syscall(%number, %code, %zero, %zero, %zero, %zero, %zero)
     unreachable
 }
-function @__omni_write(i64, ptr, i64) -> i64 internal {
+function @__ir_write(i64, ptr, i64) -> i64 internal {
 block0(%descriptor: i64, %start: ptr, %length: i64):
     %zero: i64 = const 0
     jump block1(%start, %length)
@@ -37904,7 +37904,7 @@ block1(%at: ptr, %left: i64):
 block2:
     %number: i64 = const 1
     %address: i64 = ptrtoint %at
-    %wrote: i64 = call @omni.machine.syscall(%number, %descriptor, %address, %left, %zero, %zero, %zero)
+    %wrote: i64 = call @ir.machine.syscall(%number, %descriptor, %address, %left, %zero, %zero, %zero)
     %failed: bool = icmp sle %wrote, %zero
     branch %failed, block4, block3
 block3:
@@ -37917,7 +37917,7 @@ block4:
 block5:
     return %length
 }
-function @__omni_write_number(i64, i64) internal {
+function @__ir_write_number(i64, i64) internal {
 block0(%descriptor: i64, %value: i64):
     %buffer: ptr = stack_slot size 32 align 8
     %ten: i64 = const 10
@@ -37943,54 +37943,54 @@ block2(%first: i64):
     %start: ptr = offset %buffer, %first
     %size: i64 = const 32
     %count: i64 = sub %size, %first
-    %wrote: i64 = call @__omni_write(%descriptor, %start, %count)
+    %wrote: i64 = call @__ir_write(%descriptor, %start, %count)
     return
 }
-function @__omni_trap(i64, i64) export noreturn {
+function @__ir_trap(i64, i64) export noreturn {
 block0(%kind: i64, %value: i64):
     %error: i64 = const 2
-    %text: ptr = global_address @__omni_trap_text
-    %length: i64 = const 11
-    %wrote: i64 = call @__omni_write(%error, %text, %length)
-    call @__omni_write_number(%error, %kind)
+    %text: ptr = global_address @__ir_trap_text
+    %length: i64 = const 14
+    %wrote: i64 = call @__ir_write(%error, %text, %length)
+    call @__ir_write_number(%error, %kind)
     %code: i64 = const 134
-    call @__omni_exit(%code)
+    call @__ir_exit(%code)
     unreachable
 }
-function @__omni_missing(ptr, i64) export noreturn {
+function @__ir_missing(ptr, i64) export noreturn {
 block0(%name: ptr, %length: i64):
     %error: i64 = const 2
-    %text: ptr = global_address @__omni_missing_text
-    %size: i64 = const 23
-    %wrote: i64 = call @__omni_write(%error, %text, %size)
-    %named: i64 = call @__omni_write(%error, %name, %length)
+    %text: ptr = global_address @__ir_missing_text
+    %size: i64 = const 26
+    %wrote: i64 = call @__ir_write(%error, %text, %size)
+    %named: i64 = call @__ir_write(%error, %name, %length)
     %newline: ptr = stack_slot size 8 align 8
     %ten: i8 = const 10
     store align 1 %ten, %newline
     %one: i64 = const 1
-    %ended: i64 = call @__omni_write(%error, %newline, %one)
+    %ended: i64 = call @__ir_write(%error, %newline, %one)
     %code: i64 = const 135
-    call @__omni_exit(%code)
+    call @__ir_exit(%code)
     unreachable
 }
-function @__omni_uncaught() -> i32 export {
+function @__ir_uncaught() -> i32 export {
 block0:
     %error: i64 = const 2
-    %text: ptr = global_address @__omni_uncaught_text
-    %length: i64 = const 25
-    %wrote: i64 = call @__omni_write(%error, %text, %length)
+    %text: ptr = global_address @__ir_uncaught_text
+    %length: i64 = const 28
+    %wrote: i64 = call @__ir_write(%error, %text, %length)
     %code: i64 = const 1
-    call @__omni_exit(%code)
+    call @__ir_exit(%code)
     unreachable
 }
-function @__omni_heap(i64) -> ptr internal {
+function @__ir_heap(i64) -> ptr internal {
 block0(%size: i64):
     %fifteen: i64 = const 15
     %mask: i64 = const -16
     %padded: i64 = add %size, %fifteen
     %rounded: i64 = and %padded, %mask
-    %next_slot: ptr = global_address @__omni_heap_next
-    %end_slot: ptr = global_address @__omni_heap_end
+    %next_slot: ptr = global_address @__ir_heap_next
+    %end_slot: ptr = global_address @__ir_heap_end
     %next: i64 = load align 8 %next_slot
     %end: i64 = load align 8 %end_slot
     %wanted: i64 = add %next, %rounded
@@ -38011,13 +38011,13 @@ block2:
     %protection: i64 = const 3
     %flags: i64 = const 16418
     %none: i64 = const -1
-    %mapped: i64 = call @omni.machine.syscall(%number, %zero, %chunk, %protection, %flags, %none, %zero)
+    %mapped: i64 = call @ir.machine.syscall(%number, %zero, %chunk, %protection, %flags, %none, %zero)
     %limit: i64 = const -4096
     %bad: bool = icmp ugt %mapped, %limit
     branch %bad, block3, block4
 block3:
     %exhausted: i64 = const 6
-    call @__omni_trap(%exhausted, %zero)
+    call @__ir_trap(%exhausted, %zero)
     unreachable
 block4:
     %fresh_next: i64 = add %mapped, %rounded
@@ -38027,11 +38027,11 @@ block4:
     %memory: ptr = inttoptr %mapped
     return %memory
 }
-function @__omni_allocate(i64, ptr) -> ref export {
+function @__ir_allocate(i64, ptr) -> ref export {
 block0(%size: i64, %descriptor: ptr):
-    %memory: ptr = call @__omni_heap(%size)
+    %memory: ptr = call @__ir_heap(%size)
     store align 8 %descriptor, %memory
-    %counter: ptr = global_address @__omni_identity
+    %counter: ptr = global_address @__ir_identity
     %last: i64 = load align 8 %counter
     %one: i64 = const 1
     %next: i64 = add %last, %one
@@ -38039,17 +38039,17 @@ block0(%size: i64, %descriptor: ptr):
     %eight: i64 = const 8
     %slot: ptr = offset %memory, %eight
     store align 8 %next, %slot
-    %object: ref = call @omni.machine.reference(%memory)
+    %object: ref = call @ir.machine.reference(%memory)
     return %object
 }
-function @__omni_allocate_array(i64, i64, ptr) -> ref export {
+function @__ir_allocate_array(i64, i64, ptr) -> ref export {
 block0(%length: i64, %size: i64, %descriptor: ptr):
     %zero: i64 = const 0
     %negative: bool = icmp slt %length, %zero
     branch %negative, block1, block2
 block1:
     %code: i64 = const 5
-    call @__omni_trap(%code, %zero)
+    call @__ir_trap(%code, %zero)
     unreachable
 block2:
     %limit: i64 = const 1099511627776
@@ -38057,14 +38057,14 @@ block2:
     branch %huge, block3, block4
 block3:
     %exhausted: i64 = const 6
-    call @__omni_trap(%exhausted, %zero)
+    call @__ir_trap(%exhausted, %zero)
     unreachable
 block4:
     %bytes: i64 = mul %length, %size
     %header: i64 = const 24
     %total: i64 = add %bytes, %header
-    %object: ref = call @__omni_allocate(%total, %descriptor)
-    %memory: ptr = call @omni.machine.address(%object)
+    %object: ref = call @__ir_allocate(%total, %descriptor)
+    %memory: ptr = call @ir.machine.address(%object)
     %sixteen: i64 = const 16
     %slot: ptr = offset %memory, %sixteen
     store align 8 %length, %slot
@@ -38073,20 +38073,20 @@ block4:
 function @exit(i32) weak noreturn {
 block0(%code: i32):
     %wide: i64 = zext %code
-    call @__omni_exit(%wide)
+    call @__ir_exit(%wide)
     unreachable
 }
 function @abort() weak noreturn {
 block0:
     %code: i64 = const 12
     %zero: i64 = const 0
-    call @__omni_trap(%code, %zero)
+    call @__ir_trap(%code, %zero)
     unreachable
 }
 function @write(i32, ptr, i64) -> i64 weak {
 block0(%descriptor: i32, %start: ptr, %length: i64):
     %wide: i64 = zext %descriptor
-    %wrote: i64 = call @__omni_write(%wide, %start, %length)
+    %wrote: i64 = call @__ir_write(%wide, %start, %length)
     return %wrote
 }
 function @putchar(i32) -> i32 weak {
@@ -38096,7 +38096,7 @@ block0(%character: i32):
     store align 1 %byte, %buffer
     %out: i64 = const 1
     %one: i64 = const 1
-    %wrote: i64 = call @__omni_write(%out, %buffer, %one)
+    %wrote: i64 = call @__ir_write(%out, %buffer, %one)
     %answer: i32 = zext %byte
     return %answer
 }
@@ -38121,7 +38121,7 @@ function @puts(ptr) -> i32 weak {
 block0(%text: ptr):
     %length: i64 = call @strlen(%text)
     %out: i64 = const 1
-    %wrote: i64 = call @__omni_write(%out, %text, %length)
+    %wrote: i64 = call @__ir_write(%out, %text, %length)
     %newline: i32 = const 10
     %again: i32 = call @putchar(%newline)
     %answer: i32 = const 1
@@ -38147,7 +38147,7 @@ function @malloc(i64) -> ptr weak {
 block0(%size: i64):
     %header: i64 = const 16
     %total: i64 = add %size, %header
-    %memory: ptr = call @__omni_heap(%total)
+    %memory: ptr = call @__ir_heap(%total)
     store align 8 %size, %memory
     %user: ptr = offset %memory, %header
     return %user
@@ -38186,21 +38186,21 @@ block2:
     memory_copy %fresh, %old, %copied
     return %fresh
 }
-function @omni.identity(ref) -> i64 export {
+function @ir.identity(ref) -> i64 export {
 block0(%object: ref):
-    %memory: ptr = call @omni.machine.address(%object)
+    %memory: ptr = call @ir.machine.address(%object)
     %eight: i64 = const 8
     %slot: ptr = offset %memory, %eight
     %identity: i64 = load align 8 %slot
     return %identity
 }
-function @omni.clock() -> i64 export {
+function @ir.clock() -> i64 export {
 block0:
     %time: ptr = stack_slot size 16 align 8
     %number: i64 = const 228
     %zero: i64 = const 0
     %address: i64 = ptrtoint %time
-    %status: i64 = call @omni.machine.syscall(%number, %zero, %address, %zero, %zero, %zero, %zero)
+    %status: i64 = call @ir.machine.syscall(%number, %zero, %address, %zero, %zero, %zero, %zero)
     %seconds: i64 = load align 8 %time
     %eight: i64 = const 8
     %rest: ptr = offset %time, %eight
@@ -38210,29 +38210,29 @@ block0:
     %total: i64 = add %scaled, %nanoseconds
     return %total
 }
-function @omni.print(ref) export {
+function @ir.print(ref) export {
 block0(%text: ref):
-    %memory: ptr = call @omni.machine.address(%text)
+    %memory: ptr = call @ir.machine.address(%text)
     %sixteen: i64 = const 16
     %size_slot: ptr = offset %memory, %sixteen
     %length: i64 = load align 8 %size_slot
     %header: i64 = const 24
     %bytes: ptr = offset %memory, %header
     %out: i64 = const 1
-    %wrote: i64 = call @__omni_write(%out, %bytes, %length)
+    %wrote: i64 = call @__ir_write(%out, %bytes, %length)
     return
 }
-function @omni.print_line(ref) export {
+function @ir.print_line(ref) export {
 block0(%text: ref):
-    call @omni.print(%text)
+    call @ir.print(%text)
     %newline: i32 = const 10
     %again: i32 = call @putchar(%newline)
     return
 }
-function @omni.write_chars(i32, ref, i32, i32) export {
+function @ir.write_chars(i32, ref, i32, i32) export {
 block0(%descriptor: i32, %array: ref, %from: i32, %count: i32):
     %fd: i64 = zext %descriptor
-    %memory: ptr = call @omni.machine.address(%array)
+    %memory: ptr = call @ir.machine.address(%array)
     %sixteen: i64 = const 16
     %size_slot: ptr = offset %memory, %sixteen
     %length: i64 = load align 8 %size_slot
@@ -38248,7 +38248,7 @@ block0(%descriptor: i32, %array: ref, %from: i32, %count: i32):
     branch %bad, block1, block2
 block1:
     %code: i64 = const 2
-    call @__omni_trap(%code, %zero)
+    call @__ir_trap(%code, %zero)
     unreachable
 block2:
     %buffer: ptr = stack_slot size 1040 align 8
@@ -38260,7 +38260,7 @@ block3(%index: i64, %filled: i64):
     %full: bool = icmp uge %filled, %limit
     branch %full, block4, block5(%filled)
 block4:
-    %flushed: i64 = call @__omni_write(%fd, %buffer, %filled)
+    %flushed: i64 = call @__ir_write(%fd, %buffer, %filled)
     jump block5(%zero)
 block5(%used: i64):
     %ended: bool = icmp uge %index, %finish
@@ -38392,7 +38392,7 @@ block17:
     %used4: i64 = add %used, %four_bytes
     jump block3(%continue, %used4)
 block18:
-    %last: i64 = call @__omni_write(%fd, %buffer, %used)
+    %last: i64 = call @__ir_write(%fd, %buffer, %used)
     return
 }
 "#;
@@ -40352,7 +40352,7 @@ block0(%p_array: ref, %p_text: ptr, %p_count: i64):
     store align 8 %p_text, %s_text
     store align 8 %p_count, %s_count
     %t1: ref = load align 8 %s_array
-    %t2: ptr = call @omni.machine.address(%t1)
+    %t2: ptr = call @ir.machine.address(%t1)
     store align 8 %t2, %s_base
     %t3: ptr = load align 8 %s_base
     %t4: i64 = const 16
@@ -40366,7 +40366,7 @@ block0(%p_array: ref, %p_text: ptr, %p_count: i64):
 block1:
     %t13: i64 = const 2
     %t14: i64 = const 0
-    call @__omni_trap(%t13, %t14)
+    call @__ir_trap(%t13, %t14)
     unreachable
 block2:
     %t15: ptr = load align 8 %s_base
@@ -40458,7 +40458,7 @@ block0(%p_array: ref, %p_negative: bool, %p_f: i64, %p_e: i64, %p_lower_closer: 
     %t28: i32 = call @nl_store_text(%t25, %t26, %t27)
     return %t28
 }
-function @omni.format_double(f64, ref) -> i32 export {
+function @ir.format_double(f64, ref) -> i32 export {
 block0(%p_value: f64, %p_array: ref):
     %s_value: ptr = stack_slot size 8 align 8
     %s_array: ptr = stack_slot size 8 align 8
@@ -40583,7 +40583,7 @@ block12:
     %t92: i32 = call @nl_finish(%t74, %t75, %t78, %t81, %t91)
     return %t92
 }
-function @omni.format_float(f32, ref) -> i32 export {
+function @ir.format_float(f32, ref) -> i32 export {
 block0(%p_value: f32, %p_array: ref):
     %s_value: ptr = stack_slot size 8 align 8
     %s_array: ptr = stack_slot size 8 align 8
@@ -41840,7 +41840,7 @@ block120:
     %t560: i64 = or %t558, %t559
     return %t560
 }
-function @omni.parse_double(ref, i32) -> f64 export {
+function @ir.parse_double(ref, i32) -> f64 export {
 block0(%p_array: ref, %p_count: i32):
     %s_array: ptr = stack_slot size 8 align 8
     %s_count: ptr = stack_slot size 8 align 8
@@ -41851,7 +41851,7 @@ block0(%p_array: ref, %p_count: i32):
     store align 8 %p_array, %s_array
     store align 4 %p_count, %s_count
     %t1: ref = load align 8 %s_array
-    %t2: ptr = call @omni.machine.address(%t1)
+    %t2: ptr = call @ir.machine.address(%t1)
     store align 8 %t2, %s_base
     %t3: ptr = load align 8 %s_base
     %t4: i64 = const 16
@@ -41878,7 +41878,7 @@ block2:
 block3:
     %t22: i64 = const 2
     %t23: i64 = const 0
-    call @__omni_trap(%t22, %t23)
+    call @__ir_trap(%t22, %t23)
     unreachable
 block4:
     %t24: ptr = load align 8 %s_base
@@ -44213,7 +44213,7 @@ block2:
     %t11: bool = fcmp oeq %t9, %t10
     return %t11
 }
-function @omni.math.sin(f64) -> f64 export {
+function @ir.math.sin(f64) -> f64 export {
 block0(%p_x: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_ax: ptr = stack_slot size 8 align 8
@@ -44324,7 +44324,7 @@ block16:
     %t68: f64 = call @fx_to_double(%t66, %t67)
     return %t68
 }
-function @omni.math.cos(f64) -> f64 export {
+function @ir.math.cos(f64) -> f64 export {
 block0(%p_x: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_ax: ptr = stack_slot size 8 align 8
@@ -44424,7 +44424,7 @@ block14:
     %t60: f64 = call @fx_to_double(%t58, %t59)
     return %t60
 }
-function @omni.math.tan(f64) -> f64 export {
+function @ir.math.tan(f64) -> f64 export {
 block0(%p_x: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_ax: ptr = stack_slot size 8 align 8
@@ -44515,7 +44515,7 @@ block11:
     %t57: f64 = call @fx_to_double(%t55, %t56)
     return %t57
 }
-function @omni.math.atan(f64) -> f64 export {
+function @ir.math.atan(f64) -> f64 export {
 block0(%p_x: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_ax: ptr = stack_slot size 8 align 8
@@ -44821,7 +44821,7 @@ block20:
     %t148: f64 = call @fx_to_double(%t146, %t147)
     return %t148
 }
-function @omni.math.atan2(f64, f64) -> f64 export {
+function @ir.math.atan2(f64, f64) -> f64 export {
 block0(%p_y: f64, %p_x: f64):
     %s_y: ptr = stack_slot size 8 align 8
     %s_x: ptr = stack_slot size 8 align 8
@@ -45039,7 +45039,7 @@ block36:
     %t142: f64 = call @nl_atan2_core(%t140, %t141)
     return %t142
 }
-function @omni.math.asin(f64) -> f64 export {
+function @ir.math.asin(f64) -> f64 export {
 block0(%p_x: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_ax: ptr = stack_slot size 8 align 8
@@ -45153,7 +45153,7 @@ block10:
     %t69: f64 = call @fx_to_double(%t67, %t68)
     return %t69
 }
-function @omni.math.acos(f64) -> f64 export {
+function @ir.math.acos(f64) -> f64 export {
 block0(%p_x: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_ax: ptr = stack_slot size 8 align 8
@@ -45295,7 +45295,7 @@ block12:
     %t90: f64 = call @fx_to_double(%t88, %t89)
     return %t90
 }
-function @omni.math.exp(f64) -> f64 export {
+function @ir.math.exp(f64) -> f64 export {
 block0(%p_x: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_inf: ptr = stack_slot size 8 align 8
@@ -45380,7 +45380,7 @@ block12:
     %t58: f64 = call @fx_to_double(%t54, %t56)
     return %t58
 }
-function @omni.math.expm1(f64) -> f64 export {
+function @ir.math.expm1(f64) -> f64 export {
 block0(%p_x: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_inf: ptr = stack_slot size 8 align 8
@@ -45510,7 +45510,7 @@ block17:
     %t90: f64 = call @fx_to_double(%t88, %t89)
     return %t90
 }
-function @omni.math.log(f64) -> f64 export {
+function @ir.math.log(f64) -> f64 export {
 block0(%p_x: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_out: ptr = stack_slot size 8 align 8
@@ -45559,7 +45559,7 @@ block8:
     %t32: f64 = call @fx_to_double(%t30, %t31)
     return %t32
 }
-function @omni.math.log10(f64) -> f64 export {
+function @ir.math.log10(f64) -> f64 export {
 block0(%p_x: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_out: ptr = stack_slot size 8 align 8
@@ -45619,7 +45619,7 @@ block8:
     %t39: f64 = call @fx_to_double(%t37, %t38)
     return %t39
 }
-function @omni.math.log1p(f64) -> f64 export {
+function @ir.math.log1p(f64) -> f64 export {
 block0(%p_x: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_inf: ptr = stack_slot size 8 align 8
@@ -45751,7 +45751,7 @@ block15:
     %t90: f64 = call @fx_to_double(%t88, %t89)
     return %t90
 }
-function @omni.math.cbrt(f64) -> f64 export {
+function @ir.math.cbrt(f64) -> f64 export {
 block0(%p_x: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %c7: ptr = stack_slot size 8 align 8
@@ -45843,7 +45843,7 @@ block0(%p_e: ptr, %p_ax: f64, %p_kslot: ptr):
     %t8: i64 = load align 8 %t7
     return %t8
 }
-function @omni.math.sinh(f64) -> f64 export {
+function @ir.math.sinh(f64) -> f64 export {
 block0(%p_x: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_ax: ptr = stack_slot size 8 align 8
@@ -45947,7 +45947,7 @@ block11:
     %t66: f64 = load align 8 %s_result
     return %t66
 }
-function @omni.math.cosh(f64) -> f64 export {
+function @ir.math.cosh(f64) -> f64 export {
 block0(%p_x: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_ax: ptr = stack_slot size 8 align 8
@@ -46049,7 +46049,7 @@ block11:
     %t67: f64 = call @fx_to_double(%t65, %t66)
     return %t67
 }
-function @omni.math.tanh(f64) -> f64 export {
+function @ir.math.tanh(f64) -> f64 export {
 block0(%p_x: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_ax: ptr = stack_slot size 8 align 8
@@ -46177,7 +46177,7 @@ block13:
     %t81: f64 = call @fx_to_double(%t79, %t80)
     return %t81
 }
-function @omni.math.hypot(f64, f64) -> f64 export {
+function @ir.math.hypot(f64, f64) -> f64 export {
 block0(%p_x: f64, %p_y: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_y: ptr = stack_slot size 8 align 8
@@ -46395,7 +46395,7 @@ block18:
     %t145: f64 = call @fx_to_double(%t143, %t144)
     return %t145
 }
-function @omni.math.pow(f64, f64) -> f64 export {
+function @ir.math.pow(f64, f64) -> f64 export {
 block0(%p_x: f64, %p_y: f64):
     %s_x: ptr = stack_slot size 8 align 8
     %s_y: ptr = stack_slot size 8 align 8

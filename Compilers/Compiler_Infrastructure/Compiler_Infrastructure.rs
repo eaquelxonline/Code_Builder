@@ -1882,7 +1882,7 @@ impl<'m> Printer<'m> {
         let module = self.module;
         let mut out = String::new();
         out.push_str(&format!(
-            "omni {FORMAT_VERSION}\nmodule {}\nlayout {}\n",
+            "ir {FORMAT_VERSION}\nmodule {}\nlayout {}\n",
             quote(&module.name),
             module.layout.name()
         ));
@@ -3169,7 +3169,7 @@ impl TextReader {
     }
 
     fn module(&mut self) -> Parsed<Module> {
-        self.tokens.expect_word("omni")?;
+        self.tokens.expect_word("ir")?;
         let version = self.tokens.number()?;
         if version != i128::from(FORMAT_VERSION) {
             return self.tokens.fault("unknown-version", version.to_string());
@@ -3243,7 +3243,7 @@ impl Module {
     }
 }
 
-const MAGIC: &[u8; 4] = b"OMNI";
+const MAGIC: &[u8; 4] = b"CBIR";
 
 struct Encoder {
     bytes: Vec<u8>,
@@ -7252,11 +7252,11 @@ impl StandardHost {
         let first = arguments.first();
         let second = arguments.get(1);
         match name {
-            "omni.identity" => {
+            "ir.identity" => {
                 let handle = Self::handle(first)?;
                 Ok(Some(Datum::integer(Type::I64, i128::from(handle))))
             }
-            "omni.write_chars" => {
+            "ir.write_chars" => {
                 let descriptor = Self::number(first).ok_or(Trap::TypeConfusion)?;
                 let handle = Self::handle(second)?;
                 let from = Self::number(arguments.get(2)).ok_or(Trap::TypeConfusion)?;
@@ -7268,8 +7268,8 @@ impl StandardHost {
                 machine.emit(descriptor as u32, text.as_bytes());
                 Ok(None)
             }
-            "omni.format_double" | "omni.format_float" => {
-                let single = name == "omni.format_float";
+            "ir.format_double" | "ir.format_float" => {
+                let single = name == "ir.format_float";
                 let value = match first {
                     Some(Datum::Float(bits)) if single => f64::from(f32::from_bits(*bits as u32)),
                     Some(Datum::Float(bits)) => f64::from_bits(*bits),
@@ -7280,7 +7280,7 @@ impl StandardHost {
                 let written = Self::put_units(machine, handle, &text)?;
                 Ok(Some(Datum::integer(Type::I32, written as i128)))
             }
-            "omni.parse_double" => {
+            "ir.parse_double" => {
                 let handle = Self::handle(first)?;
                 let count = Self::number(second).ok_or(Trap::TypeConfusion)?;
                 let units = Self::units(machine, handle, 0, count)?;
@@ -7288,7 +7288,7 @@ impl StandardHost {
                 let value = text.trim().parse::<f64>().unwrap_or(f64::NAN);
                 Ok(Some(Datum::f64(value)))
             }
-            "omni.clock" => {
+            "ir.clock" => {
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|elapsed| elapsed.as_nanos() as i128)
@@ -7296,7 +7296,7 @@ impl StandardHost {
                 Ok(Some(Datum::integer(Type::I64, now)))
             }
             _ => {
-                let Some(operation) = name.strip_prefix("omni.math.") else {
+                let Some(operation) = name.strip_prefix("ir.math.") else {
                     return Err(Trap::MissingImplementation);
                 };
                 let left = Self::float(first).ok_or(Trap::TypeConfusion)?;
@@ -7452,7 +7452,7 @@ impl Host for StandardHost {
                     integer(u128::MAX)
                 }
             }
-            "omni.print" | "omni.print_line" => {
+            "ir.print" | "ir.print_line" => {
                 let Some(handle) = first.and_then(Datum::as_reference) else {
                     return HostAnswer::Trapped(Trap::TypeConfusion);
                 };
@@ -7464,7 +7464,7 @@ impl Host for StandardHost {
                     });
                 };
                 let mut bytes = text.as_bytes().to_vec();
-                if name == "omni.print_line" {
+                if name == "ir.print_line" {
                     bytes.push(b'\n');
                 }
                 machine.emit(1, &bytes);
@@ -11920,10 +11920,10 @@ pub mod optimizer {
 pub mod wide {
     use super::*;
 
-    const HELPERS: &str = r#"omni 1
-module "omni.wide"
+    const HELPERS: &str = r#"ir 1
+module "ir.wide"
 layout lp64
-function @omni.wide.udivmod(i64, i64, i64, i64, ptr) internal {
+function @ir.wide.udivmod(i64, i64, i64, i64, ptr) internal {
 block0(%al: i64, %ah: i64, %bl: i64, %bh: i64, %out: ptr):
     %zero: i64 = const 0
     %one: i64 = const 1
@@ -11979,7 +11979,7 @@ block5:
     store align 8 %frh, %p3
     return
 }
-function @omni.wide.sdivmod(i64, i64, i64, i64, ptr) internal {
+function @ir.wide.sdivmod(i64, i64, i64, i64, ptr) internal {
 block0(%al: i64, %ah: i64, %bl: i64, %bh: i64, %out: ptr):
     %top: i64 = const 63
     %c8: i64 = const 8
@@ -12001,7 +12001,7 @@ block0(%al: i64, %ah: i64, %bl: i64, %bh: i64, %out: ptr):
     %nbl: i64 = sub %yl, %sb
     %nbh0: i64 = sub %yh, %sb
     %nbh: i64 = sub %nbh0, %wbi
-    call @omni.wide.udivmod(%nal, %nah, %nbl, %nbh, %out)
+    call @ir.wide.udivmod(%nal, %nah, %nbl, %nbh, %out)
     %p1: ptr = offset %out, %c8
     %p2: ptr = offset %out, %c16
     %p3: ptr = offset %out, %c24
@@ -12032,10 +12032,10 @@ block0(%al: i64, %ah: i64, %bl: i64, %bh: i64, %out: ptr):
 }
 "#;
 
-    const FLOAT_HELPERS: &str = r#"omni 1
-module "omni.wide.float"
+    const FLOAT_HELPERS: &str = r#"ir 1
+module "ir.wide.float"
 layout lp64
-function @omni.wide.u128_to_f64(i128) -> f64 internal {
+function @ir.wide.u128_to_f64(i128) -> f64 internal {
 block0(%x: i128):
     %zero: i128 = const 0
     %isz: bool = icmp eq %x, %zero
@@ -12064,7 +12064,7 @@ block2:
     %r: f64 = fmul %f, %scale
     return %r
 }
-function @omni.wide.u128_to_f32(i128) -> f32 internal {
+function @ir.wide.u128_to_f32(i128) -> f32 internal {
 block0(%x: i128):
     %zero: i128 = const 0
     %isz: bool = icmp eq %x, %zero
@@ -12093,7 +12093,7 @@ block2:
     %r: f32 = fmul %f, %scale
     return %r
 }
-function @omni.wide.umul_overflows(i128, i128) -> bool internal {
+function @ir.wide.umul_overflows(i128, i128) -> bool internal {
 block0(%a: i128, %b: i128):
     %zero: i128 = const 0
     %az: bool = icmp eq %a, %zero
@@ -12107,7 +12107,7 @@ block2:
     %bad: bool = icmp ne %q, %b
     return %bad
 }
-function @omni.wide.smul_overflows(i128, i128) -> bool internal {
+function @ir.wide.smul_overflows(i128, i128) -> bool internal {
 block0(%a: i128, %b: i128):
     %zero: i128 = const 0
     %az: bool = icmp eq %a, %zero
@@ -12127,27 +12127,27 @@ block2:
     %res: bool = or %bad, %special
     return %res
 }
-function @omni.wide.s128_to_f64(i128) -> f64 internal {
+function @ir.wide.s128_to_f64(i128) -> f64 internal {
 block0(%x: i128):
     %zero: i128 = const 0
     %neg: bool = icmp slt %x, %zero
     %m: i128 = abs %x
-    %r: f64 = call @omni.wide.u128_to_f64(%m)
+    %r: f64 = call @ir.wide.u128_to_f64(%m)
     %nr: f64 = fneg %r
     %res: f64 = select %neg, %nr, %r
     return %res
 }
-function @omni.wide.s128_to_f32(i128) -> f32 internal {
+function @ir.wide.s128_to_f32(i128) -> f32 internal {
 block0(%x: i128):
     %zero: i128 = const 0
     %neg: bool = icmp slt %x, %zero
     %m: i128 = abs %x
-    %r: f32 = call @omni.wide.u128_to_f32(%m)
+    %r: f32 = call @ir.wide.u128_to_f32(%m)
     %nr: f32 = fneg %r
     %res: f32 = select %neg, %nr, %r
     return %res
 }
-function @omni.wide.magnitude(f64) -> i128 internal {
+function @ir.wide.magnitude(f64) -> i128 internal {
 block0(%v: f64):
     %b: i64 = bitcast %v
     %c52: i64 = const 52
@@ -12178,7 +12178,7 @@ block2:
     %res: i128 = select %ge52, %l, %r
     return %res
 }
-function @omni.wide.f64_to_u128(f64) -> i128 internal {
+function @ir.wide.f64_to_u128(f64) -> i128 internal {
 block0(%v: f64):
     %b: i64 = bitcast %v
     %c52: i64 = const 52
@@ -12204,10 +12204,10 @@ block1:
     trap 4
     unreachable
 block2:
-    %r: i128 = call @omni.wide.magnitude(%v)
+    %r: i128 = call @ir.wide.magnitude(%v)
     return %r
 }
-function @omni.wide.f64_to_s128(f64) -> i128 internal {
+function @ir.wide.f64_to_s128(f64) -> i128 internal {
 block0(%v: f64):
     %b: i64 = bitcast %v
     %c52: i64 = const 52
@@ -12240,13 +12240,13 @@ block3:
     trap 4
     unreachable
 block4:
-    %r: i128 = call @omni.wide.magnitude(%v)
+    %r: i128 = call @ir.wide.magnitude(%v)
     %zero: i128 = const 0
     %nr: i128 = sub %zero, %r
     %res: i128 = select %neg, %nr, %r
     return %res
 }
-function @omni.wide.f64_to_u128_sat(f64) -> i128 internal {
+function @ir.wide.f64_to_u128_sat(f64) -> i128 internal {
 block0(%v: f64):
     %b: i64 = bitcast %v
     %c52: i64 = const 52
@@ -12280,10 +12280,10 @@ block4:
     %all: i128 = const -1
     return %all
 block5:
-    %r: i128 = call @omni.wide.magnitude(%v)
+    %r: i128 = call @ir.wide.magnitude(%v)
     return %r
 }
-function @omni.wide.f64_to_s128_sat(f64) -> i128 internal {
+function @ir.wide.f64_to_s128_sat(f64) -> i128 internal {
 block0(%v: f64):
     %b: i64 = bitcast %v
     %c52: i64 = const 52
@@ -12320,7 +12320,7 @@ block5:
     %highest: i128 = const 170141183460469231731687303715884105727
     return %highest
 block6:
-    %r: i128 = call @omni.wide.magnitude(%v)
+    %r: i128 = call @ir.wide.magnitude(%v)
     %zero: i128 = const 0
     %nr: i128 = sub %zero, %r
     %res: i128 = select %neg, %nr, %r
@@ -12431,8 +12431,8 @@ block6:
                 .map(|at| FunctionId(at as u32))
                 .ok_or_else(|| unsupported("helper functions"))
         };
-        let unsigned_division = by_name("omni.wide.udivmod")?;
-        let signed_division = by_name("omni.wide.sdivmod")?;
+        let unsigned_division = by_name("ir.wide.udivmod")?;
+        let signed_division = by_name("ir.wide.sdivmod")?;
         let mut out = source.clone();
         for index in 0..source.functions.len() {
             let function = &source.functions[index];
@@ -12862,10 +12862,10 @@ block6:
                     };
                     let single = self.function.type_of(result) == Type::F32;
                     let name = match (conversion == Conversion::SignedToFloat, single) {
-                        (true, false) => "omni.wide.s128_to_f64",
-                        (true, true) => "omni.wide.s128_to_f32",
-                        (false, false) => "omni.wide.u128_to_f64",
-                        (false, true) => "omni.wide.u128_to_f32",
+                        (true, false) => "ir.wide.s128_to_f64",
+                        (true, true) => "ir.wide.s128_to_f32",
+                        (false, false) => "ir.wide.u128_to_f64",
+                        (false, true) => "ir.wide.u128_to_f32",
                     };
                     let callee = self.helper(name)?;
                     self.push(Operation::Call(callee), vec![low, high], Some(result));
@@ -12878,10 +12878,10 @@ block6:
                     if result.is_some_and(|value| self.wide(value)) =>
                 {
                     let name = match conversion {
-                        Conversion::FloatToSigned => "omni.wide.f64_to_s128",
-                        Conversion::FloatToUnsigned => "omni.wide.f64_to_u128",
-                        Conversion::FloatToSignedSaturating => "omni.wide.f64_to_s128_sat",
-                        _ => "omni.wide.f64_to_u128_sat",
+                        Conversion::FloatToSigned => "ir.wide.f64_to_s128",
+                        Conversion::FloatToUnsigned => "ir.wide.f64_to_u128",
+                        Conversion::FloatToSignedSaturating => "ir.wide.f64_to_s128_sat",
+                        _ => "ir.wide.f64_to_u128_sat",
                     };
                     let callee = self.helper(name)?;
                     let operand = if self.function.type_of(source) == Type::F32 {
@@ -13029,9 +13029,9 @@ block6:
                 BinaryOp::MultiplyOverflowsSigned | BinaryOp::MultiplyOverflowsUnsigned => {
                     let Some(result) = result else { return Ok(()) };
                     let name = if op == BinaryOp::MultiplyOverflowsSigned {
-                        "omni.wide.smul_overflows"
+                        "ir.wide.smul_overflows"
                     } else {
-                        "omni.wide.umul_overflows"
+                        "ir.wide.umul_overflows"
                     };
                     let callee = self.helper(name)?;
                     self.push(

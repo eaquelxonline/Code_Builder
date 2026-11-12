@@ -9328,11 +9328,9 @@ pub mod native {
         }
 
         fn pending(&mut self, load: bool, register: &str) {
-            self.line("adrp x16, __omni_pending");
+            self.line("adrp x16, __ir_pending");
             let mnemonic = if load { "ldr" } else { "str" };
-            self.line(&format!(
-                "{mnemonic} {register}, [x16, :lo12:__omni_pending]"
-            ));
+            self.line(&format!("{mnemonic} {register}, [x16, :lo12:__ir_pending]"));
         }
 
         fn memory(
@@ -9390,7 +9388,7 @@ pub mod native {
         fn trap(&mut self, code: i64) {
             self.constant(code as u64, "x0");
             self.line("mov x1, xzr");
-            self.line("bl __omni_trap");
+            self.line("bl __ir_trap");
         }
 
         fn trap_unless_nonzero(&mut self, register: &str, code: i64) {
@@ -9554,8 +9552,8 @@ pub mod native {
                 self.frame_access(false, &Self::held(*held), *at);
             }
             if protected {
-                self.line("adrp x16, __omni_canary");
-                self.line("ldr x16, [x16, :lo12:__omni_canary]");
+                self.line("adrp x16, __ir_canary");
+                self.line("ldr x16, [x16, :lo12:__ir_canary]");
                 self.line("stur x16, [x29, #-8]");
             }
             let parameters = function.blocks[0].parameters.clone();
@@ -9621,8 +9619,8 @@ pub mod native {
 
         fn canary_check(&mut self, id: FunctionId) {
             self.line("ldur x16, [x29, #-8]");
-            self.line("adrp x17, __omni_canary");
-            self.line("ldr x17, [x17, :lo12:__omni_canary]");
+            self.line("adrp x17, __ir_canary");
+            self.line("ldr x17, [x17, :lo12:__ir_canary]");
             self.line("cmp x16, x17");
             self.line(&format!("b.ne .LF{}S", id.0));
         }
@@ -9924,7 +9922,7 @@ pub mod native {
                     self.store_result(A, result);
                 }
                 Operation::StringConstant(index) => {
-                    self.global_address(&format!("__omni_s{index}"), A);
+                    self.global_address(&format!("__ir_s{index}"), A);
                     self.store_result(A, result);
                 }
                 Operation::Binary(op) => {
@@ -10295,8 +10293,8 @@ pub mod native {
                 Operation::Allocate(class) => {
                     let (_, size) = self.field_layout(*class);
                     self.constant(u64::from(size), "x0");
-                    self.global_address(&format!("__omni_c{}", class.0), "x1");
-                    self.line("bl __omni_allocate");
+                    self.global_address(&format!("__ir_c{}", class.0), "x1");
+                    self.line("bl __ir_allocate");
                     self.store_result("x0", result);
                 }
                 Operation::AllocateArray(class) => {
@@ -10307,8 +10305,8 @@ pub mod native {
                     let bits = shared::type_bits(argument_type(0));
                     self.load_signed(arguments[0], "x0", bits);
                     self.constant(u64::from(size), "x1");
-                    self.global_address(&format!("__omni_c{}", class.0), "x2");
-                    self.line("bl __omni_allocate_array");
+                    self.global_address(&format!("__ir_c{}", class.0), "x2");
+                    self.line("bl __ir_allocate_array");
                     self.store_result("x0", result);
                 }
                 Operation::LoadField(class, field) | Operation::StoreField(class, field) => {
@@ -10457,7 +10455,7 @@ pub mod native {
                 Operation::Trap(code) => {
                     self.constant(TRAP_EXPLICIT as u64, "x0");
                     self.constant(*code as u64, "x1");
-                    self.line("bl __omni_trap");
+                    self.line("bl __ir_trap");
                 }
             }
             Ok(())
@@ -11168,16 +11166,16 @@ pub mod native {
         Ok(emitter.base.out)
     }
 
-    const CANARY_CONSTRUCTOR: &str = "\t.text\n\t.type __omni_init_canary, @function\n__omni_init_canary:\n\tadrp x0, __omni_canary\n\tadd x0, x0, :lo12:__omni_canary\n\tmov x1, #8\n\tmov x2, xzr\n\tmov x8, #278\n\tsvc #0\n\tret\n\t.section .init_array,\"aw\",@init_array\n\t.p2align 3\n\t.quad __omni_init_canary\n";
+    const CANARY_CONSTRUCTOR: &str = "\t.text\n\t.type __ir_init_canary, @function\n__ir_init_canary:\n\tadrp x0, __ir_canary\n\tadd x0, x0, :lo12:__ir_canary\n\tmov x1, #8\n\tmov x2, xzr\n\tmov x8, #278\n\tsvc #0\n\tret\n\t.section .init_array,\"aw\",@init_array\n\t.p2align 3\n\t.quad __ir_init_canary\n";
 
     pub fn start_assembly(entry: &str, protected: bool) -> String {
         let canary = if protected {
-            "\tadrp x0, __omni_canary\n\tadd x0, x0, :lo12:__omni_canary\n\tmov x1, #8\n\tmov x2, xzr\n\tmov x8, #278\n\tsvc #0\n"
+            "\tadrp x0, __ir_canary\n\tadd x0, x0, :lo12:__ir_canary\n\tmov x1, #8\n\tmov x2, xzr\n\tmov x8, #278\n\tsvc #0\n"
         } else {
             ""
         };
         format!(
-            "\t.text\n\t.globl _start\n\t.type _start, @function\n_start:\n\tmov x29, xzr\n\tmov x30, xzr\n\tmov x9, sp\n\tand x9, x9, #0xfffffffffffffff0\n\tmov sp, x9\n{canary}\tbl {entry}\n\tadrp x16, __omni_pending\n\tldr x16, [x16, :lo12:__omni_pending]\n\tcbz x16, .Lstart_exit\n\tbl __omni_uncaught\n.Lstart_exit:\n\tmov x8, #94\n\tsvc #0\n\tbrk #0\n"
+            "\t.text\n\t.globl _start\n\t.type _start, @function\n_start:\n\tmov x29, xzr\n\tmov x30, xzr\n\tmov x9, sp\n\tand x9, x9, #0xfffffffffffffff0\n\tmov sp, x9\n{canary}\tbl {entry}\n\tadrp x16, __ir_pending\n\tldr x16, [x16, :lo12:__ir_pending]\n\tcbz x16, .Lstart_exit\n\tbl __ir_uncaught\n.Lstart_exit:\n\tmov x8, #94\n\tsvc #0\n\tbrk #0\n"
         )
     }
 
@@ -11218,7 +11216,7 @@ pub mod native {
             {
                 let symbol = shared::function_symbol(module, FunctionId(index as u32));
                 stubs.push_str(&format!(
-                    "\t.text\n\t.globl {symbol}\n{symbol}:\n\tadrp x0, .Lmissing{index}\n\tadd x0, x0, :lo12:.Lmissing{index}\n\tmov x1, #{}\n\tbl __omni_missing\n\t.section .rodata\n.Lmissing{index}:\n",
+                    "\t.text\n\t.globl {symbol}\n{symbol}:\n\tadrp x0, .Lmissing{index}\n\tadd x0, x0, :lo12:.Lmissing{index}\n\tmov x1, #{}\n\tbl __ir_missing\n\t.section .rodata\n.Lmissing{index}:\n",
                     function.name.len()
                 ));
                 for chunk in function.name.as_bytes().chunks(16) {

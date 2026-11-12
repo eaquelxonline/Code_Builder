@@ -22253,13 +22253,13 @@ pub mod native {
         }
 
         fn pending(&mut self, load: bool, register: &str) {
-            self.global_address("__omni_pending", Y);
+            self.global_address("__ir_pending", Y);
             let mnemonic = if load { "ldr" } else { "str" };
             self.line(&format!("{mnemonic} {register}, [{Y}]"));
         }
 
         fn clear_pending(&mut self) {
-            self.global_address("__omni_pending", Y);
+            self.global_address("__ir_pending", Y);
             self.line(&format!("mov {X}, #0"));
             self.line(&format!("str {X}, [{Y}]"));
             self.line(&format!("str {X}, [{Y}, #4]"));
@@ -22319,7 +22319,7 @@ pub mod native {
             self.line("mov r1, #0");
             self.line("mov r2, #0");
             self.line("mov r3, #0");
-            self.line("bl __omni_trap");
+            self.line("bl __ir_trap");
         }
 
         fn trap_unless_nonzero(&mut self, register: &str, code: i64) {
@@ -22755,7 +22755,7 @@ pub mod native {
                     self.store_result(A, result);
                 }
                 Operation::StringConstant(index) => {
-                    self.global_address(&format!("__omni_s{index}"), A.lo);
+                    self.global_address(&format!("__ir_s{index}"), A.lo);
                     self.store_result(A, result);
                 }
                 Operation::Binary(op) => {
@@ -22958,8 +22958,8 @@ pub mod native {
                     let (_, size) = self.field_layout(*class);
                     self.constant(size, "r0");
                     self.line("mov r1, #0");
-                    self.global_address(&format!("__omni_c{}", class.0), "r2");
-                    self.line("bl __omni_allocate");
+                    self.global_address(&format!("__ir_c{}", class.0), "r2");
+                    self.line("bl __ir_allocate");
                     self.store_result(D, result);
                 }
                 Operation::AllocateArray(class) => {
@@ -22974,11 +22974,11 @@ pub mod native {
                     }
                     self.constant(size, "r2");
                     self.line("mov r3, #0");
-                    self.global_address(&format!("__omni_c{}", class.0), A.lo);
+                    self.global_address(&format!("__ir_c{}", class.0), A.lo);
                     self.line(&format!("str {}, [sp]", A.lo));
                     self.line(&format!("mov {X}, #0"));
                     self.line(&format!("str {X}, [sp, #4]"));
-                    self.line("bl __omni_allocate_array");
+                    self.line("bl __ir_allocate_array");
                     self.store_result(D, result);
                 }
                 Operation::LoadField(class, field) | Operation::StoreField(class, field) => {
@@ -23133,7 +23133,7 @@ pub mod native {
                     let code = i64::from(*code);
                     self.constant(code as u32, "r2");
                     self.constant((code >> 32) as u32, "r3");
-                    self.line("bl __omni_trap");
+                    self.line("bl __ir_trap");
                 }
             }
             Ok(())
@@ -23285,9 +23285,9 @@ pub mod native {
             self.line(&format!("mov r3, {}", B.hi));
             let signed = matches!(op, BinaryOp::DivideSigned | BinaryOp::RemainderSigned);
             self.line(if signed {
-                "bl __omni_sdivmod64"
+                "bl __ir_sdivmod64"
             } else {
-                "bl __omni_udivmod64"
+                "bl __ir_udivmod64"
             });
             if matches!(op, BinaryOp::DivideSigned | BinaryOp::DivideUnsigned) {
                 self.line(&format!("mov {}, r0", A.lo));
@@ -23304,9 +23304,9 @@ pub mod native {
             self.line(&format!("mov r2, {}", B.lo));
             self.line(&format!("mov r3, {}", B.hi));
             self.line(if signed {
-                "bl __omni_smulh64"
+                "bl __ir_smulh64"
             } else {
-                "bl __omni_umulh64"
+                "bl __ir_umulh64"
             });
         }
 
@@ -23795,10 +23795,10 @@ pub mod native {
                     }
                     UnaryOp::PopulationCount => {
                         self.line(&format!("mov r0, {a}"));
-                        self.line("bl __omni_popcount32");
+                        self.line("bl __ir_popcount32");
                         self.line(&format!("mov {b}, r0"));
                         self.line(&format!("mov r0, {}", A.hi));
-                        self.line("bl __omni_popcount32");
+                        self.line("bl __ir_popcount32");
                         self.line(&format!("add {a}, {b}, r0"));
                         self.line(&format!("mov {}, #0", A.hi));
                     }
@@ -23851,7 +23851,7 @@ pub mod native {
                 }
                 UnaryOp::PopulationCount => {
                     self.line(&format!("mov r0, {a}"));
-                    self.line("bl __omni_popcount32");
+                    self.line("bl __ir_popcount32");
                     self.line(&format!("mov {a}, r0"));
                 }
                 UnaryOp::LeadingZeros => {
@@ -24384,9 +24384,9 @@ pub mod native {
                     }
                     if to_wide {
                         self.line(if signed {
-                            "bl __omni_d2i64"
+                            "bl __ir_d2i64"
                         } else {
-                            "bl __omni_d2u64"
+                            "bl __ir_d2u64"
                         });
                         self.store(D, result);
                         return;
@@ -24445,9 +24445,9 @@ pub mod native {
 
     const HELPERS: &str = r#"
 	.text
-	.globl __omni_udivmod64
-	.type __omni_udivmod64, %function
-__omni_udivmod64:
+	.globl __ir_udivmod64
+	.type __ir_udivmod64, %function
+__ir_udivmod64:
 	push {r4, r5, r6, r7, lr}
 	mov r12, #64
 	mov r4, #0
@@ -24471,10 +24471,10 @@ __omni_udivmod64:
 	mov r2, r4
 	mov r3, r5
 	pop {r4, r5, r6, r7, pc}
-	.size __omni_udivmod64, .-__omni_udivmod64
-	.globl __omni_sdivmod64
-	.type __omni_sdivmod64, %function
-__omni_sdivmod64:
+	.size __ir_udivmod64, .-__ir_udivmod64
+	.globl __ir_sdivmod64
+	.type __ir_sdivmod64, %function
+__ir_sdivmod64:
 	push {r4, r5, r6, lr}
 	asr r5, r1, #31
 	eor r6, r5, r3, asr #31
@@ -24487,7 +24487,7 @@ __omni_sdivmod64:
 	eor r3, r3, r12
 	subs r2, r2, r12
 	sbc r3, r3, r12
-	bl __omni_udivmod64
+	bl __ir_udivmod64
 	eor r0, r0, r6
 	eor r1, r1, r6
 	subs r0, r0, r6
@@ -24497,10 +24497,10 @@ __omni_sdivmod64:
 	subs r2, r2, r5
 	sbc r3, r3, r5
 	pop {r4, r5, r6, pc}
-	.size __omni_sdivmod64, .-__omni_sdivmod64
-	.globl __omni_umulh64
-	.type __omni_umulh64, %function
-__omni_umulh64:
+	.size __ir_sdivmod64, .-__ir_sdivmod64
+	.globl __ir_umulh64
+	.type __ir_umulh64, %function
+__ir_umulh64:
 	push {r4, r5, r6, r7, lr}
 	umull r4, r5, r0, r2
 	umull r6, r7, r0, r3
@@ -24518,16 +24518,16 @@ __omni_umulh64:
 	adds r0, r0, r1
 	adc r1, r2, #0
 	pop {r4, r5, r6, r7, pc}
-	.size __omni_umulh64, .-__omni_umulh64
-	.globl __omni_smulh64
-	.type __omni_smulh64, %function
-__omni_smulh64:
+	.size __ir_umulh64, .-__ir_umulh64
+	.globl __ir_smulh64
+	.type __ir_smulh64, %function
+__ir_smulh64:
 	push {r4, r5, r6, r7, lr}
 	mov r4, r0
 	mov r5, r1
 	mov r6, r2
 	mov r7, r3
-	bl __omni_umulh64
+	bl __ir_umulh64
 	asr r12, r5, #31
 	and r2, r6, r12
 	and r3, r7, r12
@@ -24539,10 +24539,10 @@ __omni_smulh64:
 	subs r0, r0, r2
 	sbc r1, r1, r3
 	pop {r4, r5, r6, r7, pc}
-	.size __omni_smulh64, .-__omni_smulh64
-	.globl __omni_popcount32
-	.type __omni_popcount32, %function
-__omni_popcount32:
+	.size __ir_smulh64, .-__ir_smulh64
+	.globl __ir_popcount32
+	.type __ir_popcount32, %function
+__ir_popcount32:
 	lsr r1, r0, #1
 	movw r2, #0x5555
 	movt r2, #0x5555
@@ -24563,10 +24563,10 @@ __omni_popcount32:
 	mul r0, r0, r2
 	lsr r0, r0, #24
 	bx lr
-	.size __omni_popcount32, .-__omni_popcount32
-	.globl __omni_d2u64
-	.type __omni_d2u64, %function
-__omni_d2u64:
+	.size __ir_popcount32, .-__ir_popcount32
+	.globl __ir_d2u64
+	.type __ir_d2u64, %function
+__ir_d2u64:
 	vmov r0, r1, d0
 	tst r1, #0x80000000
 	bne .Ld2u_zero
@@ -24611,16 +24611,16 @@ __omni_d2u64:
 	mov r0, #0
 	mov r1, #0
 	bx lr
-	.size __omni_d2u64, .-__omni_d2u64
-	.globl __omni_d2i64
-	.type __omni_d2i64, %function
-__omni_d2i64:
+	.size __ir_d2u64, .-__ir_d2u64
+	.globl __ir_d2i64
+	.type __ir_d2i64, %function
+__ir_d2i64:
 	push {r4, lr}
 	vmov r0, r1, d0
 	mov r4, r1
 	bic r1, r1, #0x80000000
 	vmov d0, r0, r1
-	bl __omni_d2u64
+	bl __ir_d2u64
 	tst r4, #0x80000000
 	bne .Ld2i_negative
 	tst r1, #0x80000000
@@ -24638,7 +24638,7 @@ __omni_d2i64:
 	rsc r1, r1, #0
 .Ld2i_done:
 	pop {r4, pc}
-	.size __omni_d2i64, .-__omni_d2i64
+	.size __ir_d2i64, .-__ir_d2i64
 "#;
 
     pub fn emit_assembly(module: &Module) -> Result<String, Diagnostic> {
@@ -24660,7 +24660,7 @@ __omni_d2i64:
 
     pub fn start_assembly(entry: &str) -> String {
         format!(
-            "{PREAMBLE}\t.text\n\t.globl _start\n\t.type _start, %function\n_start:\n\tmov r11, #0\n\tmov lr, #0\n\tbic sp, sp, #7\n\tbl {entry}\n\tmovw r1, #:lower16:(__omni_pending - (.Lstart_anchor + 8))\n\tmovt r1, #:upper16:(__omni_pending - (.Lstart_anchor + 8))\n.Lstart_anchor:\n\tadd r1, pc, r1\n\tldr r2, [r1]\n\tcmp r2, #0\n\tbeq .Lstart_exit\n\tbl __omni_uncaught\n.Lstart_exit:\n\tmov r7, #248\n\tsvc #0\n\tudf #0\n"
+            "{PREAMBLE}\t.text\n\t.globl _start\n\t.type _start, %function\n_start:\n\tmov r11, #0\n\tmov lr, #0\n\tbic sp, sp, #7\n\tbl {entry}\n\tmovw r1, #:lower16:(__ir_pending - (.Lstart_anchor + 8))\n\tmovt r1, #:upper16:(__ir_pending - (.Lstart_anchor + 8))\n.Lstart_anchor:\n\tadd r1, pc, r1\n\tldr r2, [r1]\n\tcmp r2, #0\n\tbeq .Lstart_exit\n\tbl __ir_uncaught\n.Lstart_exit:\n\tmov r7, #248\n\tsvc #0\n\tudf #0\n"
         )
     }
 
@@ -24704,7 +24704,7 @@ __omni_d2i64:
             {
                 let symbol = shared::function_symbol(module, FunctionId(index as u32));
                 stubs.push_str(&format!(
-                    "\t.text\n\t.globl {symbol}\n\t.type {symbol}, %function\n{symbol}:\n\tmovw r0, #:lower16:(.Lmissing{index} - (.Lmissing_anchor{index} + 8))\n\tmovt r0, #:upper16:(.Lmissing{index} - (.Lmissing_anchor{index} + 8))\n.Lmissing_anchor{index}:\n\tadd r0, pc, r0\n\tmov r2, #{}\n\tmov r3, #0\n\tbl __omni_missing\n\t.section .rodata\n.Lmissing{index}:\n",
+                    "\t.text\n\t.globl {symbol}\n\t.type {symbol}, %function\n{symbol}:\n\tmovw r0, #:lower16:(.Lmissing{index} - (.Lmissing_anchor{index} + 8))\n\tmovt r0, #:upper16:(.Lmissing{index} - (.Lmissing_anchor{index} + 8))\n.Lmissing_anchor{index}:\n\tadd r0, pc, r0\n\tmov r2, #{}\n\tmov r3, #0\n\tbl __ir_missing\n\t.section .rodata\n.Lmissing{index}:\n",
                     function.name.len()
                 ));
                 for chunk in function.name.as_bytes().chunks(16) {

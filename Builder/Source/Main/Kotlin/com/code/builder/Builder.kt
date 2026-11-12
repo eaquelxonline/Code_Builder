@@ -594,8 +594,8 @@ object Builder {
     fun load(): LoadState {
         loadState?.let { return it }
         val state = try {
-            System.loadLibrary("code_builder")
-            AppLog.event(LogLevel.INFO, "native", "libcode_builder.so loaded.")
+            System.loadLibrary("builder")
+            AppLog.event(LogLevel.INFO, "native", "libbuilder.so loaded.")
             LoadState.Loaded
         } catch (error: UnsatisfiedLinkError) {
             val reason = "The native library could not be loaded: " +

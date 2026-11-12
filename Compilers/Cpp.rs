@@ -43,7 +43,7 @@ impl Plugin for CppPlugin {
     }
 }
 
-use crate::compilers::compiler_infrastructure as omni;
+use crate::compilers::compiler_infrastructure as ir;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 
@@ -27715,7 +27715,7 @@ pub struct Parser<'session, 'files> {
     extension_depth: usize,
     variable_array_counter: u32,
     vla_bounds: HashMap<u32, Expression>,
-    release_function: Option<omni::FunctionId>,
+    release_function: Option<ir::FunctionId>,
     fold_notes: HashMap<u32, Vec<Place>>,
     parenthesis_depth: i32,
     bracket_depth: i32,
@@ -27732,7 +27732,7 @@ pub struct Parser<'session, 'files> {
     pending_empty_statement: bool,
     group_guard: std::cell::Cell<Option<&'static str>>,
     record_stack: Vec<usize>,
-    module: omni::Module,
+    module: ir::Module,
     lowering_gaps: Vec<(String, String)>,
     variadic_callees: BTreeSet<String>,
     defined_elsewhere: BTreeSet<String>,
@@ -27745,18 +27745,18 @@ pub struct Parser<'session, 'files> {
     attribute_weak: bool,
     weak_symbols: BTreeSet<String>,
     local_initializers: HashMap<usize, Expression>,
-    declared_function_ids: HashMap<String, omni::FunctionId>,
+    declared_function_ids: HashMap<String, ir::FunctionId>,
     global_initializers: HashMap<usize, Expression>,
     global_blockers: HashMap<usize, String>,
-    declared_global_ids: HashMap<String, omni::GlobalId>,
-    global_users: Vec<(omni::GlobalId, omni::FunctionId)>,
+    declared_global_ids: HashMap<String, ir::GlobalId>,
+    global_users: Vec<(ir::GlobalId, ir::FunctionId)>,
     static_local_declarations: HashMap<String, usize>,
-    string_globals: HashMap<Vec<u8>, omni::GlobalId>,
-    aggregate_calls: Vec<(omni::FunctionId, omni::FunctionId)>,
+    string_globals: HashMap<Vec<u8>, ir::GlobalId>,
+    aggregate_calls: Vec<(ir::FunctionId, ir::FunctionId)>,
     compiling: bool,
     string_global_count: u32,
     compound_literal_count: u32,
-    current_function: Option<omni::FunctionId>,
+    current_function: Option<ir::FunctionId>,
 }
 
 impl<'session, 'files> Parser<'session, 'files> {
@@ -27793,7 +27793,7 @@ impl<'session, 'files> Parser<'session, 'files> {
             pending_empty_statement: false,
             group_guard: std::cell::Cell::new(None),
             record_stack: Vec::new(),
-            module: omni::Module::new("main.c"),
+            module: ir::Module::new("main.c"),
             lowering_gaps: Vec::new(),
             variadic_callees: BTreeSet::new(),
             defined_elsewhere: BTreeSet::new(),
@@ -27819,7 +27819,7 @@ impl<'session, 'files> Parser<'session, 'files> {
             compound_literal_count: 0,
             current_function: None,
         };
-        parser.module.layout = parser.omni_layout();
+        parser.module.layout = parser.ir_layout();
         parser.token_keyword = parser.keyword_of(&parser.token.clone());
         parser.check_parser_keyword();
         parser
@@ -45477,7 +45477,7 @@ enum LoweredStatement {
 
 pub struct LoweredUnit {
     pub unsupported: Option<String>,
-    pub module: omni::Module,
+    pub module: ir::Module,
     pub gaps: Vec<(String, String)>,
     pub variadic_callees: Vec<String>,
 }
@@ -45513,7 +45513,7 @@ impl SourceFiles for VirtualFiles {
 }
 
 pub struct CompiledC {
-    pub module: omni::Module,
+    pub module: ir::Module,
     pub warnings: Vec<String>,
 }
 
@@ -45667,14 +45667,14 @@ pub fn compile_c(
         }
     }
     if !errors.is_empty() {
-        let mut failure = omni::fail("EI400", "The C source has errors.");
+        let mut failure = ir::fail("EI400", "The C source has errors.");
         for line in errors {
             failure = failure.with_context(format!("Diagnostic: {}", line.trim_end()));
         }
         return Err(failure);
     }
     if !gaps.is_empty() {
-        let mut failure = omni::fail(
+        let mut failure = ir::fail(
             "EI401",
             "The C front end cannot compile this construct yet.",
         );
@@ -45688,38 +45688,38 @@ pub fn compile_c(
 }
 
 fn remap_operation(
-    operation: &mut omni::Operation,
-    functions: &[omni::FunctionId],
-    globals: &[omni::GlobalId],
+    operation: &mut ir::Operation,
+    functions: &[ir::FunctionId],
+    globals: &[ir::GlobalId],
 ) {
     match operation {
-        omni::Operation::Call(callee) => *callee = functions[callee.index()],
-        omni::Operation::FunctionAddress(callee) => *callee = functions[callee.index()],
-        omni::Operation::GlobalAddress(global) => *global = globals[global.index()],
+        ir::Operation::Call(callee) => *callee = functions[callee.index()],
+        ir::Operation::FunctionAddress(callee) => *callee = functions[callee.index()],
+        ir::Operation::GlobalAddress(global) => *global = globals[global.index()],
         _ => {}
     }
 }
 
-fn merge_modules(units: Vec<omni::Module>) -> Result<omni::Module, Diagnostic> {
-    let mut merged = omni::Module::new("c");
+fn merge_modules(units: Vec<ir::Module>) -> Result<ir::Module, Diagnostic> {
+    let mut merged = ir::Module::new("c");
     if let Some(first) = units.first() {
         merged.layout = first.layout;
     }
     let duplicate = |kind: &str, name: &str| {
-        omni::fail("EI402", "Two C translation units define the same symbol.")
+        ir::fail("EI402", "Two C translation units define the same symbol.")
             .with_context(format!("Kind: {kind}"))
             .with_context(format!("Symbol: {name}"))
     };
-    let mut function_symbols: BTreeMap<String, omni::FunctionId> = BTreeMap::new();
-    let mut global_symbols: BTreeMap<String, omni::GlobalId> = BTreeMap::new();
-    let mut function_maps: Vec<Vec<omni::FunctionId>> = Vec::new();
-    let mut global_maps: Vec<Vec<omni::GlobalId>> = Vec::new();
+    let mut function_symbols: BTreeMap<String, ir::FunctionId> = BTreeMap::new();
+    let mut global_symbols: BTreeMap<String, ir::GlobalId> = BTreeMap::new();
+    let mut function_maps: Vec<Vec<ir::FunctionId>> = Vec::new();
+    let mut global_maps: Vec<Vec<ir::GlobalId>> = Vec::new();
     let mut function_winners: Vec<(usize, usize)> = Vec::new();
     let mut global_winners: Vec<(usize, usize)> = Vec::new();
     for (unit_index, unit) in units.iter().enumerate() {
         let mut function_map = Vec::with_capacity(unit.functions.len());
         for (index, function) in unit.functions.iter().enumerate() {
-            let shared = function.linkage != omni::Linkage::Internal;
+            let shared = function.linkage != ir::Linkage::Internal;
             let existing = if shared {
                 function_symbols.get(&function.name).copied()
             } else {
@@ -45731,18 +45731,18 @@ fn merge_modules(units: Vec<omni::Module>) -> Result<omni::Module, Diagnostic> {
                     let held = &units[winner_unit].functions[winner_index];
                     if !function.is_declaration() {
                         if held.is_declaration()
-                            || (held.linkage == omni::Linkage::Weak
-                                && function.linkage != omni::Linkage::Weak)
+                            || (held.linkage == ir::Linkage::Weak
+                                && function.linkage != ir::Linkage::Weak)
                         {
                             function_winners[id.index()] = (unit_index, index);
-                        } else if function.linkage != omni::Linkage::Weak {
+                        } else if function.linkage != ir::Linkage::Weak {
                             return Err(duplicate("function", &function.name));
                         }
                     }
                     id
                 }
                 None => {
-                    let id = omni::FunctionId(function_winners.len() as u32);
+                    let id = ir::FunctionId(function_winners.len() as u32);
                     function_winners.push((unit_index, index));
                     if shared {
                         function_symbols.insert(function.name.clone(), id);
@@ -45755,19 +45755,19 @@ fn merge_modules(units: Vec<omni::Module>) -> Result<omni::Module, Diagnostic> {
         function_maps.push(function_map);
         let mut global_map = Vec::with_capacity(unit.globals.len());
         for (index, global) in unit.globals.iter().enumerate() {
-            let shared = global.linkage != omni::Linkage::Internal;
+            let shared = global.linkage != ir::Linkage::Internal;
             let existing = if shared {
                 global_symbols.get(&global.name).copied()
             } else {
                 None
             };
-            let defines = global.linkage != omni::Linkage::Import;
+            let defines = global.linkage != ir::Linkage::Import;
             let id = match existing {
                 Some(id) => {
                     let (winner_unit, winner_index) = global_winners[id.index()];
                     let held = &units[winner_unit].globals[winner_index];
                     if defines {
-                        if held.linkage != omni::Linkage::Import {
+                        if held.linkage != ir::Linkage::Import {
                             return Err(duplicate("global", &global.name));
                         }
                         global_winners[id.index()] = (unit_index, index);
@@ -45775,7 +45775,7 @@ fn merge_modules(units: Vec<omni::Module>) -> Result<omni::Module, Diagnostic> {
                     id
                 }
                 None => {
-                    let id = omni::GlobalId(global_winners.len() as u32);
+                    let id = ir::GlobalId(global_winners.len() as u32);
                     global_winners.push((unit_index, index));
                     if shared {
                         global_symbols.insert(global.name.clone(), id);
@@ -45790,7 +45790,7 @@ fn merge_modules(units: Vec<omni::Module>) -> Result<omni::Module, Diagnostic> {
     let mut taken: BTreeSet<String> = BTreeSet::new();
     for (unit_index, index) in &function_winners {
         let mut function = units[*unit_index].functions[*index].clone();
-        if function.linkage == omni::Linkage::Internal {
+        if function.linkage == ir::Linkage::Internal {
             let mut candidate = function.name.clone();
             let mut counter = 0;
             while !taken.insert(candidate.clone()) {
@@ -45809,7 +45809,7 @@ fn merge_modules(units: Vec<omni::Module>) -> Result<omni::Module, Diagnostic> {
             );
         }
         for block in &mut function.blocks {
-            if let omni::Terminator::Invoke { call, .. } = &mut block.terminator {
+            if let ir::Terminator::Invoke { call, .. } = &mut block.terminator {
                 remap_operation(
                     &mut call.operation,
                     &function_maps[*unit_index],
@@ -45822,7 +45822,7 @@ fn merge_modules(units: Vec<omni::Module>) -> Result<omni::Module, Diagnostic> {
     let mut taken_globals: BTreeSet<String> = BTreeSet::new();
     for (unit_index, index) in &global_winners {
         let mut global = units[*unit_index].globals[*index].clone();
-        if global.linkage == omni::Linkage::Internal {
+        if global.linkage == ir::Linkage::Internal {
             let mut candidate = global.name.clone();
             let mut counter = 0;
             while !taken_globals.insert(candidate.clone()) {
@@ -45835,18 +45835,18 @@ fn merge_modules(units: Vec<omni::Module>) -> Result<omni::Module, Diagnostic> {
         }
         for relocation in &mut global.relocations {
             relocation.target = match relocation.target {
-                omni::Symbol::Global(target) => {
-                    omni::Symbol::Global(global_maps[*unit_index][target.index()])
+                ir::Symbol::Global(target) => {
+                    ir::Symbol::Global(global_maps[*unit_index][target.index()])
                 }
-                omni::Symbol::Function(target) => {
-                    omni::Symbol::Function(function_maps[*unit_index][target.index()])
+                ir::Symbol::Function(target) => {
+                    ir::Symbol::Function(function_maps[*unit_index][target.index()])
                 }
             };
         }
         merged.globals.push(global);
     }
     merged.verify().map_err(|problem| {
-        omni::fail(
+        ir::fail(
             "EI401",
             "The C front end cannot compile this construct yet.",
         )
@@ -46014,59 +46014,59 @@ fn visit_statement_expressions<'e>(
 
 #[derive(Clone, Copy)]
 enum Local {
-    Register(omni::Variable),
-    Slot(omni::Value, omni::Type),
-    Aggregate(omni::Value),
+    Register(ir::Variable),
+    Slot(ir::Value, ir::Type),
+    Aggregate(ir::Value),
 }
 
 #[derive(Clone, Copy)]
 enum Target {
-    Register(omni::Variable),
-    Memory(omni::Value, omni::Type),
-    Volatile(omni::Value, omni::Type),
-    Unaligned(omni::Value, omni::Type),
+    Register(ir::Variable),
+    Memory(ir::Value, ir::Type),
+    Volatile(ir::Value, ir::Type),
+    Unaligned(ir::Value, ir::Type),
     BitField {
-        address: omni::Value,
-        unit: omni::Type,
+        address: ir::Value,
+        unit: ir::Type,
         shift: u32,
         width: u32,
         signed: bool,
-        ty: omni::Type,
+        ty: ir::Type,
     },
 }
 
 enum LoopFrame {
     Loop {
-        break_block: omni::Block,
-        continue_block: omni::Block,
+        break_block: ir::Block,
+        continue_block: ir::Block,
     },
     Switch {
-        break_block: omni::Block,
+        break_block: ir::Block,
     },
 }
 
 struct LowerState<'f> {
-    builder: omni::FunctionBuilder<'f>,
+    builder: ir::FunctionBuilder<'f>,
     locals: HashMap<usize, Local>,
     live: bool,
     targets: Vec<LoopFrame>,
-    sret: Option<(omni::Value, u32)>,
-    labels: BTreeMap<String, omni::Block>,
-    dynamic_head: Option<omni::Variable>,
-    vla_sizes: HashMap<u32, omni::Variable>,
+    sret: Option<(ir::Value, u32)>,
+    labels: BTreeMap<String, ir::Block>,
+    dynamic_head: Option<ir::Variable>,
+    vla_sizes: HashMap<u32, ir::Variable>,
     case_blocks: Vec<CaseBlocks>,
-    va_area: Option<omni::Value>,
+    va_area: Option<ir::Value>,
     address_labels: Vec<String>,
 }
 
 struct CaseBlocks {
-    values: HashMap<i128, omni::Block>,
-    default: Option<omni::Block>,
+    values: HashMap<i128, ir::Block>,
+    default: Option<ir::Block>,
 }
 
 struct LoweredSignature {
     va_area: bool,
-    signature: omni::Signature,
+    signature: ir::Signature,
     result_aggregate: Option<(u32, u32)>,
     aggregate_parameters: Vec<Option<(u32, u32)>>,
 }
@@ -46074,14 +46074,14 @@ struct LoweredSignature {
 type Lowered<T> = Result<T, String>;
 
 impl<'session, 'files> Parser<'session, 'files> {
-    fn omni_layout(&self) -> omni::Layout {
+    fn ir_layout(&self) -> ir::Layout {
         let target = self.target();
         if target.pointer_width == 64 {
-            omni::Layout::Lp64
+            ir::Layout::Lp64
         } else if matches!(target.family, TargetFamily::X86(_)) {
-            omni::Layout::I386
+            ir::Layout::I386
         } else {
-            omni::Layout::Ilp32
+            ir::Layout::Ilp32
         }
     }
 
@@ -46175,11 +46175,11 @@ impl<'session, 'files> Parser<'session, 'files> {
                 return Err("empty struct values".to_string());
             }
             result_aggregate = Some(layout);
-            types.push(omni::Type::POINTER);
+            types.push(ir::Type::POINTER);
             None
         } else {
             Some(
-                self.omni_type(result)
+                self.ir_type(result)
                     .ok_or_else(|| "a result of this type".to_string())?,
             )
         };
@@ -46190,20 +46190,20 @@ impl<'session, 'files> Parser<'session, 'files> {
                 if layout.0 == 0 {
                     return Err("empty struct values".to_string());
                 }
-                types.push(omni::Type::POINTER);
+                types.push(ir::Type::POINTER);
                 aggregate_parameters.push(Some(layout));
             } else {
                 types.push(
-                    self.omni_type(parameter)
+                    self.ir_type(parameter)
                         .ok_or_else(|| "a parameter of this type".to_string())?,
                 );
                 aggregate_parameters.push(None);
             }
         }
         if by_array {
-            types.push(omni::Type::POINTER);
+            types.push(ir::Type::POINTER);
         }
-        let mut signature = omni::Signature::new(types, result_ty);
+        let mut signature = ir::Signature::new(types, result_ty);
         signature.variadic = variadic && !by_array;
         Ok(LoweredSignature {
             va_area: by_array,
@@ -46237,7 +46237,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         state: &mut LowerState,
         name: &str,
         arguments: &[Expression],
-    ) -> Lowered<Option<omni::Value>> {
+    ) -> Lowered<Option<ir::Value>> {
         let [first, second, destination] = arguments else {
             return Err("an overflow builtin that does not take three arguments".to_string());
         };
@@ -46269,18 +46269,18 @@ impl<'session, 'files> Parser<'session, 'files> {
         let x = self.lower_expression(state, first)?;
         let y = self.lower_expression(state, second)?;
         let wrapping = match kind {
-            0 => omni::BinaryOp::Add,
-            1 => omni::BinaryOp::Subtract,
-            _ => omni::BinaryOp::Multiply,
+            0 => ir::BinaryOp::Add,
+            1 => ir::BinaryOp::Subtract,
+            _ => ir::BinaryOp::Multiply,
         };
         let (overflow, value) = if wa == wb && wb == wr && sa == sb && sb == sr && wr >= 32 {
             let predicate = match (kind, sr) {
-                (0, true) => omni::BinaryOp::AddOverflowsSigned,
-                (0, false) => omni::BinaryOp::AddOverflowsUnsigned,
-                (1, true) => omni::BinaryOp::SubtractOverflowsSigned,
-                (1, false) => omni::BinaryOp::SubtractOverflowsUnsigned,
-                (_, true) => omni::BinaryOp::MultiplyOverflowsSigned,
-                (_, false) => omni::BinaryOp::MultiplyOverflowsUnsigned,
+                (0, true) => ir::BinaryOp::AddOverflowsSigned,
+                (0, false) => ir::BinaryOp::AddOverflowsUnsigned,
+                (1, true) => ir::BinaryOp::SubtractOverflowsSigned,
+                (1, false) => ir::BinaryOp::SubtractOverflowsUnsigned,
+                (_, true) => ir::BinaryOp::MultiplyOverflowsSigned,
+                (_, false) => ir::BinaryOp::MultiplyOverflowsUnsigned,
             };
             (
                 state.builder.binary(predicate, x, y),
@@ -46291,25 +46291,23 @@ impl<'session, 'files> Parser<'session, 'files> {
             && wr <= 64
             && !(kind == 2 && (wa == 32 && !sa || wb == 32 && !sb))
         {
-            let wide = omni::Type::I64;
+            let wide = ir::Type::I64;
             let xs = Self::convert_integer(state, x, a_ty, wide, sa);
             let ys = Self::convert_integer(state, y, b_ty, wide, sb);
             let exact = state.builder.binary(wrapping, xs, ys);
             let narrowed = Self::convert_integer(state, exact, wide, result_ty, sr);
             let back = Self::convert_integer(state, narrowed, result_ty, wide, sr);
-            let differs = state
-                .builder
-                .compare(omni::Comparison::NotEqual, exact, back);
+            let differs = state.builder.compare(ir::Comparison::NotEqual, exact, back);
             (differs, narrowed)
         } else {
             return Err("an overflow builtin on operands of these types".to_string());
         };
         let address = self.lower_expression(state, destination)?;
-        let size = self.omni_size(result_ty).max(1);
+        let size = self.ir_size(result_ty).max(1);
         state.builder.store(value, address, size);
         let flag = state
             .builder
-            .convert(omni::Conversion::ZeroExtend, overflow, omni::Type::I32);
+            .convert(ir::Conversion::ZeroExtend, overflow, ir::Type::I32);
         Ok(Some(flag))
     }
 
@@ -46319,7 +46317,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         declaration: usize,
         library: &str,
         arguments: &[Expression],
-    ) -> Lowered<Option<omni::Value>> {
+    ) -> Lowered<Option<ir::Value>> {
         let prototype = self.declarations[declaration].ty.clone();
         let TypeNode::FunctionPrototype {
             result,
@@ -46335,7 +46333,7 @@ impl<'session, 'files> Parser<'session, 'files> {
             Some(id) => *id,
             None => {
                 let placeholder =
-                    omni::Function::new(library, lowered.signature.clone(), omni::Linkage::Export);
+                    ir::Function::new(library, lowered.signature.clone(), ir::Linkage::Export);
                 let id = self.module.add_function(placeholder);
                 self.declared_function_ids.insert(library.to_string(), id);
                 id
@@ -46358,7 +46356,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         ty.unqualified()
     }
 
-    fn reserve_or_get_function(&mut self, declaration_index: usize) -> Lowered<omni::FunctionId> {
+    fn reserve_or_get_function(&mut self, declaration_index: usize) -> Lowered<ir::FunctionId> {
         let name = String::from_utf8_lossy(
             self.declarations[declaration_index]
                 .name
@@ -46393,11 +46391,11 @@ impl<'session, 'files> Parser<'session, 'files> {
         let by_array = variadic && !unprototyped && self.variadic_by_array(declaration_index);
         let lowered = self.lowered_signature(&result, &parameters, variadic, by_array)?;
         let linkage = if self.declarations[declaration_index].storage == StorageClass::Static {
-            omni::Linkage::Internal
+            ir::Linkage::Internal
         } else {
-            omni::Linkage::Export
+            ir::Linkage::Export
         };
-        let placeholder = omni::Function::new(&name, lowered.signature, linkage);
+        let placeholder = ir::Function::new(&name, lowered.signature, linkage);
         let id = self.module.add_function(placeholder);
         self.declared_function_ids.insert(name, id);
         Ok(id)
@@ -46444,7 +46442,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         name: &str,
         parameters: &[usize],
         mut state: FunctionState,
-    ) -> Lowered<omni::Function> {
+    ) -> Lowered<ir::Function> {
         if let Some(reason) = state.lowering_gap.take() {
             return Err(reason);
         }
@@ -46469,11 +46467,11 @@ impl<'session, 'files> Parser<'session, 'files> {
         let parameter_types = lowered.signature.parameters.clone();
         let result = lowered.signature.result;
         let linkage = if self.declarations[index].storage == StorageClass::Static {
-            omni::Linkage::Internal
+            ir::Linkage::Internal
         } else if self.weak_symbols.contains(name) {
-            omni::Linkage::Weak
+            ir::Linkage::Weak
         } else {
-            omni::Linkage::Export
+            ir::Linkage::Export
         };
         let mut locals: BTreeSet<usize> = parameters.iter().copied().collect();
         collect_locals(&body, &mut locals);
@@ -46495,16 +46493,16 @@ impl<'session, 'files> Parser<'session, 'files> {
             .iter()
             .any(|declaration| self.declarations[*declaration].ty.is_variable_array())
             || statements_call_alloca(&self.declarations, &body);
-        let mut function = omni::Function::new(name, lowered.signature.clone(), linkage);
+        let mut function = ir::Function::new(name, lowered.signature.clone(), linkage);
         if self.preprocessor.options.stack_protector {
-            function.attributes.insert(omni::Attribute::StackProtect);
+            function.attributes.insert(ir::Attribute::StackProtect);
         }
         if self.declarations[index].inline {
-            function.attributes.insert(omni::Attribute::Inline);
+            function.attributes.insert(ir::Attribute::Inline);
         }
         {
             let mut lower = LowerState {
-                builder: omni::FunctionBuilder::new(&mut function),
+                builder: ir::FunctionBuilder::new(&mut function),
                 locals: HashMap::new(),
                 live: true,
                 targets: Vec::new(),
@@ -46519,8 +46517,8 @@ impl<'session, 'files> Parser<'session, 'files> {
             let entry = lower.builder.create_block();
             lower.builder.switch_to(entry);
             if uses_dynamic_stack {
-                let head = lower.builder.declare_variable(omni::Type::POINTER);
-                let null = lower.builder.null(omni::Type::POINTER);
+                let head = lower.builder.declare_variable(ir::Type::POINTER);
+                let null = lower.builder.null(ir::Type::POINTER);
                 lower.builder.define(head, null);
                 lower.dynamic_head = Some(head);
             }
@@ -46535,9 +46533,9 @@ impl<'session, 'files> Parser<'session, 'files> {
                     lower.locals.insert(declaration, Local::Aggregate(slot));
                 } else {
                     let ty = self
-                        .omni_type(&declared_ty)
+                        .ir_type(&declared_ty)
                         .ok_or_else(|| "the address of a local of this type".to_string())?;
-                    let size = self.omni_size(ty);
+                    let size = self.ir_size(ty);
                     let slot = lower.builder.stack_slot(size, size.max(1));
                     lower.locals.insert(declaration, Local::Slot(slot, ty));
                 }
@@ -46579,7 +46577,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                     }
                 }
             }
-            let label_blocks: Vec<omni::Block> = lower.labels.values().copied().collect();
+            let label_blocks: Vec<ir::Block> = lower.labels.values().copied().collect();
             for block in label_blocks {
                 lower.builder.seal(block);
             }
@@ -46590,35 +46588,35 @@ impl<'session, 'files> Parser<'session, 'files> {
         Ok(function)
     }
 
-    fn omni_type(&self, ty: &QualifiedType) -> Option<omni::Type> {
+    fn ir_type(&self, ty: &QualifiedType) -> Option<ir::Type> {
         if ty.is_bool() {
-            return Some(omni::Type::I8);
+            return Some(ir::Type::I8);
         }
         if ty.is_pointer() {
-            return Some(omni::Type::POINTER);
+            return Some(ir::Type::POINTER);
         }
         if ty.is_integer() {
             return match self.integer_width(ty) {
-                8 => Some(omni::Type::I8),
-                16 => Some(omni::Type::I16),
-                32 => Some(omni::Type::I32),
-                64 => Some(omni::Type::I64),
-                128 => Some(omni::Type::I128),
+                8 => Some(ir::Type::I8),
+                16 => Some(ir::Type::I16),
+                32 => Some(ir::Type::I32),
+                64 => Some(ir::Type::I64),
+                128 => Some(ir::Type::I128),
                 _ => None,
             };
         }
         if ty.is_floating() {
             return match self.builtin_width(ty.builtin_kind()?) {
-                32 => Some(omni::Type::F32),
-                64 => Some(omni::Type::F64),
+                32 => Some(ir::Type::F32),
+                64 => Some(ir::Type::F64),
                 _ => None,
             };
         }
         None
     }
 
-    fn omni_size(&self, ty: omni::Type) -> u32 {
-        if ty == omni::Type::POINTER {
+    fn ir_size(&self, ty: ir::Type) -> u32 {
+        if ty == ir::Type::POINTER {
             self.target().pointer_width / 8
         } else {
             ty.element().bits().div_ceil(8)
@@ -46638,56 +46636,56 @@ impl<'session, 'files> Parser<'session, 'files> {
     }
 
     fn element_size(&self, ty: &QualifiedType) -> Lowered<u32> {
-        match self.omni_type(ty) {
-            Some(scalar) => Ok(self.omni_size(scalar).max(1)),
+        match self.ir_type(ty) {
+            Some(scalar) => Ok(self.ir_size(scalar).max(1)),
             None => Ok(self.memory_layout(ty)?.0.max(1)),
         }
     }
 
-    fn integer_value_type(&self, ty: &QualifiedType) -> Lowered<omni::Type> {
+    fn integer_value_type(&self, ty: &QualifiedType) -> Lowered<ir::Type> {
         if !ty.is_integer() {
             return Err(format!(
                 "operations on values that are not integers (type '{}')",
                 self.print_type(ty)
             ));
         }
-        self.omni_type(ty)
+        self.ir_type(ty)
             .ok_or_else(|| "an integer type of this width".to_string())
     }
 
-    fn float_value_type(&self, ty: &QualifiedType) -> Lowered<omni::Type> {
+    fn float_value_type(&self, ty: &QualifiedType) -> Lowered<ir::Type> {
         if !ty.is_floating() {
             return Err("operations on values that are not floating-point".to_string());
         }
-        self.omni_type(ty)
-            .ok_or_else(|| "long double, which Omni IR has no format for".to_string())
+        self.ir_type(ty)
+            .ok_or_else(|| "long double, which the IR has no format for".to_string())
     }
 
-    fn scalar_value_type(&self, ty: &QualifiedType) -> Lowered<omni::Type> {
+    fn scalar_value_type(&self, ty: &QualifiedType) -> Lowered<ir::Type> {
         if !ty.is_integer() && !ty.is_pointer() {
             return Err("conditions that are not integers or pointers".to_string());
         }
-        self.omni_type(ty)
+        self.ir_type(ty)
             .ok_or_else(|| "a condition of this type".to_string())
     }
 
     fn convert_integer(
         state: &mut LowerState,
-        value: omni::Value,
-        from: omni::Type,
-        to: omni::Type,
+        value: ir::Value,
+        from: ir::Type,
+        to: ir::Type,
         signed: bool,
-    ) -> omni::Value {
+    ) -> ir::Value {
         let (from_bits, to_bits) = (from.element().bits(), to.element().bits());
         if to_bits > from_bits {
             let conversion = if signed {
-                omni::Conversion::SignExtend
+                ir::Conversion::SignExtend
             } else {
-                omni::Conversion::ZeroExtend
+                ir::Conversion::ZeroExtend
             };
             state.builder.convert(conversion, value, to)
         } else if to_bits < from_bits {
-            state.builder.convert(omni::Conversion::Truncate, value, to)
+            state.builder.convert(ir::Conversion::Truncate, value, to)
         } else {
             value
         }
@@ -46695,115 +46693,111 @@ impl<'session, 'files> Parser<'session, 'files> {
 
     fn convert_scalar(
         state: &mut LowerState,
-        value: omni::Value,
-        from: omni::Type,
-        to: omni::Type,
+        value: ir::Value,
+        from: ir::Type,
+        to: ir::Type,
         signed: bool,
-    ) -> omni::Value {
+    ) -> ir::Value {
         if from == to {
             return value;
         }
-        let integer = |ty: omni::Type| {
-            !matches!(ty, omni::Type::F32 | omni::Type::F64) && ty != omni::Type::POINTER
-        };
+        let integer =
+            |ty: ir::Type| !matches!(ty, ir::Type::F32 | ir::Type::F64) && ty != ir::Type::POINTER;
         match (from, to) {
             (from, to) if integer(from) && integer(to) => {
                 Self::convert_integer(state, value, from, to, signed)
             }
-            (from, omni::Type::POINTER) if integer(from) => {
-                let wide = Self::convert_integer(state, value, from, omni::Type::I64, signed);
-                state.builder.convert(
-                    omni::Conversion::IntegerToPointer,
-                    wide,
-                    omni::Type::POINTER,
-                )
-            }
-            (omni::Type::POINTER, to) if integer(to) => {
-                let wide = state.builder.convert(
-                    omni::Conversion::PointerToInteger,
-                    value,
-                    omni::Type::I64,
-                );
-                Self::convert_integer(state, wide, omni::Type::I64, to, false)
-            }
-            (omni::Type::F32, omni::Type::F64) => {
+            (from, ir::Type::POINTER) if integer(from) => {
+                let wide = Self::convert_integer(state, value, from, ir::Type::I64, signed);
                 state
                     .builder
-                    .convert(omni::Conversion::FloatExtend, value, to)
+                    .convert(ir::Conversion::IntegerToPointer, wide, ir::Type::POINTER)
             }
-            (omni::Type::F64, omni::Type::F32) => {
+            (ir::Type::POINTER, to) if integer(to) => {
+                let wide =
+                    state
+                        .builder
+                        .convert(ir::Conversion::PointerToInteger, value, ir::Type::I64);
+                Self::convert_integer(state, wide, ir::Type::I64, to, false)
+            }
+            (ir::Type::F32, ir::Type::F64) => {
                 state
                     .builder
-                    .convert(omni::Conversion::FloatTruncate, value, to)
+                    .convert(ir::Conversion::FloatExtend, value, to)
+            }
+            (ir::Type::F64, ir::Type::F32) => {
+                state
+                    .builder
+                    .convert(ir::Conversion::FloatTruncate, value, to)
             }
             _ => value,
         }
     }
 
-    fn zero_of(state: &mut LowerState, ty: omni::Type) -> omni::Value {
-        if ty == omni::Type::POINTER {
+    fn zero_of(state: &mut LowerState, ty: ir::Type) -> ir::Value {
+        if ty == ir::Type::POINTER {
             state.builder.null(ty)
-        } else if matches!(ty, omni::Type::F32 | omni::Type::F64) {
+        } else if matches!(ty, ir::Type::F32 | ir::Type::F64) {
             state.builder.float(ty, 0.0)
         } else {
             state.builder.integer(ty, 0)
         }
     }
 
-    fn offset_bytes(state: &mut LowerState, address: omni::Value, bytes: i128) -> omni::Value {
+    fn offset_bytes(state: &mut LowerState, address: ir::Value, bytes: i128) -> ir::Value {
         if bytes == 0 {
             return address;
         }
-        let offset_value = state.builder.integer(omni::Type::I64, bytes);
+        let offset_value = state.builder.integer(ir::Type::I64, bytes);
         state.builder.offset(address, offset_value)
     }
 
     fn library_function(
         &mut self,
         name: &str,
-        parameters: Vec<omni::Type>,
-        result: Option<omni::Type>,
-    ) -> omni::FunctionId {
+        parameters: Vec<ir::Type>,
+        result: Option<ir::Type>,
+    ) -> ir::FunctionId {
         if let Some(id) = self.declared_function_ids.get(name) {
             return *id;
         }
-        let placeholder = omni::Function::new(
+        let placeholder = ir::Function::new(
             name,
-            omni::Signature::new(parameters, result),
-            omni::Linkage::Import,
+            ir::Signature::new(parameters, result),
+            ir::Linkage::Import,
         );
         let id = self.module.add_function(placeholder);
         self.declared_function_ids.insert(name.to_string(), id);
         id
     }
 
-    fn release_function(&mut self) -> omni::FunctionId {
+    fn release_function(&mut self) -> ir::FunctionId {
         if let Some(id) = self.release_function {
             return id;
         }
-        let free = self.library_function("free", vec![omni::Type::POINTER], None);
-        let mut function = omni::Function::new(
+        let free = self.library_function("free", vec![ir::Type::POINTER], None);
+        let mut function = ir::Function::new(
             ".release_dynamic",
-            omni::Signature::new(vec![omni::Type::POINTER], None),
-            omni::Linkage::Internal,
+            ir::Signature::new(vec![ir::Type::POINTER], None),
+            ir::Linkage::Internal,
         );
         {
-            let mut builder = omni::FunctionBuilder::new(&mut function);
+            let mut builder = ir::FunctionBuilder::new(&mut function);
             let entry = builder.create_block();
             builder.switch_to(entry);
             let first = builder.entry_parameters(entry)[0];
             let header = builder.create_block();
-            let current = builder.block_parameter(header, omni::Type::POINTER);
+            let current = builder.block_parameter(header, ir::Type::POINTER);
             builder.jump(header, vec![first]);
             builder.switch_to(header);
-            let null = builder.null(omni::Type::POINTER);
-            let present = builder.compare(omni::Comparison::NotEqual, current, null);
+            let null = builder.null(ir::Type::POINTER);
+            let present = builder.compare(ir::Comparison::NotEqual, current, null);
             let body = builder.create_block();
             let exit = builder.create_block();
             builder.branch(present, body, exit);
             builder.seal(body);
             builder.switch_to(body);
-            let next = builder.load(omni::Type::POINTER, current, 8);
+            let next = builder.load(ir::Type::POINTER, current, 8);
             builder.call(free, None, vec![current]);
             builder.jump(header, vec![next]);
             builder.seal(header);
@@ -46828,21 +46822,16 @@ impl<'session, 'files> Parser<'session, 'files> {
         state.builder.call(release, None, vec![chain]);
     }
 
-    fn allocate_dynamic(
-        &mut self,
-        state: &mut LowerState,
-        bytes: omni::Value,
-    ) -> Lowered<omni::Value> {
+    fn allocate_dynamic(&mut self, state: &mut LowerState, bytes: ir::Value) -> Lowered<ir::Value> {
         let head = state
             .dynamic_head
             .ok_or_else(|| "dynamic stack allocation without a release chain".to_string())?;
-        let malloc =
-            self.library_function("malloc", vec![omni::Type::I64], Some(omni::Type::POINTER));
-        let header = state.builder.integer(omni::Type::I64, 16);
-        let total = state.builder.binary(omni::BinaryOp::Add, bytes, header);
+        let malloc = self.library_function("malloc", vec![ir::Type::I64], Some(ir::Type::POINTER));
+        let header = state.builder.integer(ir::Type::I64, 16);
+        let total = state.builder.binary(ir::BinaryOp::Add, bytes, header);
         let raw = state
             .builder
-            .call(malloc, Some(omni::Type::POINTER), vec![total])
+            .call(malloc, Some(ir::Type::POINTER), vec![total])
             .ok_or_else(|| "malloc without a result".to_string())?;
         let previous = state.builder.read(head);
         state.builder.store(previous, raw, 8);
@@ -46850,7 +46839,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         Ok(Self::offset_bytes(state, raw, 16))
     }
 
-    fn label_block(state: &mut LowerState, name: &str) -> omni::Block {
+    fn label_block(state: &mut LowerState, name: &str) -> ir::Block {
         if let Some(block) = state.labels.get(name) {
             return *block;
         }
@@ -46863,13 +46852,13 @@ impl<'session, 'files> Parser<'session, 'files> {
         &self,
         state: &mut LowerState,
         declaration: usize,
-        ty: omni::Type,
-        initial: Option<omni::Value>,
+        ty: ir::Type,
+        initial: Option<ir::Value>,
     ) {
         match state.locals.get(&declaration).copied() {
             Some(Local::Slot(slot, ty)) => {
                 if let Some(value) = initial {
-                    let size = self.omni_size(ty);
+                    let size = self.ir_size(ty);
                     state.builder.store(value, slot, size.max(1));
                 }
             }
@@ -46880,7 +46869,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                     Some(value) => value,
                     None => state
                         .builder
-                        .push(omni::Operation::Poison, Vec::new(), Some(ty))
+                        .push(ir::Operation::Poison, Vec::new(), Some(ty))
                         .expect("a poison value has a result"),
                 };
                 state.builder.define(variable, value);
@@ -46918,12 +46907,10 @@ impl<'session, 'files> Parser<'session, 'files> {
             LoweredStatement::Return(value) => {
                 if let (Some((sret, size)), Some(expression)) = (state.sret, value) {
                     let source = self.lower_aggregate_value_address(state, expression)?;
-                    let length = state.builder.integer(omni::Type::I64, i128::from(size));
-                    state.builder.push(
-                        omni::Operation::MemoryMove,
-                        vec![sret, source, length],
-                        None,
-                    );
+                    let length = state.builder.integer(ir::Type::I64, i128::from(size));
+                    state
+                        .builder
+                        .push(ir::Operation::MemoryMove, vec![sret, source, length], None);
                     self.emit_dynamic_release(state);
                     state.builder.ret(None);
                     state.live = false;
@@ -46960,9 +46947,9 @@ impl<'session, 'files> Parser<'session, 'files> {
                         {
                             let source = self.lower_aggregate_value_address(state, initializer)?;
                             let (size, _) = self.memory_layout(&declared_ty)?;
-                            let length = state.builder.integer(omni::Type::I64, i128::from(size));
+                            let length = state.builder.integer(ir::Type::I64, i128::from(size));
                             state.builder.push(
-                                omni::Operation::MemoryMove,
+                                ir::Operation::MemoryMove,
                                 vec![address, source, length],
                                 None,
                             );
@@ -46989,7 +46976,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                     return Ok(());
                 }
                 let ty = self
-                    .omni_type(&declared_ty)
+                    .ir_type(&declared_ty)
                     .ok_or_else(|| "local variables of this type".to_string())?;
                 let value = match initializer {
                     Some(initializer) => Some(self.lower_expression(state, initializer)?),
@@ -47076,11 +47063,10 @@ impl<'session, 'files> Parser<'session, 'files> {
             }
             LoweredStatement::IndirectGoto(target) => {
                 let pointer = self.lower_expression(state, target)?;
-                let number = state.builder.convert(
-                    omni::Conversion::PointerToInteger,
-                    pointer,
-                    omni::Type::I64,
-                );
+                let number =
+                    state
+                        .builder
+                        .convert(ir::Conversion::PointerToInteger, pointer, ir::Type::I64);
                 let names = state.address_labels.clone();
                 if names.is_empty() {
                     return Err(
@@ -47090,13 +47076,13 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let mut cases = Vec::new();
                 for (at, name) in names.iter().enumerate() {
                     let block = Self::label_block(state, name);
-                    cases.push((at as i128 + 1, omni::BlockCall::to(block)));
+                    cases.push((at as i128 + 1, ir::BlockCall::to(block)));
                 }
                 let default = Self::label_block(state, &names[0]);
-                state.builder.terminate(omni::Terminator::Switch {
+                state.builder.terminate(ir::Terminator::Switch {
                     value: number,
                     cases,
-                    default: omni::BlockCall::to(default),
+                    default: ir::BlockCall::to(default),
                 });
                 state.live = false;
                 Ok(())
@@ -47236,7 +47222,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         state.builder.switch_to(header);
         let condition_value = match condition {
             Some(condition) => self.lower_condition(state, condition)?,
-            None => state.builder.integer(omni::Type::BOOL, 1),
+            None => state.builder.integer(ir::Type::BOOL, 1),
         };
         let body_block = state.builder.create_block();
         let exit_block = state.builder.create_block();
@@ -47360,7 +47346,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         &mut self,
         state: &mut LowerState,
         ty: &QualifiedType,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         let TypeNode::VariableArray {
             element, identity, ..
         } = &*ty.desugared().node
@@ -47382,14 +47368,14 @@ impl<'session, 'files> Parser<'session, 'files> {
             state,
             count,
             count_ty,
-            omni::Type::I64,
+            ir::Type::I64,
             self.is_signed_integer(&bound.ty),
         );
         let size = state
             .builder
-            .integer(omni::Type::I64, i128::from(element_size));
-        let bytes = state.builder.binary(omni::BinaryOp::Multiply, count, size);
-        let recorded = state.builder.declare_variable(omni::Type::I64);
+            .integer(ir::Type::I64, i128::from(element_size));
+        let bytes = state.builder.binary(ir::BinaryOp::Multiply, count, size);
+        let recorded = state.builder.declare_variable(ir::Type::I64);
         state.builder.define(recorded, bytes);
         state.vla_sizes.insert(*identity, recorded);
         self.allocate_dynamic(state, bytes)
@@ -47399,7 +47385,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         &mut self,
         state: &mut LowerState,
         expression: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         let ExpressionKind::CompoundLiteral {
             initializer,
             file_scope,
@@ -47421,19 +47407,19 @@ impl<'session, 'files> Parser<'session, 'files> {
             self.lower_aggregate_initializer(state, slot, &ty, elements)?;
         } else {
             let scalar = self
-                .omni_type(&ty)
+                .ir_type(&ty)
                 .ok_or_else(|| "a compound literal of this type".to_string())?;
             let value = match elements.first() {
                 Some(element) => self.lower_expression(state, element)?,
                 None => Self::zero_of(state, scalar),
             };
-            let size = self.omni_size(scalar).max(1);
+            let size = self.ir_size(scalar).max(1);
             state.builder.store(value, slot, size);
         }
         Ok(slot)
     }
 
-    fn compound_literal_global(&mut self, literal: &Expression) -> Lowered<omni::GlobalId> {
+    fn compound_literal_global(&mut self, literal: &Expression) -> Lowered<ir::GlobalId> {
         let ExpressionKind::CompoundLiteral { initializer, .. } = &literal.kind else {
             return Err("a compound literal that cannot be located".to_string());
         };
@@ -47443,19 +47429,19 @@ impl<'session, 'files> Parser<'session, 'files> {
         let mut relocations = Vec::new();
         self.fill_global_image(&ty, initializer, 0, &mut bytes, &mut relocations)?;
         let content = if bytes.iter().all(|byte| *byte == 0) {
-            omni::GlobalContent::Zero
+            ir::GlobalContent::Zero
         } else {
-            omni::GlobalContent::Bytes(bytes)
+            ir::GlobalContent::Bytes(bytes)
         };
         let name = format!(".compound.{}", self.compound_literal_count);
         self.compound_literal_count += 1;
-        Ok(self.module.add_global(omni::Global {
+        Ok(self.module.add_global(ir::Global {
             name,
             size,
             align,
             mutable: true,
             thread_local: false,
-            linkage: omni::Linkage::Internal,
+            linkage: ir::Linkage::Internal,
             content,
             relocations,
         }))
@@ -47481,7 +47467,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         &mut self,
         state: &mut LowerState,
         expression: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         let mut source = expression.ignore_parentheses();
         while let ExpressionKind::Cast {
             kind: CastKind::LValueToRValue | CastKind::NoOp,
@@ -47512,7 +47498,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let then_block = state.builder.create_block();
                 let else_block = state.builder.create_block();
                 let merge = state.builder.create_block();
-                let result = state.builder.block_parameter(merge, omni::Type::POINTER);
+                let result = state.builder.block_parameter(merge, ir::Type::POINTER);
                 state.builder.branch(condition, then_block, else_block);
                 state.builder.seal(then_block);
                 state.builder.seal(else_block);
@@ -47553,9 +47539,9 @@ impl<'session, 'files> Parser<'session, 'files> {
         let (size, _) = self.memory_layout(&left.ty)?;
         let destination = self.lower_address(state, left)?;
         let origin = self.lower_aggregate_value_address(state, right)?;
-        let length = state.builder.integer(omni::Type::I64, i128::from(size));
+        let length = state.builder.integer(ir::Type::I64, i128::from(size));
         state.builder.push(
-            omni::Operation::MemoryMove,
+            ir::Operation::MemoryMove,
             vec![destination, origin, length],
             None,
         );
@@ -47585,7 +47571,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                 Some(Local::Aggregate(_)) => Err("assigning a whole array or struct".to_string()),
                 None => {
                     let ty = self
-                        .omni_type(&expression.ty)
+                        .ir_type(&expression.ty)
                         .ok_or_else(|| "a file-scope object of this type".to_string())?;
                     let address = self.reference_address(state, *declaration)?;
                     Ok(Target::Memory(address, ty))
@@ -47596,14 +47582,14 @@ impl<'session, 'files> Parser<'session, 'files> {
                 operand,
             } => {
                 let ty = self
-                    .omni_type(&expression.ty)
+                    .ir_type(&expression.ty)
                     .ok_or_else(|| "an object of this type".to_string())?;
                 let address = self.lower_expression(state, operand)?;
                 Ok(Target::Memory(address, ty))
             }
             ExpressionKind::Subscript { base, index } => {
                 let ty = self
-                    .omni_type(&expression.ty)
+                    .ir_type(&expression.ty)
                     .ok_or_else(|| "an array element of this type".to_string())?;
                 let address = self.lower_subscript_address(state, base, index)?;
                 Ok(Target::Memory(address, ty))
@@ -47615,7 +47601,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                 arrow,
             } => {
                 let ty = self
-                    .omni_type(&expression.ty)
+                    .ir_type(&expression.ty)
                     .ok_or_else(|| "a member of this type".to_string())?;
                 if let Some(width) = self.tags[*tag].fields[*field].bit_width {
                     return self.lower_bit_field_target(
@@ -47630,7 +47616,7 @@ impl<'session, 'files> Parser<'session, 'files> {
             }
             ExpressionKind::CompoundLiteral { .. } => {
                 let ty = self
-                    .omni_type(&expression.ty)
+                    .ir_type(&expression.ty)
                     .ok_or_else(|| "a compound literal of this type".to_string())?;
                 let address = self.lower_compound_literal_address(state, expression)?;
                 Ok(Target::Memory(address, ty))
@@ -47639,7 +47625,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         }
     }
 
-    fn local_address(&self, state: &LowerState, declaration: usize) -> Lowered<omni::Value> {
+    fn local_address(&self, state: &LowerState, declaration: usize) -> Lowered<ir::Value> {
         match state.locals.get(&declaration) {
             Some(Local::Slot(address, _)) | Some(Local::Aggregate(address)) => Ok(*address),
             Some(Local::Register(_)) => Err("the address of a variable in a register".to_string()),
@@ -47651,7 +47637,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         &mut self,
         state: &mut LowerState,
         declaration: usize,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         if state.locals.contains_key(&declaration) {
             return self.local_address(state, declaration);
         }
@@ -47663,7 +47649,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         Ok(state.builder.global_address(global))
     }
 
-    fn reserve_or_get_global(&mut self, declaration: usize) -> Lowered<omni::GlobalId> {
+    fn reserve_or_get_global(&mut self, declaration: usize) -> Lowered<ir::GlobalId> {
         let information = &self.declarations[declaration];
         let static_local = !information.file_scope
             && information.kind == DeclarationKind::Variable
@@ -47693,14 +47679,14 @@ impl<'session, 'files> Parser<'session, 'files> {
         let id = match self.declared_global_ids.get(&name) {
             Some(id) => *id,
             None => {
-                let id = self.module.add_global(omni::Global {
+                let id = self.module.add_global(ir::Global {
                     name: name.clone(),
                     size: 0,
                     align: 1,
                     mutable: true,
                     thread_local: false,
-                    linkage: omni::Linkage::Export,
-                    content: omni::GlobalContent::Zero,
+                    linkage: ir::Linkage::Export,
+                    content: ir::GlobalContent::Zero,
                     relocations: Vec::new(),
                 });
                 self.declared_global_ids.insert(name, id);
@@ -47736,7 +47722,7 @@ impl<'session, 'files> Parser<'session, 'files> {
             if held.is_declaration() {
                 continue;
             }
-            let placeholder = omni::Function::new(&held.name, held.signature.clone(), held.linkage);
+            let placeholder = ir::Function::new(&held.name, held.signature.clone(), held.linkage);
             self.module.functions[index] = placeholder;
             self.lowering_gaps.push((
                 name,
@@ -47750,10 +47736,10 @@ impl<'session, 'files> Parser<'session, 'files> {
             .collect();
         for function in &mut self.module.functions {
             if function.is_declaration()
-                && function.linkage == omni::Linkage::Export
+                && function.linkage == ir::Linkage::Export
                 && !reported.contains(&function.name)
             {
-                function.linkage = omni::Linkage::Import;
+                function.linkage = ir::Linkage::Import;
             }
         }
     }
@@ -47794,7 +47780,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         let mut finalized: BTreeSet<usize> = BTreeSet::new();
         let mut failed: BTreeMap<usize, (String, String)> = BTreeMap::new();
         loop {
-            let mut names: Vec<(omni::GlobalId, String)> = self
+            let mut names: Vec<(ir::GlobalId, String)> = self
                 .declared_global_ids
                 .iter()
                 .filter(|(_, id)| !finalized.contains(&id.index()))
@@ -47818,7 +47804,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                     continue;
                 }
                 for relocation in &global.relocations {
-                    if let omni::Symbol::Global(target) = relocation.target {
+                    if let ir::Symbol::Global(target) = relocation.target {
                         if let Some((target_name, _)) = failed.get(&target.index()) {
                             spreading.push((
                                 index,
@@ -47841,7 +47827,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         }
         for (index, (name, reason)) in failed {
             let mut reported = BTreeSet::new();
-            let users: Vec<omni::FunctionId> = self
+            let users: Vec<ir::FunctionId> = self
                 .global_users
                 .iter()
                 .filter(|(global, _)| global.index() == index)
@@ -47857,7 +47843,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let held = &self.module.functions[function.index()];
                 let function_name = held.name.clone();
                 let placeholder =
-                    omni::Function::new(&held.name, held.signature.clone(), held.linkage);
+                    ir::Function::new(&held.name, held.signature.clone(), held.linkage);
                 self.module.functions[function.index()] = placeholder;
                 self.lowering_gaps
                     .push((function_name, format!("the global '{name}': {reason}")));
@@ -47865,7 +47851,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         }
     }
 
-    fn finalize_global(&mut self, id: omni::GlobalId, name: &str) -> Lowered<()> {
+    fn finalize_global(&mut self, id: ir::GlobalId, name: &str) -> Lowered<()> {
         let candidates: Vec<usize> = match self.static_local_declarations.get(name) {
             Some(declaration) => vec![*declaration],
             None => (0..self.declarations.len())
@@ -47889,11 +47875,11 @@ impl<'session, 'files> Parser<'session, 'files> {
             .iter()
             .any(|index| self.declarations[*index].storage == StorageClass::Static);
         let linkage = if internal {
-            omni::Linkage::Internal
+            ir::Linkage::Internal
         } else if definition.is_some() || tentative.is_some() {
-            omni::Linkage::Export
+            ir::Linkage::Export
         } else {
-            omni::Linkage::Import
+            ir::Linkage::Import
         };
         let representative = definition
             .or(tentative)
@@ -47902,7 +47888,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         let ty = self.declarations[representative].ty.clone();
         let (size, align) = match self.memory_layout(&ty) {
             Ok(layout) => layout,
-            Err(_) if linkage == omni::Linkage::Import => (0, 1),
+            Err(_) if linkage == ir::Linkage::Import => (0, 1),
             Err(reason) => return Err(reason),
         };
         let mut bytes = vec![0u8; size as usize];
@@ -47918,10 +47904,10 @@ impl<'session, 'files> Parser<'session, 'files> {
                 .ok_or_else(|| "an initializer that was not kept".to_string())?;
             self.fill_global_image(&ty, &initializer, 0, &mut bytes, &mut relocations)?;
         }
-        let content = if bytes.iter().all(|byte| *byte == 0) || linkage == omni::Linkage::Import {
-            omni::GlobalContent::Zero
+        let content = if bytes.iter().all(|byte| *byte == 0) || linkage == ir::Linkage::Import {
+            ir::GlobalContent::Zero
         } else {
-            omni::GlobalContent::Bytes(bytes)
+            ir::GlobalContent::Bytes(bytes)
         };
         let mutable = !ty.is_const();
         let held = &mut self.module.globals[id.index()];
@@ -47954,7 +47940,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         initializer: &Expression,
         offset: usize,
         image: &mut Vec<u8>,
-        relocations: &mut Vec<omni::Relocation>,
+        relocations: &mut Vec<ir::Relocation>,
     ) -> Lowered<()> {
         let initializer = initializer.ignore_parentheses();
         if matches!(initializer.kind, ExpressionKind::Designated { .. }) {
@@ -48048,9 +48034,9 @@ impl<'session, 'files> Parser<'session, 'files> {
             return Ok(());
         }
         let scalar = self
-            .omni_type(ty)
+            .ir_type(ty)
             .ok_or_else(|| "an initializer of this type".to_string())?;
-        let size = self.omni_size(scalar) as usize;
+        let size = self.ir_size(scalar) as usize;
         let mut state = EvaluationState::default();
         let value = self
             .evaluate(initializer, &mut state)
@@ -48069,7 +48055,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let bits = match size {
                     4 => u128::from((value as f32).to_bits()),
                     8 => u128::from(value.to_bits()),
-                    _ => return Err("long double, which Omni IR has no format for".to_string()),
+                    _ => return Err("long double, which the IR has no format for".to_string()),
                 };
                 Self::write_image_integer(image, offset, size, bits as i128)
             }
@@ -48082,10 +48068,10 @@ impl<'session, 'files> Parser<'session, 'files> {
                         return Self::write_image_integer(image, offset, size, delta);
                     }
                     AddressBase::Declaration(declaration) => {
-                        omni::Symbol::Global(self.reserve_or_get_global(declaration)?)
+                        ir::Symbol::Global(self.reserve_or_get_global(declaration)?)
                     }
                     AddressBase::Function(declaration) => {
-                        omni::Symbol::Function(self.reserve_or_get_function(declaration)?)
+                        ir::Symbol::Function(self.reserve_or_get_function(declaration)?)
                     }
                     AddressBase::String => {
                         if delta != 0 {
@@ -48093,16 +48079,16 @@ impl<'session, 'files> Parser<'session, 'files> {
                         }
                         let literal = Self::find_string_literal(initializer)
                             .ok_or_else(|| "a string literal that cannot be located".to_string())?;
-                        omni::Symbol::Global(self.string_global(literal)?)
+                        ir::Symbol::Global(self.string_global(literal)?)
                     }
                     AddressBase::CompoundLiteral => {
                         let literal = Self::find_compound_literal(initializer)
                             .ok_or_else(|| "a compound literal that cannot be located".to_string())?
                             .clone();
-                        omni::Symbol::Global(self.compound_literal_global(&literal)?)
+                        ir::Symbol::Global(self.compound_literal_global(&literal)?)
                     }
                 };
-                relocations.push(omni::Relocation {
+                relocations.push(ir::Relocation {
                     offset: offset as u32,
                     target,
                     addend: delta as i64,
@@ -48121,7 +48107,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         }
     }
 
-    fn string_global(&mut self, literal: &Expression) -> Lowered<omni::GlobalId> {
+    fn string_global(&mut self, literal: &Expression) -> Lowered<ir::GlobalId> {
         let (units, prefix) = match &literal.kind {
             ExpressionKind::String { units, prefix, .. } => (units, prefix),
             ExpressionKind::Predefined { units, .. } => (units, &LiteralPrefix::Plain),
@@ -48137,14 +48123,14 @@ impl<'session, 'files> Parser<'session, 'files> {
         }
         let name = format!(".str.{}", self.string_global_count);
         self.string_global_count += 1;
-        let id = self.module.add_global(omni::Global {
+        let id = self.module.add_global(ir::Global {
             name,
             size: bytes.len() as u32,
             align: 1,
             mutable: false,
             thread_local: false,
-            linkage: omni::Linkage::Internal,
-            content: omni::GlobalContent::Bytes(bytes.clone()),
+            linkage: ir::Linkage::Internal,
+            content: ir::GlobalContent::Bytes(bytes.clone()),
             relocations: Vec::new(),
         });
         self.string_globals.insert(bytes, id);
@@ -48155,7 +48141,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         &mut self,
         state: &mut LowerState,
         expression: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         match &expression.kind {
             ExpressionKind::Parenthesized(inner) => self.lower_address(state, inner),
             ExpressionKind::Unary {
@@ -48198,7 +48184,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         state: &mut LowerState,
         base: &Expression,
         index: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         let element = base
             .ty
             .pointee()
@@ -48211,13 +48197,13 @@ impl<'session, 'files> Parser<'session, 'files> {
             state,
             index_value,
             index_type,
-            omni::Type::I64,
+            ir::Type::I64,
             self.is_signed_integer(&index.ty),
         );
-        let size_value = state.builder.integer(omni::Type::I64, i128::from(size));
+        let size_value = state.builder.integer(ir::Type::I64, i128::from(size));
         let scaled = state
             .builder
-            .binary(omni::BinaryOp::Multiply, index_value, size_value);
+            .binary(ir::BinaryOp::Multiply, index_value, size_value);
         Ok(state.builder.offset(base_value, scaled))
     }
 
@@ -48228,7 +48214,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         tag: usize,
         field: usize,
         arrow: bool,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         if self.tags[tag].fields[field].bit_width.is_some() {
             return Err("bit-field members".to_string());
         }
@@ -48257,7 +48243,7 @@ impl<'session, 'files> Parser<'session, 'files> {
     fn lower_aggregate_initializer(
         &mut self,
         state: &mut LowerState,
-        address: omni::Value,
+        address: ir::Value,
         ty: &QualifiedType,
         elements: &[Expression],
     ) -> Lowered<()> {
@@ -48307,7 +48293,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                 };
                 if let Some(width) = bit_width {
                     let scalar = self
-                        .omni_type(&field_ty)
+                        .ir_type(&field_ty)
                         .ok_or_else(|| "a bit-field of this type".to_string())?;
                     let value = self.lower_expression(state, element)?;
                     let target =
@@ -48329,7 +48315,7 @@ impl<'session, 'files> Parser<'session, 'files> {
     fn lower_string_array_initializer(
         &mut self,
         state: &mut LowerState,
-        address: omni::Value,
+        address: ir::Value,
         ty: &QualifiedType,
         units: &[u32],
         prefix: LiteralPrefix,
@@ -48350,7 +48336,7 @@ impl<'session, 'files> Parser<'session, 'files> {
             let unit = units.get(index as usize).copied().unwrap_or(0);
             let value = state
                 .builder
-                .integer(omni::Type::I8, wrap_constant(u128::from(unit), 8));
+                .integer(ir::Type::I8, wrap_constant(u128::from(unit), 8));
             let slot = Self::offset_bytes(state, address, i128::from(index));
             state.builder.store(value, slot, 1);
         }
@@ -48360,7 +48346,7 @@ impl<'session, 'files> Parser<'session, 'files> {
     fn lower_initializer_element(
         &mut self,
         state: &mut LowerState,
-        address: omni::Value,
+        address: ir::Value,
         ty: &QualifiedType,
         element: &Expression,
     ) -> Lowered<()> {
@@ -48382,9 +48368,9 @@ impl<'session, 'files> Parser<'session, 'files> {
         {
             let source = self.lower_aggregate_value_address(state, element)?;
             let (size, _) = self.memory_layout(ty)?;
-            let length = state.builder.integer(omni::Type::I64, i128::from(size));
+            let length = state.builder.integer(ir::Type::I64, i128::from(size));
             state.builder.push(
-                omni::Operation::MemoryMove,
+                ir::Operation::MemoryMove,
                 vec![address, source, length],
                 None,
             );
@@ -48394,10 +48380,10 @@ impl<'session, 'files> Parser<'session, 'files> {
             return Err("this kind of initializer".to_string());
         }
         let scalar_ty = self
-            .omni_type(ty)
+            .ir_type(ty)
             .ok_or_else(|| "an initializer of this type".to_string())?;
         let value = self.lower_expression(state, element)?;
-        let size = self.omni_size(scalar_ty).max(1);
+        let size = self.ir_size(scalar_ty).max(1);
         state.builder.store(value, address, size);
         Ok(())
     }
@@ -48405,12 +48391,12 @@ impl<'session, 'files> Parser<'session, 'files> {
     fn zero_fill(
         &mut self,
         state: &mut LowerState,
-        address: omni::Value,
+        address: ir::Value,
         ty: &QualifiedType,
     ) -> Lowered<()> {
-        if let Some(scalar_ty) = self.omni_type(ty) {
+        if let Some(scalar_ty) = self.ir_type(ty) {
             let zero = Self::zero_of(state, scalar_ty);
-            let size = self.omni_size(scalar_ty).max(1);
+            let size = self.ir_size(scalar_ty).max(1);
             state.builder.store(zero, address, size);
             return Ok(());
         }
@@ -48419,13 +48405,11 @@ impl<'session, 'files> Parser<'session, 'files> {
             if size == 0 {
                 return Ok(());
             }
-            let byte = state.builder.integer(omni::Type::I8, 0);
-            let length = state.builder.integer(omni::Type::I64, i128::from(size));
-            state.builder.push(
-                omni::Operation::MemoryFill,
-                vec![address, byte, length],
-                None,
-            );
+            let byte = state.builder.integer(ir::Type::I8, 0);
+            let length = state.builder.integer(ir::Type::I64, i128::from(size));
+            state
+                .builder
+                .push(ir::Operation::MemoryFill, vec![address, byte, length], None);
             return Ok(());
         }
         Err("zero-initializing a value of this type".to_string())
@@ -48440,7 +48424,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         field: usize,
         arrow: bool,
         width: u32,
-        ty: omni::Type,
+        ty: ir::Type,
         expression: &Expression,
     ) -> Lowered<Target> {
         let record = if arrow {
@@ -48463,12 +48447,12 @@ impl<'session, 'files> Parser<'session, 'files> {
     fn bit_field_target_at(
         &self,
         state: &mut LowerState,
-        base_address: omni::Value,
+        base_address: ir::Value,
         record: &QualifiedType,
         tag: usize,
         field: usize,
         width: u32,
-        ty: omni::Type,
+        ty: ir::Type,
     ) -> Lowered<Target> {
         let offset_bits = self
             .field_offset_bits(tag, field)
@@ -48489,10 +48473,10 @@ impl<'session, 'files> Parser<'session, 'files> {
             return Err("a bit-field that does not fit one machine word".to_string());
         }
         let unit = match unit_bytes {
-            1 => omni::Type::I8,
-            2 => omni::Type::I16,
-            4 => omni::Type::I32,
-            _ => omni::Type::I64,
+            1 => ir::Type::I8,
+            2 => ir::Type::I16,
+            4 => ir::Type::I32,
+            _ => ir::Type::I64,
         };
         let address = Self::offset_bytes(state, base_address, i128::from(start));
         let signed = self.is_signed_integer(&self.tags[tag].fields[field].ty);
@@ -48508,39 +48492,39 @@ impl<'session, 'files> Parser<'session, 'files> {
 
     fn extract_bit_field(
         state: &mut LowerState,
-        raw: omni::Value,
-        unit: omni::Type,
+        raw: ir::Value,
+        unit: ir::Type,
         shift: u32,
         width: u32,
         signed: bool,
-        ty: omni::Type,
-    ) -> omni::Value {
+        ty: ir::Type,
+    ) -> ir::Value {
         let unit_bits = unit.element().bits();
         let left = unit_bits - shift - width;
         let right = unit_bits - width;
         let left_amount = state.builder.integer(unit, i128::from(left));
         let lifted = state
             .builder
-            .binary(omni::BinaryOp::ShiftLeft, raw, left_amount);
+            .binary(ir::BinaryOp::ShiftLeft, raw, left_amount);
         let right_amount = state.builder.integer(unit, i128::from(right));
         let operation = if signed {
-            omni::BinaryOp::ShiftRightArithmetic
+            ir::BinaryOp::ShiftRightArithmetic
         } else {
-            omni::BinaryOp::ShiftRightLogical
+            ir::BinaryOp::ShiftRightLogical
         };
         let field = state.builder.binary(operation, lifted, right_amount);
         Self::convert_integer(state, field, unit, ty, signed)
     }
 
-    fn read_target(&self, state: &mut LowerState, target: Target) -> omni::Value {
+    fn read_target(&self, state: &mut LowerState, target: Target) -> ir::Value {
         match target {
             Target::Register(variable) => state.builder.read(variable),
             Target::Memory(address, ty) => {
-                let size = self.omni_size(ty).max(1);
+                let size = self.ir_size(ty).max(1);
                 state.builder.load(ty, address, size)
             }
             Target::Volatile(address, ty) => {
-                let size = self.omni_size(ty).max(1);
+                let size = self.ir_size(ty).max(1);
                 state.builder.load_volatile(ty, address, size)
             }
             Target::Unaligned(address, ty) => state.builder.load(ty, address, 1),
@@ -48552,27 +48536,22 @@ impl<'session, 'files> Parser<'session, 'files> {
                 signed,
                 ty,
             } => {
-                let size = self.omni_size(unit).max(1);
+                let size = self.ir_size(unit).max(1);
                 let raw = state.builder.load(unit, address, size);
                 Self::extract_bit_field(state, raw, unit, shift, width, signed, ty)
             }
         }
     }
 
-    fn write_target(
-        &self,
-        state: &mut LowerState,
-        target: Target,
-        value: omni::Value,
-    ) -> omni::Value {
+    fn write_target(&self, state: &mut LowerState, target: Target, value: ir::Value) -> ir::Value {
         match target {
             Target::Register(variable) => state.builder.define(variable, value),
             Target::Memory(address, ty) => {
-                let size = self.omni_size(ty).max(1);
+                let size = self.ir_size(ty).max(1);
                 state.builder.store(value, address, size);
             }
             Target::Volatile(address, ty) => {
-                let size = self.omni_size(ty).max(1);
+                let size = self.ir_size(ty).max(1);
                 state.builder.store_volatile(value, address, size);
             }
             Target::Unaligned(address, _) => state.builder.store(value, address, 1),
@@ -48584,7 +48563,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                 signed,
                 ty,
             } => {
-                let size = self.omni_size(unit).max(1);
+                let size = self.ir_size(unit).max(1);
                 let unit_bits = unit.element().bits();
                 let old = state.builder.load(unit, address, size);
                 let field_mask: u128 = if width >= 128 {
@@ -48594,19 +48573,19 @@ impl<'session, 'files> Parser<'session, 'files> {
                 };
                 let kept = wrap_constant(!(field_mask << shift), unit_bits);
                 let kept_value = state.builder.integer(unit, kept);
-                let cleared = state.builder.binary(omni::BinaryOp::And, old, kept_value);
+                let cleared = state.builder.binary(ir::BinaryOp::And, old, kept_value);
                 let narrowed = Self::convert_integer(state, value, ty, unit, false);
                 let mask_value = state
                     .builder
                     .integer(unit, wrap_constant(field_mask, unit_bits));
                 let masked = state
                     .builder
-                    .binary(omni::BinaryOp::And, narrowed, mask_value);
+                    .binary(ir::BinaryOp::And, narrowed, mask_value);
                 let amount = state.builder.integer(unit, i128::from(shift));
                 let placed = state
                     .builder
-                    .binary(omni::BinaryOp::ShiftLeft, masked, amount);
-                let merged = state.builder.binary(omni::BinaryOp::Or, cleared, placed);
+                    .binary(ir::BinaryOp::ShiftLeft, masked, amount);
+                let merged = state.builder.binary(ir::BinaryOp::Or, cleared, placed);
                 state.builder.store(merged, address, size);
                 return Self::extract_bit_field(state, placed, unit, shift, width, signed, ty);
             }
@@ -48618,14 +48597,14 @@ impl<'session, 'files> Parser<'session, 'files> {
         &mut self,
         state: &mut LowerState,
         expression: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         match &expression.kind {
             ExpressionKind::LabelAddress { number, .. } => {
-                let number = state.builder.integer(omni::Type::I64, *number);
+                let number = state.builder.integer(ir::Type::I64, *number);
                 Ok(state.builder.convert(
-                    omni::Conversion::IntegerToPointer,
+                    ir::Conversion::IntegerToPointer,
                     number,
-                    omni::Type::POINTER,
+                    ir::Type::POINTER,
                 ))
             }
             ExpressionKind::VaArg { list } => self.lower_va_arg(state, list, expression),
@@ -48683,7 +48662,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                 Ok(Self::convert_integer(
                     state,
                     bytes,
-                    omni::Type::I64,
+                    ir::Type::I64,
                     ty,
                     false,
                 ))
@@ -48730,7 +48709,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         kind: CastKind,
         operand: &Expression,
         expression: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         match kind {
             CastKind::NoOp | CastKind::BitCast
                 if expression.ty.is_pointer() == operand.ty.is_pointer() =>
@@ -48753,9 +48732,9 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let condition = self.lower_condition(state, operand)?;
                 Ok(state
                     .builder
-                    .convert(omni::Conversion::ZeroExtend, condition, to))
+                    .convert(ir::Conversion::ZeroExtend, condition, to))
             }
-            CastKind::NullToPointer => Ok(state.builder.null(omni::Type::POINTER)),
+            CastKind::NullToPointer => Ok(state.builder.null(ir::Type::POINTER)),
             CastKind::FunctionToPointerDecay => {
                 let Some(declaration) = operand.ignore_parentheses().referenced_declaration()
                 else {
@@ -48780,23 +48759,23 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let value = self.lower_expression(state, operand)?;
                 Ok(state
                     .builder
-                    .convert(omni::Conversion::PointerToInteger, value, to))
+                    .convert(ir::Conversion::PointerToInteger, value, to))
             }
             CastKind::IntegralToPointer => {
                 let value = self.lower_expression(state, operand)?;
                 Ok(state.builder.convert(
-                    omni::Conversion::IntegerToPointer,
+                    ir::Conversion::IntegerToPointer,
                     value,
-                    omni::Type::POINTER,
+                    ir::Type::POINTER,
                 ))
             }
             CastKind::IntegralToFloating => {
                 let to = self.float_value_type(&expression.ty)?;
                 let value = self.lower_expression(state, operand)?;
                 let conversion = if self.is_signed_integer(&operand.ty) {
-                    omni::Conversion::SignedToFloat
+                    ir::Conversion::SignedToFloat
                 } else {
-                    omni::Conversion::UnsignedToFloat
+                    ir::Conversion::UnsignedToFloat
                 };
                 Ok(state.builder.convert(conversion, value, to))
             }
@@ -48804,9 +48783,9 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let to = self.integer_value_type(&expression.ty)?;
                 let value = self.lower_expression(state, operand)?;
                 let conversion = if self.is_signed_integer(&expression.ty) {
-                    omni::Conversion::FloatToSigned
+                    ir::Conversion::FloatToSigned
                 } else {
-                    omni::Conversion::FloatToUnsigned
+                    ir::Conversion::FloatToUnsigned
                 };
                 Ok(state.builder.convert(conversion, value, to))
             }
@@ -48818,12 +48797,12 @@ impl<'session, 'files> Parser<'session, 'files> {
                     std::cmp::Ordering::Greater => {
                         Ok(state
                             .builder
-                            .convert(omni::Conversion::FloatExtend, value, to))
+                            .convert(ir::Conversion::FloatExtend, value, to))
                     }
                     std::cmp::Ordering::Less => {
                         Ok(state
                             .builder
-                            .convert(omni::Conversion::FloatTruncate, value, to))
+                            .convert(ir::Conversion::FloatTruncate, value, to))
                     }
                     std::cmp::Ordering::Equal => Ok(value),
                 }
@@ -48834,13 +48813,13 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let value = self.lower_expression(state, operand)?;
                 let zero = state.builder.float(from, 0.0);
                 let nonzero = state.builder.float_compare(
-                    omni::FloatComparison::UnorderedNotEqual,
+                    ir::FloatComparison::UnorderedNotEqual,
                     value,
                     zero,
                 );
                 Ok(state
                     .builder
-                    .convert(omni::Conversion::ZeroExtend, nonzero, to))
+                    .convert(ir::Conversion::ZeroExtend, nonzero, to))
             }
             other => Err(format!("{other:?} casts")),
         }
@@ -48852,7 +48831,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         operator: UnaryOperator,
         operand: &Expression,
         expression: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         match operator {
             UnaryOperator::AddressOf => {
                 return self.lower_address(state, operand);
@@ -48880,18 +48859,18 @@ impl<'session, 'files> Parser<'session, 'files> {
                     let ty = self.float_value_type(&operand.ty)?;
                     let one = state.builder.float(ty, 1.0);
                     let operation = if increment {
-                        omni::BinaryOp::FloatAdd
+                        ir::BinaryOp::FloatAdd
                     } else {
-                        omni::BinaryOp::FloatSubtract
+                        ir::BinaryOp::FloatSubtract
                     };
                     state.builder.binary(operation, old, one)
                 } else {
                     let ty = self.integer_value_type(&operand.ty)?;
                     let one = state.builder.integer(ty, 1);
                     let operation = if increment {
-                        omni::BinaryOp::Add
+                        ir::BinaryOp::Add
                     } else {
-                        omni::BinaryOp::Subtract
+                        ir::BinaryOp::Subtract
                     };
                     state.builder.binary(operation, old, one)
                 };
@@ -48906,16 +48885,16 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let value = self.lower_expression(state, operand)?;
                 if operand.ty.is_floating() {
                     self.float_value_type(&operand.ty)?;
-                    Ok(state.builder.unary(omni::UnaryOp::FloatNegate, value))
+                    Ok(state.builder.unary(ir::UnaryOp::FloatNegate, value))
                 } else {
                     self.integer_value_type(&operand.ty)?;
-                    Ok(state.builder.unary(omni::UnaryOp::Negate, value))
+                    Ok(state.builder.unary(ir::UnaryOp::Negate, value))
                 }
             }
             UnaryOperator::Not => {
                 self.integer_value_type(&operand.ty)?;
                 let value = self.lower_expression(state, operand)?;
-                Ok(state.builder.unary(omni::UnaryOp::Not, value))
+                Ok(state.builder.unary(ir::UnaryOp::Not, value))
             }
             UnaryOperator::LogicalNot => {
                 let to = self.integer_value_type(&expression.ty)?;
@@ -48925,73 +48904,73 @@ impl<'session, 'files> Parser<'session, 'files> {
                     let zero = state.builder.float(from, 0.0);
                     state
                         .builder
-                        .float_compare(omni::FloatComparison::OrderedEqual, value, zero)
+                        .float_compare(ir::FloatComparison::OrderedEqual, value, zero)
                 } else {
                     let from = self.scalar_value_type(&operand.ty)?;
                     let zero = Self::zero_of(state, from);
-                    state.builder.compare(omni::Comparison::Equal, value, zero)
+                    state.builder.compare(ir::Comparison::Equal, value, zero)
                 };
                 Ok(state
                     .builder
-                    .convert(omni::Conversion::ZeroExtend, is_zero, to))
+                    .convert(ir::Conversion::ZeroExtend, is_zero, to))
             }
             other => Err(format!("the {} operator", other.spelling())),
         }
     }
 
-    fn binary_operation(operator: BinaryOperator, signed: bool) -> Option<omni::BinaryOp> {
+    fn binary_operation(operator: BinaryOperator, signed: bool) -> Option<ir::BinaryOp> {
         Some(match operator {
-            BinaryOperator::Add => omni::BinaryOp::Add,
-            BinaryOperator::Subtract => omni::BinaryOp::Subtract,
-            BinaryOperator::Multiply => omni::BinaryOp::Multiply,
-            BinaryOperator::Divide if signed => omni::BinaryOp::DivideSigned,
-            BinaryOperator::Divide => omni::BinaryOp::DivideUnsigned,
-            BinaryOperator::Remainder if signed => omni::BinaryOp::RemainderSigned,
-            BinaryOperator::Remainder => omni::BinaryOp::RemainderUnsigned,
-            BinaryOperator::BitAnd => omni::BinaryOp::And,
-            BinaryOperator::BitOr => omni::BinaryOp::Or,
-            BinaryOperator::BitXor => omni::BinaryOp::Xor,
-            BinaryOperator::ShiftLeft => omni::BinaryOp::ShiftLeft,
-            BinaryOperator::ShiftRight if signed => omni::BinaryOp::ShiftRightArithmetic,
-            BinaryOperator::ShiftRight => omni::BinaryOp::ShiftRightLogical,
+            BinaryOperator::Add => ir::BinaryOp::Add,
+            BinaryOperator::Subtract => ir::BinaryOp::Subtract,
+            BinaryOperator::Multiply => ir::BinaryOp::Multiply,
+            BinaryOperator::Divide if signed => ir::BinaryOp::DivideSigned,
+            BinaryOperator::Divide => ir::BinaryOp::DivideUnsigned,
+            BinaryOperator::Remainder if signed => ir::BinaryOp::RemainderSigned,
+            BinaryOperator::Remainder => ir::BinaryOp::RemainderUnsigned,
+            BinaryOperator::BitAnd => ir::BinaryOp::And,
+            BinaryOperator::BitOr => ir::BinaryOp::Or,
+            BinaryOperator::BitXor => ir::BinaryOp::Xor,
+            BinaryOperator::ShiftLeft => ir::BinaryOp::ShiftLeft,
+            BinaryOperator::ShiftRight if signed => ir::BinaryOp::ShiftRightArithmetic,
+            BinaryOperator::ShiftRight => ir::BinaryOp::ShiftRightLogical,
             _ => return None,
         })
     }
 
-    fn float_binary_operation(operator: BinaryOperator) -> Option<omni::BinaryOp> {
+    fn float_binary_operation(operator: BinaryOperator) -> Option<ir::BinaryOp> {
         Some(match operator {
-            BinaryOperator::Add => omni::BinaryOp::FloatAdd,
-            BinaryOperator::Subtract => omni::BinaryOp::FloatSubtract,
-            BinaryOperator::Multiply => omni::BinaryOp::FloatMultiply,
-            BinaryOperator::Divide => omni::BinaryOp::FloatDivide,
+            BinaryOperator::Add => ir::BinaryOp::FloatAdd,
+            BinaryOperator::Subtract => ir::BinaryOp::FloatSubtract,
+            BinaryOperator::Multiply => ir::BinaryOp::FloatMultiply,
+            BinaryOperator::Divide => ir::BinaryOp::FloatDivide,
             _ => return None,
         })
     }
 
-    fn comparison_operation(operator: BinaryOperator, signed: bool) -> Option<omni::Comparison> {
+    fn comparison_operation(operator: BinaryOperator, signed: bool) -> Option<ir::Comparison> {
         Some(match operator {
-            BinaryOperator::Equal => omni::Comparison::Equal,
-            BinaryOperator::NotEqual => omni::Comparison::NotEqual,
-            BinaryOperator::Less if signed => omni::Comparison::LessSigned,
-            BinaryOperator::LessEqual if signed => omni::Comparison::LessEqualSigned,
-            BinaryOperator::Greater if signed => omni::Comparison::GreaterSigned,
-            BinaryOperator::GreaterEqual if signed => omni::Comparison::GreaterEqualSigned,
-            BinaryOperator::Less => omni::Comparison::LessUnsigned,
-            BinaryOperator::LessEqual => omni::Comparison::LessEqualUnsigned,
-            BinaryOperator::Greater => omni::Comparison::GreaterUnsigned,
-            BinaryOperator::GreaterEqual => omni::Comparison::GreaterEqualUnsigned,
+            BinaryOperator::Equal => ir::Comparison::Equal,
+            BinaryOperator::NotEqual => ir::Comparison::NotEqual,
+            BinaryOperator::Less if signed => ir::Comparison::LessSigned,
+            BinaryOperator::LessEqual if signed => ir::Comparison::LessEqualSigned,
+            BinaryOperator::Greater if signed => ir::Comparison::GreaterSigned,
+            BinaryOperator::GreaterEqual if signed => ir::Comparison::GreaterEqualSigned,
+            BinaryOperator::Less => ir::Comparison::LessUnsigned,
+            BinaryOperator::LessEqual => ir::Comparison::LessEqualUnsigned,
+            BinaryOperator::Greater => ir::Comparison::GreaterUnsigned,
+            BinaryOperator::GreaterEqual => ir::Comparison::GreaterEqualUnsigned,
             _ => return None,
         })
     }
 
-    fn float_comparison_operation(operator: BinaryOperator) -> Option<omni::FloatComparison> {
+    fn float_comparison_operation(operator: BinaryOperator) -> Option<ir::FloatComparison> {
         Some(match operator {
-            BinaryOperator::Equal => omni::FloatComparison::OrderedEqual,
-            BinaryOperator::NotEqual => omni::FloatComparison::UnorderedNotEqual,
-            BinaryOperator::Less => omni::FloatComparison::OrderedLess,
-            BinaryOperator::LessEqual => omni::FloatComparison::OrderedLessEqual,
-            BinaryOperator::Greater => omni::FloatComparison::OrderedGreater,
-            BinaryOperator::GreaterEqual => omni::FloatComparison::OrderedGreaterEqual,
+            BinaryOperator::Equal => ir::FloatComparison::OrderedEqual,
+            BinaryOperator::NotEqual => ir::FloatComparison::UnorderedNotEqual,
+            BinaryOperator::Less => ir::FloatComparison::OrderedLess,
+            BinaryOperator::LessEqual => ir::FloatComparison::OrderedLessEqual,
+            BinaryOperator::Greater => ir::FloatComparison::OrderedGreater,
+            BinaryOperator::GreaterEqual => ir::FloatComparison::OrderedGreaterEqual,
             _ => return None,
         })
     }
@@ -49002,7 +48981,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         operator: BinaryOperator,
         left: &Expression,
         right: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         if left.ty.is_floating() || right.ty.is_floating() {
             self.float_value_type(&left.ty)?;
             self.float_value_type(&right.ty)?;
@@ -49028,7 +49007,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         &mut self,
         state: &mut LowerState,
         expression: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         let inner = expression.ignore_parentheses();
         match &inner.kind {
             ExpressionKind::Cast {
@@ -49055,7 +49034,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                     let value = self.lower_expression(state, operand)?;
                     let zero = state.builder.float(ty, 0.0);
                     return Ok(state.builder.float_compare(
-                        omni::FloatComparison::OrderedEqual,
+                        ir::FloatComparison::OrderedEqual,
                         value,
                         zero,
                     ));
@@ -49063,7 +49042,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let ty = self.scalar_value_type(&operand.ty)?;
                 let value = self.lower_expression(state, operand)?;
                 let zero = Self::zero_of(state, ty);
-                return Ok(state.builder.compare(omni::Comparison::Equal, value, zero));
+                return Ok(state.builder.compare(ir::Comparison::Equal, value, zero));
             }
             _ => {}
         }
@@ -49072,7 +49051,7 @@ impl<'session, 'files> Parser<'session, 'files> {
             let value = self.lower_expression(state, inner)?;
             let zero = state.builder.float(ty, 0.0);
             return Ok(state.builder.float_compare(
-                omni::FloatComparison::UnorderedNotEqual,
+                ir::FloatComparison::UnorderedNotEqual,
                 value,
                 zero,
             ));
@@ -49080,9 +49059,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         let ty = self.scalar_value_type(&inner.ty)?;
         let value = self.lower_expression(state, inner)?;
         let zero = Self::zero_of(state, ty);
-        Ok(state
-            .builder
-            .compare(omni::Comparison::NotEqual, value, zero))
+        Ok(state.builder.compare(ir::Comparison::NotEqual, value, zero))
     }
 
     fn lower_conditional(
@@ -49092,9 +49069,9 @@ impl<'session, 'files> Parser<'session, 'files> {
         then: &Expression,
         otherwise: &Expression,
         expression: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         let ty = self
-            .omni_type(&expression.ty)
+            .ir_type(&expression.ty)
             .ok_or_else(|| "a conditional expression of this type".to_string())?;
         let condition = self.lower_condition(state, condition)?;
         let then_block = state.builder.create_block();
@@ -49121,7 +49098,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         left: &Expression,
         right: &Expression,
         expression: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         let ty = self.integer_value_type(&expression.ty)?;
         let condition = self.lower_condition(state, left)?;
         let right_block = state.builder.create_block();
@@ -49130,16 +49107,16 @@ impl<'session, 'files> Parser<'session, 'files> {
         let decided = state.builder.integer(ty, i128::from(!and));
         let (taken, otherwise) = if and {
             (
-                omni::BlockCall::to(right_block),
-                omni::BlockCall::with(merge, vec![decided]),
+                ir::BlockCall::to(right_block),
+                ir::BlockCall::with(merge, vec![decided]),
             )
         } else {
             (
-                omni::BlockCall::with(merge, vec![decided]),
-                omni::BlockCall::to(right_block),
+                ir::BlockCall::with(merge, vec![decided]),
+                ir::BlockCall::to(right_block),
             )
         };
-        state.builder.terminate(omni::Terminator::Branch {
+        state.builder.terminate(ir::Terminator::Branch {
             condition,
             taken,
             otherwise,
@@ -49147,9 +49124,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         state.builder.seal(right_block);
         state.builder.switch_to(right_block);
         let right = self.lower_condition(state, right)?;
-        let right = state
-            .builder
-            .convert(omni::Conversion::ZeroExtend, right, ty);
+        let right = state.builder.convert(ir::Conversion::ZeroExtend, right, ty);
         state.builder.jump(merge, vec![right]);
         state.builder.seal(merge);
         state.builder.switch_to(merge);
@@ -49162,7 +49137,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         operator: BinaryOperator,
         left: &Expression,
         right: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         let base = operator.compound_base();
         if left.ty.is_pointer() {
             if !matches!(base, BinaryOperator::Add | BinaryOperator::Subtract) {
@@ -49181,15 +49156,13 @@ impl<'session, 'files> Parser<'session, 'files> {
                 state,
                 amount,
                 amount_ty,
-                omni::Type::I64,
+                ir::Type::I64,
                 self.is_signed_integer(&right.ty),
             );
-            let scale = state.builder.integer(omni::Type::I64, size);
-            let mut bytes = state
-                .builder
-                .binary(omni::BinaryOp::Multiply, amount, scale);
+            let scale = state.builder.integer(ir::Type::I64, size);
+            let mut bytes = state.builder.binary(ir::BinaryOp::Multiply, amount, scale);
             if base == BinaryOperator::Subtract {
-                bytes = state.builder.unary(omni::UnaryOp::Negate, bytes);
+                bytes = state.builder.unary(ir::UnaryOp::Negate, bytes);
             }
             let new = state.builder.offset(old, bytes);
             return Ok(self.write_target(state, target, new));
@@ -49207,12 +49180,12 @@ impl<'session, 'files> Parser<'session, 'files> {
                     std::cmp::Ordering::Less => {
                         state
                             .builder
-                            .convert(omni::Conversion::FloatExtend, value, left_ty)
+                            .convert(ir::Conversion::FloatExtend, value, left_ty)
                     }
                     std::cmp::Ordering::Greater => {
                         state
                             .builder
-                            .convert(omni::Conversion::FloatTruncate, value, left_ty)
+                            .convert(ir::Conversion::FloatTruncate, value, left_ty)
                     }
                     std::cmp::Ordering::Equal => value,
                 }
@@ -49220,9 +49193,9 @@ impl<'session, 'files> Parser<'session, 'files> {
                 self.integer_value_type(&right.ty)?;
                 let value = self.lower_expression(state, right)?;
                 let conversion = if self.is_signed_integer(&right.ty) {
-                    omni::Conversion::SignedToFloat
+                    ir::Conversion::SignedToFloat
                 } else {
-                    omni::Conversion::UnsignedToFloat
+                    ir::Conversion::UnsignedToFloat
                 };
                 state.builder.convert(conversion, value, left_ty)
             };
@@ -49280,7 +49253,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         callee: &Expression,
         arguments: &[Expression],
         expression: &Expression,
-    ) -> Lowered<Option<omni::Value>> {
+    ) -> Lowered<Option<ir::Value>> {
         let written_callee = callee;
         let callee = callee.ignore_parentheses_and_implicit_casts();
         let direct = match &callee.kind {
@@ -49300,7 +49273,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                 return self.lower_library_alias(state, declaration, library, arguments);
             }
             if text == "__builtin_infl" || text == "__builtin_huge_vall" {
-                return Ok(Some(state.builder.float(omni::Type::F64, f64::INFINITY)));
+                return Ok(Some(state.builder.float(ir::Type::F64, f64::INFINITY)));
             }
             if matches!(
                 text.as_str(),
@@ -49313,17 +49286,16 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let left = self.lower_expression(state, &arguments[0])?;
                 let right = self.lower_expression(state, &arguments[1])?;
                 let how = match text.as_str() {
-                    "__builtin_isless" => omni::FloatComparison::OrderedLess,
-                    "__builtin_isgreater" => omni::FloatComparison::OrderedGreater,
-                    "__builtin_islessequal" => omni::FloatComparison::OrderedLessEqual,
-                    "__builtin_isgreaterequal" => omni::FloatComparison::OrderedGreaterEqual,
-                    _ => omni::FloatComparison::OrderedNotEqual,
+                    "__builtin_isless" => ir::FloatComparison::OrderedLess,
+                    "__builtin_isgreater" => ir::FloatComparison::OrderedGreater,
+                    "__builtin_islessequal" => ir::FloatComparison::OrderedLessEqual,
+                    "__builtin_isgreaterequal" => ir::FloatComparison::OrderedGreaterEqual,
+                    _ => ir::FloatComparison::OrderedNotEqual,
                 };
                 let held = state.builder.float_compare(how, left, right);
-                let flag =
-                    state
-                        .builder
-                        .convert(omni::Conversion::ZeroExtend, held, omni::Type::I32);
+                let flag = state
+                    .builder
+                    .convert(ir::Conversion::ZeroExtend, held, ir::Type::I32);
                 return Ok(Some(flag));
             }
             if text == "__builtin_isunordered" {
@@ -49332,11 +49304,11 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let unordered =
                     state
                         .builder
-                        .float_compare(omni::FloatComparison::Unordered, left, right);
+                        .float_compare(ir::FloatComparison::Unordered, left, right);
                 let flag =
                     state
                         .builder
-                        .convert(omni::Conversion::ZeroExtend, unordered, omni::Type::I32);
+                        .convert(ir::Conversion::ZeroExtend, unordered, ir::Type::I32);
                 return Ok(Some(flag));
             }
             if let Some(kind) = atomic_builtin(&text) {
@@ -49409,7 +49381,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                     values.len()
                 };
                 for (position, target) in wanted.iter().enumerate().take(spoken) {
-                    let Some(have) = self.omni_type(&arguments[position].ty) else {
+                    let Some(have) = self.ir_type(&arguments[position].ty) else {
                         continue;
                     };
                     let signed = self.is_signed_integer(&arguments[position].ty);
@@ -49437,7 +49409,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         &mut self,
         state: &mut LowerState,
         expression: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         let mut source = expression.ignore_parentheses();
         while let ExpressionKind::Cast {
             kind: CastKind::LValueToRValue | CastKind::NoOp | CastKind::ArrayToPointerDecay,
@@ -49462,13 +49434,13 @@ impl<'session, 'files> Parser<'session, 'files> {
         state: &mut LowerState,
         name: &str,
         arguments: &[Expression],
-    ) -> Lowered<Option<omni::Value>> {
+    ) -> Lowered<Option<ir::Value>> {
         let (size, _) = self.va_list_layout()?;
         let x86 = matches!(self.target().family, TargetFamily::X86(_));
         let list =
             self.va_list_address(state, arguments.first().ok_or("va builtins need a list")?)?;
         let at = |state: &mut LowerState, bytes: i128| {
-            let offset = state.builder.integer(omni::Type::I64, bytes);
+            let offset = state.builder.integer(ir::Type::I64, bytes);
             state.builder.offset(list, offset)
         };
         match name {
@@ -49476,10 +49448,10 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let area = state
                     .va_area
                     .ok_or_else(|| "va_start in a function that is not variadic".to_string())?;
-                let null = state.builder.null(omni::Type::POINTER);
+                let null = state.builder.null(ir::Type::POINTER);
                 if x86 {
-                    let gp = state.builder.integer(omni::Type::I32, 48);
-                    let fp = state.builder.integer(omni::Type::I32, 304);
+                    let gp = state.builder.integer(ir::Type::I32, 48);
+                    let fp = state.builder.integer(ir::Type::I32, 304);
                     let gp_at = at(state, 0);
                     state.builder.store(gp, gp_at, 4);
                     let fp_at = at(state, 4);
@@ -49495,7 +49467,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                     state.builder.store(null, gr_top_at, 8);
                     let vr_top_at = at(state, 16);
                     state.builder.store(null, vr_top_at, 8);
-                    let zero = state.builder.integer(omni::Type::I32, 0);
+                    let zero = state.builder.integer(ir::Type::I32, 0);
                     let gr_at = at(state, 24);
                     state.builder.store(zero, gr_at, 4);
                     let vr_at = at(state, 28);
@@ -49506,12 +49478,10 @@ impl<'session, 'files> Parser<'session, 'files> {
             "__builtin_va_copy" => {
                 let source = self
                     .va_list_address(state, arguments.get(1).ok_or("va_copy needs two lists")?)?;
-                let length = state.builder.integer(omni::Type::I64, i128::from(size));
-                state.builder.push(
-                    omni::Operation::MemoryMove,
-                    vec![list, source, length],
-                    None,
-                );
+                let length = state.builder.integer(ir::Type::I64, i128::from(size));
+                state
+                    .builder
+                    .push(ir::Operation::MemoryMove, vec![list, source, length], None);
                 Ok(None)
             }
             _ => Ok(None),
@@ -49523,34 +49493,34 @@ impl<'session, 'files> Parser<'session, 'files> {
         state: &mut LowerState,
         list: &Expression,
         expression: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         let (_, cursor) = self.va_list_layout()?;
         let ty = self
-            .omni_type(&expression.ty)
+            .ir_type(&expression.ty)
             .ok_or_else(|| "va_arg of this type".to_string())?;
-        if ty == omni::Type::I128 || ty == omni::Type::F32 {
+        if ty == ir::Type::I128 || ty == ir::Type::F32 {
             return Err("va_arg of this type".to_string());
         }
         let list = self.va_list_address(state, list)?;
-        let offset = state.builder.integer(omni::Type::I64, i128::from(cursor));
+        let offset = state.builder.integer(ir::Type::I64, i128::from(cursor));
         let field = state.builder.offset(list, offset);
-        let current = state.builder.load(omni::Type::POINTER, field, 8);
-        let size = self.omni_size(ty).max(1);
+        let current = state.builder.load(ir::Type::POINTER, field, 8);
+        let size = self.ir_size(ty).max(1);
         let slot = state.builder.load(ty, current, size);
-        let eight = state.builder.integer(omni::Type::I64, 8);
+        let eight = state.builder.integer(ir::Type::I64, 8);
         let next = state.builder.offset(current, eight);
         state.builder.store(next, field, 8);
         Ok(slot)
     }
 
-    fn atomic_ordering(&self, argument: Option<&Expression>) -> omni::Ordering {
+    fn atomic_ordering(&self, argument: Option<&Expression>) -> ir::Ordering {
         match argument.and_then(|argument| self.evaluate_integer(argument.ignore_implicit_casts()))
         {
-            Some(0) => omni::Ordering::Relaxed,
-            Some(1 | 2) => omni::Ordering::Acquire,
-            Some(3) => omni::Ordering::Release,
-            Some(4) => omni::Ordering::AcquireRelease,
-            _ => omni::Ordering::SequentiallyConsistent,
+            Some(0) => ir::Ordering::Relaxed,
+            Some(1 | 2) => ir::Ordering::Acquire,
+            Some(3) => ir::Ordering::Release,
+            Some(4) => ir::Ordering::AcquireRelease,
+            _ => ir::Ordering::SequentiallyConsistent,
         }
     }
 
@@ -49560,18 +49530,18 @@ impl<'session, 'files> Parser<'session, 'files> {
         kind: AtomicBuiltin,
         name: &str,
         arguments: &[Expression],
-    ) -> Lowered<Option<omni::Value>> {
+    ) -> Lowered<Option<ir::Value>> {
         let sync = name.starts_with("__sync_");
         if kind == AtomicBuiltin::Fence {
             let ordering = if sync {
-                omni::Ordering::SequentiallyConsistent
+                ir::Ordering::SequentiallyConsistent
             } else {
                 self.atomic_ordering(arguments.first())
             };
-            if ordering != omni::Ordering::Relaxed {
+            if ordering != ir::Ordering::Relaxed {
                 state
                     .builder
-                    .push(omni::Operation::Fence(ordering), Vec::new(), None);
+                    .push(ir::Operation::Fence(ordering), Vec::new(), None);
             }
             return Ok(None);
         }
@@ -49583,14 +49553,14 @@ impl<'session, 'files> Parser<'session, 'files> {
             .pointee()
             .ok_or_else(|| "an atomic builtin on something that is not a pointer".to_string())?;
         let ty = self
-            .omni_type(&pointee)
-            .filter(|ty| *ty != omni::Type::I128)
+            .ir_type(&pointee)
+            .filter(|ty| *ty != ir::Type::I128)
             .ok_or_else(|| "an atomic builtin on a value of this type".to_string())?;
-        let align = self.omni_size(ty).max(1);
+        let align = self.ir_size(ty).max(1);
         let address = self.lower_expression(state, first)?;
         let order = |this: &Self, index: usize| {
             if sync {
-                omni::Ordering::SequentiallyConsistent
+                ir::Ordering::SequentiallyConsistent
             } else {
                 this.atomic_ordering(arguments.get(index))
             }
@@ -49600,10 +49570,10 @@ impl<'session, 'files> Parser<'session, 'files> {
                 .get(index)
                 .ok_or_else(|| "an atomic builtin with too few arguments".to_string())?;
             let from = this
-                .omni_type(&argument.ty)
+                .ir_type(&argument.ty)
                 .ok_or_else(|| "an atomic operand of this type".to_string())?;
             let value = this.lower_expression(state, argument)?;
-            Ok::<omni::Value, String>(Self::convert_scalar(
+            Ok::<ir::Value, String>(Self::convert_scalar(
                 state,
                 value,
                 from,
@@ -49611,15 +49581,15 @@ impl<'session, 'files> Parser<'session, 'files> {
                 this.is_signed_integer(&argument.ty),
             ))
         };
-        let load_order = |ordering: omni::Ordering| match ordering {
-            omni::Ordering::Release | omni::Ordering::AcquireRelease => {
-                omni::Ordering::SequentiallyConsistent
+        let load_order = |ordering: ir::Ordering| match ordering {
+            ir::Ordering::Release | ir::Ordering::AcquireRelease => {
+                ir::Ordering::SequentiallyConsistent
             }
             other => other,
         };
-        let store_order = |ordering: omni::Ordering| match ordering {
-            omni::Ordering::Acquire | omni::Ordering::AcquireRelease => {
-                omni::Ordering::SequentiallyConsistent
+        let store_order = |ordering: ir::Ordering| match ordering {
+            ir::Ordering::Acquire | ir::Ordering::AcquireRelease => {
+                ir::Ordering::SequentiallyConsistent
             }
             other => other,
         };
@@ -49629,7 +49599,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let value = state
                     .builder
                     .push(
-                        omni::Operation::Load {
+                        ir::Operation::Load {
                             align,
                             volatile: false,
                             ordering: Some(ordering),
@@ -49654,7 +49624,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                     operand(self, state, 1)?
                 };
                 state.builder.push(
-                    omni::Operation::Store {
+                    ir::Operation::Store {
                         align,
                         volatile: false,
                         ordering: Some(ordering),
@@ -49665,16 +49635,16 @@ impl<'session, 'files> Parser<'session, 'files> {
                 Ok(None)
             }
             AtomicBuiltin::Release => {
-                let zero = if ty == omni::Type::POINTER {
+                let zero = if ty == ir::Type::POINTER {
                     state.builder.null(ty)
                 } else {
                     state.builder.integer(ty, 0)
                 };
                 state.builder.push(
-                    omni::Operation::Store {
+                    ir::Operation::Store {
                         align,
                         volatile: false,
-                        ordering: Some(omni::Ordering::Release),
+                        ordering: Some(ir::Ordering::Release),
                     },
                     vec![zero, address],
                     None,
@@ -49684,12 +49654,12 @@ impl<'session, 'files> Parser<'session, 'files> {
             AtomicBuiltin::Exchange => {
                 let value = operand(self, state, 1)?;
                 let ordering = if sync {
-                    omni::Ordering::Acquire
+                    ir::Ordering::Acquire
                 } else {
                     order(self, 2)
                 };
                 Ok(state.builder.push(
-                    omni::Operation::AtomicUpdate(omni::AtomicOp::Exchange, ordering),
+                    ir::Operation::AtomicUpdate(ir::AtomicOp::Exchange, ordering),
                     vec![address, value],
                     Some(ty),
                 ))
@@ -49698,7 +49668,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                 operation,
                 returns_new,
             } => {
-                if ty == omni::Type::POINTER || ty.element().bits() < 8 {
+                if ty == ir::Type::POINTER || ty.element().bits() < 8 {
                     return Err("an atomic arithmetic builtin on a pointer".to_string());
                 }
                 let value = operand(self, state, 1)?;
@@ -49706,7 +49676,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let old = state
                     .builder
                     .push(
-                        omni::Operation::AtomicUpdate(operation, ordering),
+                        ir::Operation::AtomicUpdate(operation, ordering),
                         vec![address, value],
                         Some(ty),
                     )
@@ -49715,17 +49685,17 @@ impl<'session, 'files> Parser<'session, 'files> {
                     return Ok(Some(old));
                 }
                 let combined = match operation {
-                    omni::AtomicOp::Add => state.builder.binary(omni::BinaryOp::Add, old, value),
-                    omni::AtomicOp::Subtract => {
-                        state.builder.binary(omni::BinaryOp::Subtract, old, value)
+                    ir::AtomicOp::Add => state.builder.binary(ir::BinaryOp::Add, old, value),
+                    ir::AtomicOp::Subtract => {
+                        state.builder.binary(ir::BinaryOp::Subtract, old, value)
                     }
-                    omni::AtomicOp::And => state.builder.binary(omni::BinaryOp::And, old, value),
-                    omni::AtomicOp::Or => state.builder.binary(omni::BinaryOp::Or, old, value),
-                    omni::AtomicOp::Xor => state.builder.binary(omni::BinaryOp::Xor, old, value),
+                    ir::AtomicOp::And => state.builder.binary(ir::BinaryOp::And, old, value),
+                    ir::AtomicOp::Or => state.builder.binary(ir::BinaryOp::Or, old, value),
+                    ir::AtomicOp::Xor => state.builder.binary(ir::BinaryOp::Xor, old, value),
                     _ => {
-                        let both = state.builder.binary(omni::BinaryOp::And, old, value);
+                        let both = state.builder.binary(ir::BinaryOp::And, old, value);
                         let ones = state.builder.integer(ty, -1);
-                        state.builder.binary(omni::BinaryOp::Xor, both, ones)
+                        state.builder.binary(ir::BinaryOp::Xor, both, ones)
                     }
                 };
                 Ok(Some(combined))
@@ -49752,25 +49722,25 @@ impl<'session, 'files> Parser<'session, 'files> {
                             None,
                             expected,
                             desired,
-                            omni::Ordering::SequentiallyConsistent,
-                            omni::Ordering::SequentiallyConsistent,
+                            ir::Ordering::SequentiallyConsistent,
+                            ir::Ordering::SequentiallyConsistent,
                         )
                     };
                 let mut failure = match failure {
-                    omni::Ordering::Release => omni::Ordering::Relaxed,
-                    omni::Ordering::AcquireRelease => omni::Ordering::Acquire,
+                    ir::Ordering::Release => ir::Ordering::Relaxed,
+                    ir::Ordering::AcquireRelease => ir::Ordering::Acquire,
                     other => other,
                 };
                 if failure.strength() > success.strength() {
-                    success = omni::Ordering::SequentiallyConsistent;
+                    success = ir::Ordering::SequentiallyConsistent;
                 }
-                if success == omni::Ordering::Relaxed {
-                    failure = omni::Ordering::Relaxed;
+                if success == ir::Ordering::Relaxed {
+                    failure = ir::Ordering::Relaxed;
                 }
                 let old = state
                     .builder
                     .push(
-                        omni::Operation::CompareExchange(success, failure),
+                        ir::Operation::CompareExchange(success, failure),
                         vec![address, expected, desired],
                         Some(ty),
                     )
@@ -49778,16 +49748,14 @@ impl<'session, 'files> Parser<'session, 'files> {
                 if kind == AtomicBuiltin::CompareExchangeValue {
                     return Ok(Some(old));
                 }
-                let equal = state
-                    .builder
-                    .compare(omni::Comparison::Equal, old, expected);
+                let equal = state.builder.compare(ir::Comparison::Equal, old, expected);
                 if let Some(place) = expected_address {
                     state.builder.store(old, place, align);
                 }
                 Ok(Some(state.builder.convert(
-                    omni::Conversion::ZeroExtend,
+                    ir::Conversion::ZeroExtend,
                     equal,
-                    omni::Type::I32,
+                    ir::Type::I32,
                 )))
             }
             AtomicBuiltin::Fence => Ok(None),
@@ -49799,8 +49767,8 @@ impl<'session, 'files> Parser<'session, 'files> {
         state: &mut LowerState,
         name: &str,
         arguments: &[Expression],
-    ) -> Lowered<Option<omni::Value>> {
-        let unary = |operation: omni::UnaryOp| Some(operation);
+    ) -> Lowered<Option<ir::Value>> {
+        let unary = |operation: ir::UnaryOp| Some(operation);
         match name {
             "__builtin_expect" | "__builtin_expect_with_probability" => {
                 let value = self.lower_expression(state, &arguments[0])?;
@@ -49812,17 +49780,17 @@ impl<'session, 'files> Parser<'session, 'files> {
             "__builtin_alloca" => {
                 let size_ty = self.integer_value_type(&arguments[0].ty)?;
                 let size = self.lower_expression(state, &arguments[0])?;
-                let size = Self::convert_integer(state, size, size_ty, omni::Type::I64, false);
+                let size = Self::convert_integer(state, size, size_ty, ir::Type::I64, false);
                 Ok(Some(self.allocate_dynamic(state, size)?))
             }
             "__builtin_unreachable" => {
-                state.builder.terminate(omni::Terminator::Unreachable);
+                state.builder.terminate(ir::Terminator::Unreachable);
                 state.live = false;
                 Ok(None)
             }
             "__builtin_trap" => {
                 state.builder.trap(0);
-                state.builder.terminate(omni::Terminator::Unreachable);
+                state.builder.terminate(ir::Terminator::Unreachable);
                 state.live = false;
                 Ok(None)
             }
@@ -49831,19 +49799,18 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let second = self.lower_expression(state, &arguments[1])?;
                 let length = self.lower_expression(state, &arguments[2])?;
                 let length_ty = self.integer_value_type(&arguments[2].ty)?;
-                let length =
-                    Self::convert_integer(state, length, length_ty, omni::Type::I64, false);
+                let length = Self::convert_integer(state, length, length_ty, ir::Type::I64, false);
                 if name == "__builtin_memset" {
                     let byte = self.integer_value_type(&arguments[1].ty)?;
-                    let byte = Self::convert_integer(state, second, byte, omni::Type::I8, false);
+                    let byte = Self::convert_integer(state, second, byte, ir::Type::I8, false);
                     state.builder.push(
-                        omni::Operation::MemoryFill,
+                        ir::Operation::MemoryFill,
                         vec![destination, byte, length],
                         None,
                     );
                 } else {
                     state.builder.push(
-                        omni::Operation::MemoryMove,
+                        ir::Operation::MemoryMove,
                         vec![destination, second, length],
                         None,
                     );
@@ -49857,7 +49824,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                         .is_some()
                 });
                 Ok(Some(
-                    state.builder.integer(omni::Type::I32, i128::from(constant)),
+                    state.builder.integer(ir::Type::I32, i128::from(constant)),
                 ))
             }
             overflow if overflow.ends_with("_overflow") && overflow.starts_with("__builtin_") => {
@@ -49883,19 +49850,19 @@ impl<'session, 'files> Parser<'session, 'files> {
                     false,
                 );
                 let operation = if name.contains("rotateleft") {
-                    omni::BinaryOp::RotateLeft
+                    ir::BinaryOp::RotateLeft
                 } else {
-                    omni::BinaryOp::RotateRight
+                    ir::BinaryOp::RotateRight
                 };
                 Ok(Some(state.builder.binary(operation, value, amount)))
             }
             "__builtin_nan" | "__builtin_nans" => {
                 self.lower_expression(state, &arguments[0])?;
-                Ok(Some(state.builder.float(omni::Type::F64, f64::NAN)))
+                Ok(Some(state.builder.float(ir::Type::F64, f64::NAN)))
             }
             "__builtin_nanf" | "__builtin_nansf" => {
                 self.lower_expression(state, &arguments[0])?;
-                Ok(Some(state.builder.float(omni::Type::F32, f64::NAN)))
+                Ok(Some(state.builder.float(ir::Type::F32, f64::NAN)))
             }
             "__builtin_isnan"
             | "__builtin_isinf"
@@ -49903,64 +49870,63 @@ impl<'session, 'files> Parser<'session, 'files> {
             | "__builtin_isfinite"
             | "__builtin_signbit" => {
                 let x = self.lower_expression(state, &arguments[0])?;
-                let infinity = state.builder.float(omni::Type::F64, f64::INFINITY);
-                let flag = |state: &mut LowerState, condition: omni::Value| {
+                let infinity = state.builder.float(ir::Type::F64, f64::INFINITY);
+                let flag = |state: &mut LowerState, condition: ir::Value| {
                     state
                         .builder
-                        .convert(omni::Conversion::ZeroExtend, condition, omni::Type::I32)
+                        .convert(ir::Conversion::ZeroExtend, condition, ir::Type::I32)
                 };
                 let result = match name {
                     "__builtin_isnan" => {
                         let unordered = state.builder.float_compare(
-                            omni::FloatComparison::UnorderedNotEqual,
+                            ir::FloatComparison::UnorderedNotEqual,
                             x,
                             x,
                         );
                         flag(state, unordered)
                     }
                     "__builtin_isinf" => {
-                        let magnitude = state.builder.unary(omni::UnaryOp::FloatAbsolute, x);
+                        let magnitude = state.builder.unary(ir::UnaryOp::FloatAbsolute, x);
                         let equal = state.builder.float_compare(
-                            omni::FloatComparison::OrderedEqual,
+                            ir::FloatComparison::OrderedEqual,
                             magnitude,
                             infinity,
                         );
                         flag(state, equal)
                     }
                     "__builtin_isfinite" => {
-                        let magnitude = state.builder.unary(omni::UnaryOp::FloatAbsolute, x);
+                        let magnitude = state.builder.unary(ir::UnaryOp::FloatAbsolute, x);
                         let less = state.builder.float_compare(
-                            omni::FloatComparison::OrderedLess,
+                            ir::FloatComparison::OrderedLess,
                             magnitude,
                             infinity,
                         );
                         flag(state, less)
                     }
                     "__builtin_signbit" => {
-                        let bits =
-                            state
-                                .builder
-                                .convert(omni::Conversion::Bitcast, x, omni::Type::I64);
-                        let zero = state.builder.integer(omni::Type::I64, 0);
+                        let bits = state
+                            .builder
+                            .convert(ir::Conversion::Bitcast, x, ir::Type::I64);
+                        let zero = state.builder.integer(ir::Type::I64, 0);
                         let negative =
                             state
                                 .builder
-                                .compare(omni::Comparison::LessSigned, bits, zero);
+                                .compare(ir::Comparison::LessSigned, bits, zero);
                         flag(state, negative)
                     }
                     _ => {
-                        let magnitude = state.builder.unary(omni::UnaryOp::FloatAbsolute, x);
+                        let magnitude = state.builder.unary(ir::UnaryOp::FloatAbsolute, x);
                         let infinite = state.builder.float_compare(
-                            omni::FloatComparison::OrderedEqual,
+                            ir::FloatComparison::OrderedEqual,
                             magnitude,
                             infinity,
                         );
-                        let zero = state.builder.integer(omni::Type::I32, 0);
-                        let one = state.builder.integer(omni::Type::I32, 1);
-                        let minus = state.builder.integer(omni::Type::I32, -1);
-                        let origin = state.builder.float(omni::Type::F64, 0.0);
+                        let zero = state.builder.integer(ir::Type::I32, 0);
+                        let one = state.builder.integer(ir::Type::I32, 1);
+                        let minus = state.builder.integer(ir::Type::I32, -1);
+                        let origin = state.builder.float(ir::Type::F64, 0.0);
                         let negative = state.builder.float_compare(
-                            omni::FloatComparison::OrderedLess,
+                            ir::FloatComparison::OrderedLess,
                             x,
                             origin,
                         );
@@ -49971,32 +49937,32 @@ impl<'session, 'files> Parser<'session, 'files> {
                 Ok(Some(result))
             }
             "__builtin_huge_val" | "__builtin_inf" => {
-                Ok(Some(state.builder.float(omni::Type::F64, f64::INFINITY)))
+                Ok(Some(state.builder.float(ir::Type::F64, f64::INFINITY)))
             }
             "__builtin_huge_valf" | "__builtin_inff" => {
-                Ok(Some(state.builder.float(omni::Type::F32, f64::INFINITY)))
+                Ok(Some(state.builder.float(ir::Type::F32, f64::INFINITY)))
             }
             _ => {
                 let operation = match name {
                     "__builtin_popcount" | "__builtin_popcountl" | "__builtin_popcountll" => {
-                        unary(omni::UnaryOp::PopulationCount)
+                        unary(ir::UnaryOp::PopulationCount)
                     }
                     "__builtin_clz" | "__builtin_clzl" | "__builtin_clzll" => {
-                        unary(omni::UnaryOp::LeadingZeros)
+                        unary(ir::UnaryOp::LeadingZeros)
                     }
                     "__builtin_ctz" | "__builtin_ctzl" | "__builtin_ctzll" => {
-                        unary(omni::UnaryOp::TrailingZeros)
+                        unary(ir::UnaryOp::TrailingZeros)
                     }
                     "__builtin_bswap16" | "__builtin_bswap32" | "__builtin_bswap64" => {
-                        unary(omni::UnaryOp::ByteSwap)
+                        unary(ir::UnaryOp::ByteSwap)
                     }
                     "__builtin_abs" | "__builtin_labs" | "__builtin_llabs" => {
-                        unary(omni::UnaryOp::AbsoluteSigned)
+                        unary(ir::UnaryOp::AbsoluteSigned)
                     }
-                    "__builtin_fabs" | "__builtin_fabsf" => unary(omni::UnaryOp::FloatAbsolute),
-                    "__builtin_sqrt" | "__builtin_sqrtf" => unary(omni::UnaryOp::SquareRoot),
-                    "__builtin_floor" | "__builtin_floorf" => unary(omni::UnaryOp::Floor),
-                    "__builtin_ceil" | "__builtin_ceilf" => unary(omni::UnaryOp::Ceiling),
+                    "__builtin_fabs" | "__builtin_fabsf" => unary(ir::UnaryOp::FloatAbsolute),
+                    "__builtin_sqrt" | "__builtin_sqrtf" => unary(ir::UnaryOp::SquareRoot),
+                    "__builtin_floor" | "__builtin_floorf" => unary(ir::UnaryOp::Floor),
+                    "__builtin_ceil" | "__builtin_ceilf" => unary(ir::UnaryOp::Ceiling),
                     _ => None,
                 };
                 let Some(operation) = operation else {
@@ -50006,9 +49972,9 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let result = state.builder.unary(operation, operand);
                 let counts = matches!(
                     operation,
-                    omni::UnaryOp::PopulationCount
-                        | omni::UnaryOp::LeadingZeros
-                        | omni::UnaryOp::TrailingZeros
+                    ir::UnaryOp::PopulationCount
+                        | ir::UnaryOp::LeadingZeros
+                        | ir::UnaryOp::TrailingZeros
                 );
                 if counts {
                     let from = self.integer_value_type(&arguments[0].ty)?;
@@ -50016,7 +49982,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                         state,
                         result,
                         from,
-                        omni::Type::I32,
+                        ir::Type::I32,
                         false,
                     )));
                 }
@@ -50030,7 +49996,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         state: &mut LowerState,
         name: &str,
         arguments: &[Expression],
-    ) -> Lowered<Option<omni::Value>> {
+    ) -> Lowered<Option<ir::Value>> {
         let ffs = matches!(name, "__builtin_ffs" | "__builtin_ffsl" | "__builtin_ffsll");
         if !ffs && name != "__builtin_parity" {
             return Err(format!("the {name} builtin"));
@@ -50040,28 +50006,26 @@ impl<'session, 'files> Parser<'session, 'files> {
         if ffs {
             let zero = state.builder.integer(from, 0);
             let one = state.builder.integer(from, 1);
-            let trailing = state.builder.unary(omni::UnaryOp::TrailingZeros, operand);
-            let position = state.builder.binary(omni::BinaryOp::Add, trailing, one);
-            let is_zero = state
-                .builder
-                .compare(omni::Comparison::Equal, operand, zero);
+            let trailing = state.builder.unary(ir::UnaryOp::TrailingZeros, operand);
+            let position = state.builder.binary(ir::BinaryOp::Add, trailing, one);
+            let is_zero = state.builder.compare(ir::Comparison::Equal, operand, zero);
             let chosen = state.builder.select(is_zero, zero, position);
             return Ok(Some(Self::convert_integer(
                 state,
                 chosen,
                 from,
-                omni::Type::I32,
+                ir::Type::I32,
                 false,
             )));
         }
-        let count = state.builder.unary(omni::UnaryOp::PopulationCount, operand);
+        let count = state.builder.unary(ir::UnaryOp::PopulationCount, operand);
         let one = state.builder.integer(from, 1);
-        let odd = state.builder.binary(omni::BinaryOp::And, count, one);
+        let odd = state.builder.binary(ir::BinaryOp::And, count, one);
         Ok(Some(Self::convert_integer(
             state,
             odd,
             from,
-            omni::Type::I32,
+            ir::Type::I32,
             false,
         )))
     }
@@ -50070,35 +50034,34 @@ impl<'session, 'files> Parser<'session, 'files> {
         &mut self,
         state: &mut LowerState,
         extras: &[Expression],
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         if extras.is_empty() {
-            return Ok(state.builder.null(omni::Type::POINTER));
+            return Ok(state.builder.null(ir::Type::POINTER));
         }
         let slot = state.builder.stack_slot(extras.len() as u32 * 8, 8);
         for (position, extra) in extras.iter().enumerate() {
             let ty = self
-                .omni_type(&extra.ty)
+                .ir_type(&extra.ty)
                 .ok_or_else(|| "a variadic argument of this type".to_string())?;
             let value = self.lower_expression(state, extra)?;
-            let stored =
-                if ty == omni::Type::POINTER || ty == omni::Type::F64 || ty == omni::Type::I64 {
-                    value
-                } else if ty == omni::Type::F32 {
-                    state
-                        .builder
-                        .convert(omni::Conversion::FloatExtend, value, omni::Type::F64)
-                } else if ty == omni::Type::I128 {
-                    return Err("128-bit variadic arguments".to_string());
-                } else if extra.ty.is_integer() && self.is_signed_integer(&extra.ty) {
-                    state
-                        .builder
-                        .convert(omni::Conversion::SignExtend, value, omni::Type::I64)
-                } else {
-                    state
-                        .builder
-                        .convert(omni::Conversion::ZeroExtend, value, omni::Type::I64)
-                };
-            let offset = state.builder.integer(omni::Type::I64, position as i128 * 8);
+            let stored = if ty == ir::Type::POINTER || ty == ir::Type::F64 || ty == ir::Type::I64 {
+                value
+            } else if ty == ir::Type::F32 {
+                state
+                    .builder
+                    .convert(ir::Conversion::FloatExtend, value, ir::Type::F64)
+            } else if ty == ir::Type::I128 {
+                return Err("128-bit variadic arguments".to_string());
+            } else if extra.ty.is_integer() && self.is_signed_integer(&extra.ty) {
+                state
+                    .builder
+                    .convert(ir::Conversion::SignExtend, value, ir::Type::I64)
+            } else {
+                state
+                    .builder
+                    .convert(ir::Conversion::ZeroExtend, value, ir::Type::I64)
+            };
+            let offset = state.builder.integer(ir::Type::I64, position as i128 * 8);
             let address = state.builder.offset(slot, offset);
             state.builder.store(stored, address, 8);
         }
@@ -50110,8 +50073,8 @@ impl<'session, 'files> Parser<'session, 'files> {
         state: &mut LowerState,
         lowered: &LoweredSignature,
         arguments: &[Expression],
-        target: Option<omni::Value>,
-    ) -> Lowered<(Vec<omni::Value>, Option<omni::Value>)> {
+        target: Option<ir::Value>,
+    ) -> Lowered<(Vec<ir::Value>, Option<ir::Value>)> {
         let mut values = Vec::with_capacity(arguments.len() + 2);
         if let Some(target) = target {
             values.push(target);
@@ -50132,12 +50095,10 @@ impl<'session, 'files> Parser<'session, 'files> {
                 Some((size, align)) => {
                     let source = self.lower_aggregate_value_address(state, argument)?;
                     let copy = state.builder.stack_slot(size, align);
-                    let length = state.builder.integer(omni::Type::I64, i128::from(size));
-                    state.builder.push(
-                        omni::Operation::MemoryMove,
-                        vec![copy, source, length],
-                        None,
-                    );
+                    let length = state.builder.integer(ir::Type::I64, i128::from(size));
+                    state
+                        .builder
+                        .push(ir::Operation::MemoryMove, vec![copy, source, length], None);
                     values.push(copy);
                 }
                 None => values.push(self.lower_expression(state, argument)?),
@@ -50152,7 +50113,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         callee: &Expression,
         arguments: &[Expression],
         expression: &Expression,
-    ) -> Lowered<Option<omni::Value>> {
+    ) -> Lowered<Option<ir::Value>> {
         let mut pointer = callee;
         loop {
             match &pointer.kind {
@@ -50208,7 +50169,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         };
         let result_ty = lowered.signature.result;
         let returned = state.builder.push(
-            omni::Operation::CallIndirect(lowered.signature),
+            ir::Operation::CallIndirect(lowered.signature),
             values,
             result_ty,
         );
@@ -50222,7 +50183,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         left: &Expression,
         right: &Expression,
         expression: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         match operator {
             BinaryOperator::Comma => {
                 self.lower_discarded(state, left)?;
@@ -50250,7 +50211,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let result = self.lower_comparison(state, operator, left, right)?;
                 return Ok(state
                     .builder
-                    .convert(omni::Conversion::ZeroExtend, result, to));
+                    .convert(ir::Conversion::ZeroExtend, result, to));
             }
             BinaryOperator::Add | BinaryOperator::Subtract
                 if left.ty.is_pointer() || right.ty.is_pointer() =>
@@ -50306,7 +50267,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         operator: BinaryOperator,
         left: &Expression,
         right: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         let (pointer_expr, integer_expr, negate) = if left.ty.is_pointer() {
             (left, right, operator == BinaryOperator::Subtract)
         } else {
@@ -50324,15 +50285,15 @@ impl<'session, 'files> Parser<'session, 'files> {
             state,
             index_value,
             index_type,
-            omni::Type::I64,
+            ir::Type::I64,
             self.is_signed_integer(&integer_expr.ty),
         );
-        let size_value = state.builder.integer(omni::Type::I64, i128::from(size));
+        let size_value = state.builder.integer(ir::Type::I64, i128::from(size));
         let mut scaled = state
             .builder
-            .binary(omni::BinaryOp::Multiply, index_value, size_value);
+            .binary(ir::BinaryOp::Multiply, index_value, size_value);
         if negate {
-            scaled = state.builder.unary(omni::UnaryOp::Negate, scaled);
+            scaled = state.builder.unary(ir::UnaryOp::Negate, scaled);
         }
         Ok(state.builder.offset(pointer_value, scaled))
     }
@@ -50343,7 +50304,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         left: &Expression,
         right: &Expression,
         expression: &Expression,
-    ) -> Lowered<omni::Value> {
+    ) -> Lowered<ir::Value> {
         let element = left
             .ty
             .pointee()
@@ -50355,18 +50316,18 @@ impl<'session, 'files> Parser<'session, 'files> {
         let left_int =
             state
                 .builder
-                .convert(omni::Conversion::PointerToInteger, left_value, result_ty);
+                .convert(ir::Conversion::PointerToInteger, left_value, result_ty);
         let right_int =
             state
                 .builder
-                .convert(omni::Conversion::PointerToInteger, right_value, result_ty);
+                .convert(ir::Conversion::PointerToInteger, right_value, result_ty);
         let diff = state
             .builder
-            .binary(omni::BinaryOp::Subtract, left_int, right_int);
+            .binary(ir::BinaryOp::Subtract, left_int, right_int);
         let size_value = state.builder.integer(result_ty, i128::from(size));
         Ok(state
             .builder
-            .binary(omni::BinaryOp::DivideSigned, diff, size_value))
+            .binary(ir::BinaryOp::DivideSigned, diff, size_value))
     }
 
     fn lower_nested_switch(
@@ -50392,7 +50353,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                     if blocks.values.insert(value, block).is_some() {
                         return Err("duplicate case values".to_string());
                     }
-                    cases.push((value, omni::BlockCall::to(block)));
+                    cases.push((value, ir::BlockCall::to(block)));
                 }
                 CaseLabelValue::Default => {
                     if blocks.default.replace(block).is_some() {
@@ -50402,16 +50363,16 @@ impl<'session, 'files> Parser<'session, 'files> {
             }
         }
         let default_block = blocks.default.unwrap_or(exit_block);
-        let all: Vec<omni::Block> = blocks
+        let all: Vec<ir::Block> = blocks
             .values
             .values()
             .copied()
             .chain(blocks.default)
             .collect();
-        state.builder.terminate(omni::Terminator::Switch {
+        state.builder.terminate(ir::Terminator::Switch {
             value: condition_value,
             cases,
-            default: omni::BlockCall::to(default_block),
+            default: ir::BlockCall::to(default_block),
         });
         state.targets.push(LoopFrame::Switch {
             break_block: exit_block,
@@ -50452,7 +50413,7 @@ impl<'session, 'files> Parser<'session, 'files> {
         }
         self.integer_value_type(&condition.ty)?;
         let condition_value = self.lower_expression(state, condition)?;
-        let blocks: Vec<omni::Block> = segments
+        let blocks: Vec<ir::Block> = segments
             .iter()
             .map(|_| state.builder.create_block())
             .collect();
@@ -50466,7 +50427,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                         if cases.iter().any(|(existing, _)| existing == value) {
                             return Err("duplicate case values".to_string());
                         }
-                        cases.push((*value, omni::BlockCall::to(*block)));
+                        cases.push((*value, ir::BlockCall::to(*block)));
                     }
                     CaseLabelValue::Default => {
                         if default_target.is_some() {
@@ -50478,10 +50439,10 @@ impl<'session, 'files> Parser<'session, 'files> {
             }
         }
         let default_block = default_target.unwrap_or(exit_block);
-        state.builder.terminate(omni::Terminator::Switch {
+        state.builder.terminate(ir::Terminator::Switch {
             value: condition_value,
             cases,
-            default: omni::BlockCall::to(default_block),
+            default: ir::BlockCall::to(default_block),
         });
         state.targets.push(LoopFrame::Switch {
             break_block: exit_block,
@@ -50656,7 +50617,7 @@ enum AtomicBuiltin {
     Exchange,
     Release,
     Fetch {
-        operation: omni::AtomicOp,
+        operation: ir::AtomicOp,
         returns_new: bool,
     },
     CompareExchange,
@@ -50665,14 +50626,14 @@ enum AtomicBuiltin {
     Fence,
 }
 
-fn atomic_operation(name: &str) -> Option<omni::AtomicOp> {
+fn atomic_operation(name: &str) -> Option<ir::AtomicOp> {
     Some(match name {
-        "add" => omni::AtomicOp::Add,
-        "sub" => omni::AtomicOp::Subtract,
-        "and" => omni::AtomicOp::And,
-        "or" => omni::AtomicOp::Or,
-        "xor" => omni::AtomicOp::Xor,
-        "nand" => omni::AtomicOp::Nand,
+        "add" => ir::AtomicOp::Add,
+        "sub" => ir::AtomicOp::Subtract,
+        "and" => ir::AtomicOp::And,
+        "or" => ir::AtomicOp::Or,
+        "xor" => ir::AtomicOp::Xor,
+        "nand" => ir::AtomicOp::Nand,
         _ => return None,
     })
 }

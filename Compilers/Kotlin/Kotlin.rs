@@ -41341,7 +41341,7 @@ pub mod native {
             }
         }
 
-        pub fn omni_layout(&self) -> crate::compilers::compiler_infrastructure::Layout {
+        pub fn ir_layout(&self) -> crate::compilers::compiler_infrastructure::Layout {
             use crate::compilers::compiler_infrastructure::Layout;
             match (self.pointer_bytes(), self.architecture, self.family) {
                 (8, _, _) => Layout::Lp64,
@@ -42193,7 +42193,7 @@ pub mod native {
     }
 
     impl RuntimeType {
-        pub fn omni(self) -> Option<crate::compilers::compiler_infrastructure::Type> {
+        pub fn ir(self) -> Option<crate::compilers::compiler_infrastructure::Type> {
             use crate::compilers::compiler_infrastructure::{Scalar, Type};
             Some(Type::Scalar(match self {
                 RuntimeType::Void => return None,
@@ -42241,9 +42241,9 @@ pub mod native {
                     crate::compilers::compiler_infrastructure::Signature::new(
                         self.parameters()
                             .into_iter()
-                            .filter_map(RuntimeType::omni)
+                            .filter_map(RuntimeType::ir)
                             .collect(),
-                        self.returns().omni(),
+                        self.returns().ir(),
                     )
                 }
 
@@ -42742,8 +42742,8 @@ pub mod native {
         use crate::jvm;
         use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-        pub const FAULTS: &str = "omni/runtime/Faults";
-        pub const CLASSES: &str = "omni/runtime/Classes";
+        pub const FAULTS: &str = "ir/runtime/Faults";
+        pub const CLASSES: &str = "ir/runtime/Classes";
         pub const STRING: &str = "java/lang/String";
         pub const BUILDER: &str = "java/lang/StringBuilder";
 
@@ -42963,13 +42963,13 @@ public class PrintStream extends OutputStream {
 
     public void write(int value) {
         char[] one = new char[] {(char) (value & 0xff)};
-        omni.runtime.Console.write(descriptor, one, 0, 1);
+        ir.runtime.Console.write(descriptor, one, 0, 1);
     }
 
     public void print(String text) {
         String shown = String.valueOf(text);
         char[] chars = shown.toCharArray();
-        omni.runtime.Console.write(descriptor, chars, 0, chars.length);
+        ir.runtime.Console.write(descriptor, chars, 0, chars.length);
     }
 
     public void print(Object value) {
@@ -42977,7 +42977,7 @@ public class PrintStream extends OutputStream {
     }
 
     public void print(char[] chars) {
-        omni.runtime.Console.write(descriptor, chars, 0, chars.length);
+        ir.runtime.Console.write(descriptor, chars, 0, chars.length);
     }
 
     public void print(boolean value) {
@@ -43937,7 +43937,7 @@ public final class Class<T> implements java.io.Serializable, java.lang.reflect.T
 
     private int bits() {
         if (described < 0) {
-            described = primitive || isArray() ? 0 : omni.runtime.Classes.describe(name);
+            described = primitive || isArray() ? 0 : ir.runtime.Classes.describe(name);
         }
         return described;
     }
@@ -43949,10 +43949,10 @@ public final class Class<T> implements java.io.Serializable, java.lang.reflect.T
         if (primitive) {
             return name;
         }
-        if ((bits() & omni.runtime.Classes.ANONYMOUS) != 0) {
+        if ((bits() & ir.runtime.Classes.ANONYMOUS) != 0) {
             return "";
         }
-        String inner = omni.runtime.Classes.simpleName(name);
+        String inner = ir.runtime.Classes.simpleName(name);
         if (inner != null) {
             return inner;
         }
@@ -43961,39 +43961,39 @@ public final class Class<T> implements java.io.Serializable, java.lang.reflect.T
     }
 
     public boolean isAnonymousClass() {
-        return (bits() & omni.runtime.Classes.ANONYMOUS) != 0;
+        return (bits() & ir.runtime.Classes.ANONYMOUS) != 0;
     }
 
     public boolean isLocalClass() {
-        return (bits() & omni.runtime.Classes.LOCAL) != 0;
+        return (bits() & ir.runtime.Classes.LOCAL) != 0;
     }
 
     public boolean isMemberClass() {
-        return (bits() & omni.runtime.Classes.MEMBER) != 0;
+        return (bits() & ir.runtime.Classes.MEMBER) != 0;
     }
 
     public boolean isEnum() {
-        return (bits() & omni.runtime.Classes.ENUM) != 0;
+        return (bits() & ir.runtime.Classes.ENUM) != 0;
     }
 
     public boolean isAnnotation() {
-        return (bits() & omni.runtime.Classes.ANNOTATION) != 0;
+        return (bits() & ir.runtime.Classes.ANNOTATION) != 0;
     }
 
     public boolean isSynthetic() {
-        return (bits() & omni.runtime.Classes.SYNTHETIC) != 0;
+        return (bits() & ir.runtime.Classes.SYNTHETIC) != 0;
     }
 
     public int getModifiers() {
         int bits = bits();
         int modifiers = 0x0001;
-        if ((bits & omni.runtime.Classes.INTERFACE) != 0) {
+        if ((bits & ir.runtime.Classes.INTERFACE) != 0) {
             modifiers |= 0x0200 | 0x0400;
         }
-        if ((bits & omni.runtime.Classes.ABSTRACT) != 0) {
+        if ((bits & ir.runtime.Classes.ABSTRACT) != 0) {
             modifiers |= 0x0400;
         }
-        if ((bits & omni.runtime.Classes.FINAL) != 0 || primitive || isArray()) {
+        if ((bits & ir.runtime.Classes.FINAL) != 0 || primitive || isArray()) {
             modifiers |= 0x0010;
         }
         return modifiers;
@@ -44005,18 +44005,18 @@ public final class Class<T> implements java.io.Serializable, java.lang.reflect.T
             return null;
         }
         if (isArray()) {
-            return (Class<? super T>) omni.runtime.Classes.named("java.lang.Object");
+            return (Class<? super T>) ir.runtime.Classes.named("java.lang.Object");
         }
-        String above = omni.runtime.Classes.superName(name);
-        return above == null ? null : (Class<? super T>) omni.runtime.Classes.named(above);
+        String above = ir.runtime.Classes.superName(name);
+        return above == null ? null : (Class<? super T>) ir.runtime.Classes.named(above);
     }
 
     public Class<?> getEnclosingClass() {
         if (primitive || isArray()) {
             return null;
         }
-        String outer = omni.runtime.Classes.enclosingName(name);
-        return outer == null ? null : omni.runtime.Classes.named(outer);
+        String outer = ir.runtime.Classes.enclosingName(name);
+        return outer == null ? null : ir.runtime.Classes.named(outer);
     }
 
     public Class<?> getDeclaringClass() {
@@ -44024,7 +44024,7 @@ public final class Class<T> implements java.io.Serializable, java.lang.reflect.T
     }
 
     public java.lang.reflect.Method getEnclosingMethod() {
-        String method = primitive || isArray() ? null : omni.runtime.Classes.enclosingMethod(name);
+        String method = primitive || isArray() ? null : ir.runtime.Classes.enclosingMethod(name);
         if (method == null || method.equals("<init>") || method.equals("<clinit>")) {
             return null;
         }
@@ -44033,7 +44033,7 @@ public final class Class<T> implements java.io.Serializable, java.lang.reflect.T
 
     @SuppressWarnings("unchecked")
     public java.lang.reflect.Constructor<?> getEnclosingConstructor() {
-        String method = primitive || isArray() ? null : omni.runtime.Classes.enclosingMethod(name);
+        String method = primitive || isArray() ? null : ir.runtime.Classes.enclosingMethod(name);
         if (method == null || !method.equals("<init>")) {
             return null;
         }
@@ -44045,10 +44045,10 @@ public final class Class<T> implements java.io.Serializable, java.lang.reflect.T
     }
 
     public static Class<?> forName(String name) throws ClassNotFoundException {
-        if ((omni.runtime.Classes.describe(name) & omni.runtime.Classes.KNOWN) == 0) {
+        if ((ir.runtime.Classes.describe(name) & ir.runtime.Classes.KNOWN) == 0) {
             throw new ClassNotFoundException(name);
         }
-        return omni.runtime.Classes.named(name);
+        return ir.runtime.Classes.named(name);
     }
 
     public static Class<?> forName(String name, boolean initialize, Object loader) throws ClassNotFoundException {
@@ -44060,7 +44060,7 @@ public final class Class<T> implements java.io.Serializable, java.lang.reflect.T
         if (primitive || isArray() || isInterface()) {
             throw new InstantiationException(name);
         }
-        return (T) omni.runtime.Classes.create(name);
+        return (T) ir.runtime.Classes.create(name);
     }
 
     public java.lang.reflect.Constructor<T> getDeclaredConstructor(Class<?>... types) throws NoSuchMethodException {
@@ -44088,7 +44088,7 @@ public final class Class<T> implements java.io.Serializable, java.lang.reflect.T
     }
 
     public boolean isInterface() {
-        return (bits() & omni.runtime.Classes.INTERFACE) != 0;
+        return (bits() & ir.runtime.Classes.INTERFACE) != 0;
     }
 
     public Class<?> getComponentType() {
@@ -44114,9 +44114,9 @@ public final class Class<T> implements java.io.Serializable, java.lang.reflect.T
             case 'D':
                 return Double.TYPE;
             case '[':
-                return omni.runtime.Classes.named(rest);
+                return ir.runtime.Classes.named(rest);
             default:
-                return omni.runtime.Classes.named(rest.substring(1, rest.length() - 1));
+                return ir.runtime.Classes.named(rest.substring(1, rest.length() - 1));
         }
     }
 
@@ -44139,7 +44139,7 @@ public final class Class<T> implements java.io.Serializable, java.lang.reflect.T
         if (value.getClass() == this) {
             return true;
         }
-        return omni.runtime.Classes.isInstance(name, value);
+        return ir.runtime.Classes.isInstance(name, value);
     }
 
     public String toString() {
@@ -44266,12 +44266,12 @@ public final class Double extends Number implements Comparable<Double> {
     }
 
     public static double parseDouble(String text) {
-        return omni.runtime.Numbers.parse(text);
+        return ir.runtime.Numbers.parse(text);
     }
 
     public static String toString(double value) {
         char[] buffer = new char[32];
-        int length = omni.runtime.Numbers.formatDouble(value, buffer);
+        int length = ir.runtime.Numbers.formatDouble(value, buffer);
         return new String(buffer, 0, length);
     }
 
@@ -44530,12 +44530,12 @@ public final class Float extends Number implements Comparable<Float> {
     }
 
     public static float parseFloat(String text) {
-        return (float) omni.runtime.Numbers.parse(text);
+        return (float) ir.runtime.Numbers.parse(text);
     }
 
     public static String toString(float value) {
         char[] buffer = new char[32];
-        int length = omni.runtime.Numbers.formatFloat(value, buffer);
+        int length = ir.runtime.Numbers.formatFloat(value, buffer);
         return new String(buffer, 0, length);
     }
 
@@ -45645,7 +45645,7 @@ public final class Math {
     }
 
     public static double random() {
-        return omni.runtime.Numbers.random();
+        return ir.runtime.Numbers.random();
     }
 }
 "####,
@@ -46679,11 +46679,11 @@ public final class String implements java.io.Serializable, Comparable<String>, C
     }
 
     public static String format(String format, Object... arguments) {
-        return omni.runtime.Formatting.format(format, arguments);
+        return ir.runtime.Formatting.format(format, arguments);
     }
 
     public static String format(Locale locale, String format, Object... arguments) {
-        return omni.runtime.Formatting.format(format, arguments);
+        return ir.runtime.Formatting.format(format, arguments);
     }
 
     public static String valueOf(Object value) {
@@ -47306,11 +47306,11 @@ public final class System {
     public static native int identityHashCode(Object value);
 
     public static long currentTimeMillis() {
-        return omni.runtime.Numbers.clock() / 1000000L;
+        return ir.runtime.Numbers.clock() / 1000000L;
     }
 
     public static long nanoTime() {
-        return omni.runtime.Numbers.clock();
+        return ir.runtime.Numbers.clock();
     }
 
     public static String getProperty(String key) {
@@ -47337,7 +47337,7 @@ public final class System {
     }
 
     public static void exit(int status) {
-        omni.runtime.Console.exit(status);
+        ir.runtime.Console.exit(status);
     }
 
     public static void gc() {
@@ -47680,11 +47680,11 @@ public final class Array {
     }
 
     public static Object newInstance(Class<?> componentType, int length) {
-        return omni.runtime.Arrays.newInstance(componentType.getName(), length);
+        return ir.runtime.Arrays.newInstance(componentType.getName(), length);
     }
 
     public static int getLength(Object array) {
-        return omni.runtime.Arrays.length(array);
+        return ir.runtime.Arrays.length(array);
     }
 }
 "####,
@@ -47721,7 +47721,7 @@ public final class Constructor<T> implements Member, GenericDeclaration {
         if (arguments.length != 0) {
             throw new IllegalArgumentException("wrong number of arguments: " + arguments.length + " expected: 0");
         }
-        return (T) omni.runtime.Classes.create(owner.getName());
+        return (T) ir.runtime.Classes.create(owner.getName());
     }
 
     public String toString() {
@@ -47848,7 +47848,7 @@ public abstract class AbstractCollection<E> implements Collection<E> {
     @SuppressWarnings("unchecked")
     public <T> T[] toArray(T[] array) {
         int size = size();
-        T[] made = array.length >= size ? array : (T[]) omni.runtime.Arrays.newInstance(array.getClass().getComponentType().getName(), size);
+        T[] made = array.length >= size ? array : (T[]) ir.runtime.Arrays.newInstance(array.getClass().getComponentType().getName(), size);
         int at = 0;
         Iterator<E> walk = iterator();
         while (walk.hasNext()) {
@@ -49326,7 +49326,7 @@ public final class Arrays {
         if (length < 0) {
             throw new NegativeArraySizeException(String.valueOf(length));
         }
-        T[] made = (T[]) omni.runtime.Arrays.newInstance(type.getComponentType().getName(), length);
+        T[] made = (T[]) ir.runtime.Arrays.newInstance(type.getComponentType().getName(), length);
         System.arraycopy(original, 0, made, 0, Math.min(original.length, length));
         return made;
     }
@@ -49345,7 +49345,7 @@ public final class Arrays {
         if (from < 0 || from > original.length) {
             throw new ArrayIndexOutOfBoundsException("Array index out of range: " + from);
         }
-        T[] made = (T[]) omni.runtime.Arrays.newInstance(type.getComponentType().getName(), length);
+        T[] made = (T[]) ir.runtime.Arrays.newInstance(type.getComponentType().getName(), length);
         System.arraycopy(original, from, made, 0, Math.min(original.length - from, length));
         return made;
     }
@@ -57540,8 +57540,8 @@ public class PatternSyntaxException extends IllegalArgumentException {
 "####,
             ),
             (
-                "omni/runtime/Arrays.java",
-                r####"package omni.runtime;
+                "ir/runtime/Arrays.java",
+                r####"package ir.runtime;
 
 public final class Arrays {
     private Arrays() {
@@ -57583,8 +57583,8 @@ public final class Arrays {
 "####,
             ),
             (
-                "omni/runtime/Classes.java",
-                r####"package omni.runtime;
+                "ir/runtime/Classes.java",
+                r####"package ir.runtime;
 
 import java.util.HashMap;
 
@@ -57668,8 +57668,8 @@ public final class Classes {
 "####,
             ),
             (
-                "omni/runtime/Console.java",
-                r####"package omni.runtime;
+                "ir/runtime/Console.java",
+                r####"package ir.runtime;
 
 public final class Console {
     private Console() {
@@ -57682,8 +57682,8 @@ public final class Console {
 "####,
             ),
             (
-                "omni/runtime/Faults.java",
-                r####"package omni.runtime;
+                "ir/runtime/Faults.java",
+                r####"package ir.runtime;
 
 public final class Faults {
     private Faults() {
@@ -57716,8 +57716,8 @@ public final class Faults {
 "####,
             ),
             (
-                "omni/runtime/Formatting.java",
-                r####"package omni.runtime;
+                "ir/runtime/Formatting.java",
+                r####"package ir.runtime;
 
 public final class Formatting {
     private Formatting() {
@@ -58158,8 +58158,8 @@ public final class Formatting {
 "####,
             ),
             (
-                "omni/runtime/Numbers.java",
-                r####"package omni.runtime;
+                "ir/runtime/Numbers.java",
+                r####"package ir.runtime;
 
 public final class Numbers {
     private static long seed = 0x2545F4914F6CDD1DL;
@@ -58280,16 +58280,16 @@ public final class Numbers {
 
         fn host_forward(owner: &str, name: &str, descriptor: &str) -> Option<String> {
             let host = match (owner, name, descriptor) {
-                ("omni/runtime/Numbers", "formatDouble", "(D[C)I") => "omni.format_double",
-                ("omni/runtime/Numbers", "formatFloat", "(F[C)I") => "omni.format_float",
-                ("omni/runtime/Numbers", "parseDecimal", "([CI)D") => "omni.parse_double",
-                ("omni/runtime/Numbers", "clock", "()J") => "omni.clock",
-                ("omni/runtime/Console", "write", "(I[CII)V") => "omni.write_chars",
-                ("omni/runtime/Console", "exit", "(I)V") => "exit",
+                ("ir/runtime/Numbers", "formatDouble", "(D[C)I") => "ir.format_double",
+                ("ir/runtime/Numbers", "formatFloat", "(F[C)I") => "ir.format_float",
+                ("ir/runtime/Numbers", "parseDecimal", "([CI)D") => "ir.parse_double",
+                ("ir/runtime/Numbers", "clock", "()J") => "ir.clock",
+                ("ir/runtime/Console", "write", "(I[CII)V") => "ir.write_chars",
+                ("ir/runtime/Console", "exit", "(I)V") => "exit",
                 ("java/lang/Math" | "java/lang/StrictMath", _, "(D)D" | "(DD)D")
                     if MATHEMATICS.contains(&name) =>
                 {
-                    return Some(format!("omni.math.{name}"));
+                    return Some(format!("ir.math.{name}"));
                 }
                 _ => return None,
             };
@@ -58302,7 +58302,7 @@ public final class Numbers {
                 (ROOT, "getClass", "()Ljava/lang/Class;")
                     | (ROOT, "clone", "()Ljava/lang/Object;")
                     | (
-                        "omni/runtime/Arrays",
+                        "ir/runtime/Arrays",
                         "newInstance",
                         "(Ljava/lang/String;I)Ljava/lang/Object;"
                     )
@@ -59234,7 +59234,7 @@ public final class Numbers {
                     }),
                     ("java/lang/System", "identityHashCode", "(Ljava/lang/Object;)I")
                     | (ROOT, "hashCode", "()I") => {
-                        NativeShape::Identity(self.import("omni.identity", identity))
+                        NativeShape::Identity(self.import("ir.identity", identity))
                     }
                     _ => return Ok(None),
                 };
@@ -59948,7 +59948,7 @@ public final class Numbers {
             }
 
             fn string_maker(&mut self) -> Result<FunctionId, Diagnostic> {
-                if let Some(found) = self.helpers.get("omni.string") {
+                if let Some(found) = self.helpers.get("ir.string") {
                     return Ok(*found);
                 }
                 let signature =
@@ -59957,13 +59957,13 @@ public final class Numbers {
                 let field = self.instance_field(STRING, "value")?;
                 let Some((holder, index, descriptor)) = field.filter(|(_, _, held)| held == "[C")
                 else {
-                    let id = self.import("omni.string", signature);
-                    self.helpers.insert("omni.string".to_string(), id);
+                    let id = self.import("ir.string", signature);
+                    self.helpers.insert("ir.string".to_string(), id);
                     return Ok(id);
                 };
                 self.instantiate(string);
                 let chars = self.declare(&descriptor)?;
-                self.generated("omni.string", signature, move |body, values| {
+                self.generated("ir.string", signature, move |body, values| {
                     let (data, length) = (values[0], values[1]);
                     let array = body
                         .builder
@@ -62820,7 +62820,7 @@ annotation class ThreadLocal
 annotation class SharedImmutable
 "####;
 
-    pub fn lower_to_omni(
+    pub fn lower_to_ir(
         kotlin: &[(String, String)],
         java: &[(String, String)],
         options: &Options,
@@ -62882,7 +62882,7 @@ annotation class SharedImmutable
                 }
             }
         }
-        let layout = options.target.omni_layout();
+        let layout = options.target.ir_layout();
         let mut lowered = lowering::lower(&mut files, &roots, layout, &options.module())?;
         if starts {
             lowered.entry = lowered.entries.first().copied();
@@ -62897,7 +62897,7 @@ annotation class SharedImmutable
         libraries: Vec<Vec<u8>>,
         toolchain: Option<Toolchain<'_>>,
     ) -> Result<Compiled, Diagnostic> {
-        let lowered = lower_to_omni(kotlin, java, options, libraries)?;
+        let lowered = lower_to_ir(kotlin, java, options, libraries)?;
         finish(lowered, options, toolchain)
     }
 
@@ -63054,7 +63054,7 @@ annotation class SharedImmutable
         output: &str,
     ) -> Result<Artifact, Diagnostic> {
         let manifest = format!(
-            "unique_name={}\nabi_version=omni-ir-1\nnative_targets={}\ncompiler_version=code-builder\nbuiltins_platform=NATIVE\nir_provider=omni\n",
+            "unique_name={}\nabi_version=ir-1\nnative_targets={}\ncompiler_version=code-builder\nbuiltins_platform=NATIVE\nir_provider=ir\n",
             options.module(),
             options.target.name
         );
@@ -63066,7 +63066,7 @@ annotation class SharedImmutable
                 changed: 0,
             },
             crate::packer::Item {
-                name: "default/ir/module.omni".to_string(),
+                name: "default/ir/module.ir".to_string(),
                 bytes: lowered.module.to_binary(),
                 folder: false,
                 changed: 0,

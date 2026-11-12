@@ -47,7 +47,7 @@ SUITE_HOMES = {
     "compiler-rt-builtins-x86": "compiler_rt_builtins",
     "compiler-rt-builtins-arm64": "compiler_rt_builtins",
 }
-KOTLIN_SUITES = ["kotlin-omni", "kotlin-omni-native"]
+KOTLIN_SUITES = ["kotlin-ir", "kotlin-ir-native"]
 LINKER_SUITES = ["lld-elf", "lld-coff"]
 ASSEMBLER_SUITES = [
     "mc-x86",
@@ -590,7 +590,7 @@ def check_bridge() -> str:
 
     checked = 0
     for abi in ("arm64-v8a", "x86_64"):
-        library = work / f"lib/{abi}/libcode_builder.so"
+        library = work / f"lib/{abi}/libbuilder.so"
         if not library.is_file():
             raise AssertionError(f"no native library for {abi}")
         listed = run([str(nm), "-D", "--defined-only", str(library)])
@@ -1073,8 +1073,8 @@ def kotlin_standard_library() -> Path | None:
     found = sorted(base.glob("*/*/kotlin-stdlib-*.jar")) if base.is_dir() else []
     return found[-1] if found else None
 
-def check_kotlin_omni() -> str:
-    """Every Kotlin box test the JVM answers OK answers OK on Omni IR too, and natively as interpreted."""
+def check_kotlin_ir() -> str:
+    """Every Kotlin box test the JVM answers OK answers OK on the IR too, and natively as interpreted."""
     if shutil.which("cargo") is None:
         raise Skip("cargo is not on this machine")
     if not bundles_present():
@@ -1117,7 +1117,7 @@ CHECKS: dict[str, tuple[str, object]] = {
     "suites": ("every reference suite holds its ground", check_suites),
     "differential": ("our engines agree with independent ones", check_differential),
     "determinism": ("the same verdicts on one worker and many", check_determinism),
-    "kotlin-omni": ("Kotlin answers the same on Omni IR as on the JVM", check_kotlin_omni),
+    "kotlin-ir": ("Kotlin answers the same on the IR as on the JVM", check_kotlin_ir),
     "linker": ("our linkers hold their ground on the LLD tests", check_linker),
     "assembler": ("our x86 and AArch64 assemblers hold their ground on the LLVM MC tests", check_assembler),
     "c-front-end": ("our C front end holds its ground on the Clang tests", check_c_front_end),

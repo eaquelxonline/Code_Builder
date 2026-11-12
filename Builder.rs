@@ -2257,7 +2257,7 @@ pub mod toolchain {
             checksum: None,
             observable_on_device: false,
             note: "Provides the Clang toolchain that links the Core into \
-                   libcode_builder.so.",
+                   libbuilder.so.",
         },
         Pin {
             id: "androidApi",

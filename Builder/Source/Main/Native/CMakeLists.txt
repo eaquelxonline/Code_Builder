@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(code_builder LANGUAGES CXX)
+project(builder LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -43,24 +43,24 @@ endif()
 
 message(STATUS "Code Builder Core archive for ${ANDROID_ABI}: ${CODE_BUILDER_CORE_ARCHIVE}")
 
-add_library(code_builder SHARED Builder.cpp)
+add_library(builder SHARED Builder.cpp)
 
-target_include_directories(code_builder PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(builder PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
-target_compile_options(code_builder PRIVATE
+target_compile_options(builder PRIVATE
     -Wall
     -Wextra
     -Werror
     -fvisibility=hidden
     -fstack-protector-strong)
 
-target_link_libraries(code_builder PRIVATE
+target_link_libraries(builder PRIVATE
     "${CODE_BUILDER_CORE_ARCHIVE}"
     log
     dl
     m)
 
-target_link_options(code_builder PRIVATE
+target_link_options(builder PRIVATE
     "-Wl,--exclude-libs,ALL"
     "-Wl,-z,relro"
     "-Wl,-z,now"

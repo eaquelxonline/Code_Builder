@@ -2,7 +2,7 @@ use super::compiler_infrastructure::fail;
 use crate::diag::Diagnostic;
 use std::collections::{BTreeMap, BTreeSet};
 
-pub const TABLEGEN_VERSION: &str = "omni-tablegen 1 (llvm-tblgen 24.0.0git semantics)";
+pub const TABLEGEN_VERSION: &str = "code-builder-tablegen 1 (llvm-tblgen 24.0.0git semantics)";
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub struct Location {
@@ -9635,11 +9635,11 @@ pub fn read_records<'a>(
 
 pub const TABLE_FORMAT_VERSION: u32 = 2;
 
-pub const TABLE_MAGIC: &[u8; 8] = b"OMNITBL\0";
+pub const TABLE_MAGIC: &[u8; 8] = b"CBTABLE\0";
 
-pub const CANONICAL_HEADER: &str = "omni-tablegen-canonical 1";
+pub const CANONICAL_HEADER: &str = "code-builder-tablegen-canonical 1";
 
-pub const MANIFEST_HEADER: &str = "omni-tables-manifest 1";
+pub const MANIFEST_HEADER: &str = "code-builder-tables-manifest 1";
 
 const ROOT_CLASSES: &[&str] = &[
     "AsmOperandClass",

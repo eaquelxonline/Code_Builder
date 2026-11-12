@@ -9,8 +9,8 @@ use crate::FailureClass;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
-pub const LINKER_IDENTITY: &str = "Linker: Omni Builder 1.0.0";
-pub const VERSION_BANNER: &str = "Omni Builder LLD 1.0.0 (compatible with GNU linkers)";
+pub const LINKER_IDENTITY: &str = "Linker: Code Builder 1.0.0";
+pub const VERSION_BANNER: &str = "Code Builder LLD 1.0.0 (compatible with GNU linkers)";
 
 const HELP_TEXT: &str = r#"OVERVIEW: lld
 
