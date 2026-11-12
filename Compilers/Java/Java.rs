@@ -233,7 +233,7 @@ impl<'a> Lexer<'a> {
                 });
                 return Ok(out);
             }
-            let token = self.one(line, column)?;
+            let token = self.scan_token(line, column)?;
             out.push(Spelled {
                 token,
                 line,
@@ -242,7 +242,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn one(&mut self, line: u32, column: u32) -> Result<Token, Diagnostic> {
+    fn scan_token(&mut self, line: u32, column: u32) -> Result<Token, Diagnostic> {
         let byte = self.peek(0);
 
         if byte == b'"' {
@@ -1563,7 +1563,7 @@ fn as_the_class_a_record_is(
         };
         let mut same = Expression::Boolean(true);
         for (what, name) in components {
-            let one = the_same_component(what, mine(name), theirs(name));
+            let one = component_equals_expression(what, mine(name), theirs(name));
             same = Expression::Binary {
                 operator: Binary::AndAlso,
                 left: Box::new(same),
@@ -1625,7 +1625,7 @@ fn as_the_class_a_record_is(
                     left: Box::new(worked),
                     right: Box::new(Expression::Int(31)),
                 }),
-                right: Box::new(what_one_component_hashes_to(
+                right: Box::new(component_hash_expression(
                     what,
                     Expression::Field {
                         of: Box::new(Expression::This),
@@ -1658,7 +1658,7 @@ fn as_the_class_a_record_is(
     Ok(unit)
 }
 
-fn the_same_component(what: &Written, mine: Expression, theirs: Expression) -> Expression {
+fn component_equals_expression(what: &Written, mine: Expression, theirs: Expression) -> Expression {
     let compared_by = |class: &str| Expression::Binary {
         operator: Binary::Equal,
         left: Box::new(Expression::Call {
@@ -1705,7 +1705,7 @@ fn the_same_component(what: &Written, mine: Expression, theirs: Expression) -> E
     }
 }
 
-fn what_one_component_hashes_to(what: &Written, mine: Expression) -> Expression {
+fn component_hash_expression(what: &Written, mine: Expression) -> Expression {
     let hashed_by = |class: &str| Expression::Call {
         on: Some(Box::new(Expression::Name(class.to_string()))),
         super_call: false,
@@ -1740,7 +1740,7 @@ fn what_one_component_hashes_to(what: &Written, mine: Expression) -> Expression 
     }
 }
 
-fn belonging_to_an_instance(mut unit: Unit, holder: &str, package: &Option<String>) -> Unit {
+fn attach_enclosing_instance(mut unit: Unit, holder: &str, package: &Option<String>) -> Unit {
     let enclosing = match package {
         Some(package) => format!("{}/{holder}", package.replace('.', "/")),
         None => holder.to_string(),
@@ -1806,7 +1806,7 @@ fn belonging_to_an_instance(mut unit: Unit, holder: &str, package: &Option<Strin
             line: method.line,
             column: 1,
         };
-        method.body = Some(filled_before_the_chain(
+        method.body = Some(insert_before_constructor_chain(
             body,
             &[filling],
             &[OUTER.to_string()],
@@ -1818,7 +1818,7 @@ fn belonging_to_an_instance(mut unit: Unit, holder: &str, package: &Option<Strin
     unit
 }
 
-fn filled_before_the_chain(
+fn insert_before_constructor_chain(
     mut body: Vec<Positioned<Statement>>,
     filling: &[Positioned<Statement>],
     handed_on: &[String],
@@ -1903,30 +1903,36 @@ fn with_the_assertion_flag(unit: &Unit) -> Unit {
     held
 }
 
-fn holds_an_assert(unit: &Unit) -> bool {
-    fn inside(statement: &Statement) -> bool {
+fn contains_assert(unit: &Unit) -> bool {
+    fn contains_assert_statement(statement: &Statement) -> bool {
         let mut found = matches!(statement, Statement::Assert { .. });
         match statement {
             Statement::Block(held) | Statement::Several(held) => {
-                found = found || held.iter().any(|one| inside(&one.node))
+                found = found || held.iter().any(|one| contains_assert_statement(&one.node))
             }
             Statement::If {
                 then, otherwise, ..
             } => {
                 found = found
-                    || inside(&then.node)
-                    || otherwise.as_ref().is_some_and(|one| inside(&one.node))
+                    || contains_assert_statement(&then.node)
+                    || otherwise
+                        .as_ref()
+                        .is_some_and(|one| contains_assert_statement(&one.node))
             }
             Statement::While { body, .. }
             | Statement::DoWhile { body, .. }
             | Statement::For { body, .. }
             | Statement::ForEach { body, .. }
-            | Statement::Labelled { body, .. } => found = found || inside(&body.node),
+            | Statement::Labelled { body, .. } => {
+                found = found || contains_assert_statement(&body.node)
+            }
             Statement::Switch { arms, .. } => {
                 found = found
-                    || arms
-                        .iter()
-                        .any(|arm| arm.body.iter().any(|one| inside(&one.node)))
+                    || arms.iter().any(|arm| {
+                        arm.body
+                            .iter()
+                            .any(|one| contains_assert_statement(&one.node))
+                    })
             }
             Statement::Try {
                 body,
@@ -1934,16 +1940,19 @@ fn holds_an_assert(unit: &Unit) -> bool {
                 finally,
             } => {
                 found = found
-                    || body.iter().any(|one| inside(&one.node))
-                    || catches
-                        .iter()
-                        .any(|catch| catch.body.iter().any(|one| inside(&one.node)))
-                    || finally
-                        .as_ref()
-                        .is_some_and(|held| held.iter().any(|one| inside(&one.node)))
+                    || body.iter().any(|one| contains_assert_statement(&one.node))
+                    || catches.iter().any(|catch| {
+                        catch
+                            .body
+                            .iter()
+                            .any(|one| contains_assert_statement(&one.node))
+                    })
+                    || finally.as_ref().is_some_and(|held| {
+                        held.iter().any(|one| contains_assert_statement(&one.node))
+                    })
             }
             Statement::Synchronized { body, .. } => {
-                found = found || body.iter().any(|one| inside(&one.node))
+                found = found || body.iter().any(|one| contains_assert_statement(&one.node))
             }
             _ => {}
         }
@@ -1955,7 +1964,7 @@ fn holds_an_assert(unit: &Unit) -> bool {
         .flat_map(|method| method.body.iter().flatten())
         .chain(unit.instance_setup.iter())
         .chain(unit.static_setup.iter())
-        .any(|one| inside(&one.node))
+        .any(|one| contains_assert_statement(&one.node))
 }
 
 const ASSERTIONS_OFF: &str = "$assertionsDisabled";
@@ -1966,7 +1975,7 @@ const OUTER: &str = "$outer";
 
 const REACHING_UP: &str = "lambda$super$";
 
-fn written_for(what: &Type) -> Option<Written> {
+fn written_type_of(what: &Type) -> Option<Written> {
     Some(match what {
         Type::Void => return None,
         Type::Boolean => Written::Boolean,
@@ -1977,11 +1986,11 @@ fn written_for(what: &Type) -> Option<Written> {
         Type::Long => Written::Long,
         Type::Float => Written::Float,
         Type::Double => Written::Double,
-        Type::Array(of) => Written::Array(Box::new(written_for(of)?)),
+        Type::Array(of) => Written::Array(Box::new(written_type_of(of)?)),
 
         Type::Object(name, held) => Written::Named(
             name.replace('/', "."),
-            held.iter().filter_map(written_for).collect(),
+            held.iter().filter_map(written_type_of).collect(),
         ),
     })
 }
@@ -2800,14 +2809,14 @@ impl Parser {
             return Ok(false);
         }
 
-        self.want_mark("<")?;
+        self.require_mark("<")?;
         let mut frame = Vec::new();
         loop {
-            let name = self.want_name()?;
+            let name = self.require_name()?;
             let bound = if self.eat_word("extends") {
-                let first = self.written_type()?;
+                let first = self.parse_written_type()?;
                 while self.eat_mark("&") {
-                    self.written_type()?;
+                    self.parse_written_type()?;
                 }
                 first
             } else {
@@ -2828,7 +2837,7 @@ impl Parser {
     }
 
     fn close_type_parameters(&mut self) -> Result<(), Diagnostic> {
-        match self.here().token {
+        match self.current_token().token {
             Token::Punctuation(">") => {
                 self.take();
                 Ok(())
@@ -2866,24 +2875,24 @@ impl Parser {
         }
     }
 
-    fn here(&self) -> &Spelled {
+    fn current_token(&self) -> &Spelled {
         &self.tokens[self.at.min(self.tokens.len() - 1)]
     }
 
-    fn ahead(&self, by: usize) -> &Token {
+    fn peek_ahead(&self, by: usize) -> &Token {
         &self.tokens[(self.at + by).min(self.tokens.len() - 1)].token
     }
 
     fn line(&self) -> u32 {
-        self.here().line
+        self.current_token().line
     }
 
     fn column(&self) -> u32 {
-        self.here().column
+        self.current_token().column
     }
 
     fn take(&mut self) -> Token {
-        let token = self.here().token.clone();
+        let token = self.current_token().token.clone();
         if self.at < self.tokens.len() - 1 {
             self.at += 1;
         }
@@ -2891,11 +2900,11 @@ impl Parser {
     }
 
     fn is_mark(&self, mark: &str) -> bool {
-        matches!(&self.here().token, Token::Punctuation(found) if *found == mark)
+        matches!(&self.current_token().token, Token::Punctuation(found) if *found == mark)
     }
 
     fn is_word(&self, word: &str) -> bool {
-        matches!(&self.here().token, Token::Keyword(found) if *found == word)
+        matches!(&self.current_token().token, Token::Keyword(found) if *found == word)
     }
 
     fn eat_mark(&mut self, mark: &str) -> bool {
@@ -2914,7 +2923,7 @@ impl Parser {
         false
     }
 
-    fn want_mark(&mut self, mark: &str) -> Result<(), Diagnostic> {
+    fn require_mark(&mut self, mark: &str) -> Result<(), Diagnostic> {
         if self.eat_mark(mark) {
             return Ok(());
         }
@@ -2924,13 +2933,13 @@ impl Parser {
             self.column(),
             format!(
                 "`{mark}` was expected, and {} was found.",
-                self.here().token.describe()
+                self.current_token().token.describe()
             ),
         )
         .with_context(format!("Mark: {mark}")))
     }
 
-    fn want_name(&mut self) -> Result<String, Diagnostic> {
+    fn require_name(&mut self) -> Result<String, Diagnostic> {
         match self.take() {
             Token::Identifier(name) => Ok(name),
             other => Err(at(
@@ -2943,11 +2952,11 @@ impl Parser {
     }
 
     fn qualified(&mut self) -> Result<String, Diagnostic> {
-        let mut out = self.want_name()?;
-        while self.is_mark(".") && matches!(self.ahead(1), Token::Identifier(_)) {
+        let mut out = self.require_name()?;
+        while self.is_mark(".") && matches!(self.peek_ahead(1), Token::Identifier(_)) {
             self.take();
             out.push('.');
-            out.push_str(&self.want_name()?);
+            out.push_str(&self.require_name()?);
         }
         Ok(out)
     }
@@ -2959,7 +2968,7 @@ impl Parser {
                 fixed = true;
                 continue;
             }
-            if self.is_mark("@") && !matches!(self.ahead(1), Token::Keyword("interface")) {
+            if self.is_mark("@") && !matches!(self.peek_ahead(1), Token::Keyword("interface")) {
                 let before = self.held_annotations.len();
                 self.skip_annotations()?;
                 self.held_annotations.truncate(before);
@@ -2970,7 +2979,7 @@ impl Parser {
     }
 
     fn skip_annotations(&mut self) -> Result<(), Diagnostic> {
-        while self.is_mark("@") && !matches!(self.ahead(1), Token::Keyword("interface")) {
+        while self.is_mark("@") && !matches!(self.peek_ahead(1), Token::Keyword("interface")) {
             let line = self.line();
             self.take();
             let name = self.qualified()?;
@@ -2979,7 +2988,7 @@ impl Parser {
                 self.take();
                 if !self.is_mark(")") {
                     loop {
-                        let named = match (&self.here().token, self.ahead(1)) {
+                        let named = match (&self.current_token().token, self.peek_ahead(1)) {
                             (Token::Identifier(word), Token::Punctuation("=")) => {
                                 let held = word.clone();
                                 self.take();
@@ -2994,7 +3003,7 @@ impl Parser {
                         }
                     }
                 }
-                self.want_mark(")")?;
+                self.require_mark(")")?;
             }
             self.held_annotations.push(Annotated { name, values, line });
         }
@@ -3009,7 +3018,7 @@ impl Parser {
             if self.eat_mark("(") {
                 if !self.is_mark(")") {
                     loop {
-                        let named = match (&self.here().token, self.ahead(1)) {
+                        let named = match (&self.current_token().token, self.peek_ahead(1)) {
                             (Token::Identifier(word), Token::Punctuation("=")) => {
                                 let held = word.clone();
                                 self.take();
@@ -3028,7 +3037,7 @@ impl Parser {
                         }
                     }
                 }
-                self.want_mark(")")?;
+                self.require_mark(")")?;
             }
             return Ok(Expression::Call {
                 on: None,
@@ -3048,7 +3057,7 @@ impl Parser {
                     break;
                 }
             }
-            self.want_mark("}")?;
+            self.require_mark("}")?;
             return Ok(Expression::ArrayOf {
                 of: None,
                 values: held,
@@ -3063,18 +3072,18 @@ impl Parser {
     }
 
     fn looks_like_sealed(&self) -> bool {
-        if !matches!(&self.here().token, Token::Identifier(word) if word == "sealed") {
+        if !matches!(&self.current_token().token, Token::Identifier(word) if word == "sealed") {
             return false;
         }
 
-        matches!(self.ahead(1), Token::Keyword(_))
-            || matches!(self.ahead(1), Token::Identifier(word) if word == "record")
+        matches!(self.peek_ahead(1), Token::Keyword(_))
+            || matches!(self.peek_ahead(1), Token::Identifier(word) if word == "record")
     }
 
     fn looks_like_non_sealed(&self) -> bool {
-        matches!(&self.here().token, Token::Identifier(word) if word == "non")
-            && matches!(self.ahead(1), Token::Punctuation("-"))
-            && matches!(self.ahead(2), Token::Identifier(word) if word == "sealed")
+        matches!(&self.current_token().token, Token::Identifier(word) if word == "non")
+            && matches!(self.peek_ahead(1), Token::Punctuation("-"))
+            && matches!(self.peek_ahead(2), Token::Identifier(word) if word == "sealed")
     }
 
     fn modifiers(&mut self) -> Result<Modifiers, Diagnostic> {
@@ -3093,7 +3102,7 @@ impl Parser {
                 self.take();
                 continue;
             }
-            let word = match &self.here().token {
+            let word = match &self.current_token().token {
                 Token::Keyword(word) => *word,
                 _ => break,
             };
@@ -3105,9 +3114,9 @@ impl Parser {
                 "final" => found.final_ = true,
                 "abstract" => found.abstract_ = true,
 
-                "default" if !matches!(self.ahead(1), Token::Punctuation(":")) => {}
+                "default" if !matches!(self.peek_ahead(1), Token::Punctuation(":")) => {}
 
-                "synchronized" if !matches!(self.ahead(1), Token::Punctuation("(")) => {
+                "synchronized" if !matches!(self.peek_ahead(1), Token::Punctuation("(")) => {
                     found.synchronized = true
                 }
                 "volatile" => found.volatile = true,
@@ -3123,8 +3132,8 @@ impl Parser {
         Ok(found)
     }
 
-    fn written_type(&mut self) -> Result<Written, Diagnostic> {
-        let base = match self.here().token.clone() {
+    fn parse_written_type(&mut self) -> Result<Written, Diagnostic> {
+        let base = match self.current_token().token.clone() {
             Token::Keyword(word) => match Written::of_keyword(word) {
                 Some(found) => {
                     self.take();
@@ -3142,7 +3151,7 @@ impl Parser {
             Token::Identifier(name)
                 if name == "var"
                     && !matches!(
-                        self.ahead(1),
+                        self.peek_ahead(1),
                         Token::Punctuation(".") | Token::Punctuation("[")
                     ) =>
             {
@@ -3153,10 +3162,10 @@ impl Parser {
                 let mut named = self.qualified()?;
                 let mut arguments = self.type_arguments()?;
 
-                while self.is_mark(".") && matches!(self.ahead(1), Token::Identifier(_)) {
+                while self.is_mark(".") && matches!(self.peek_ahead(1), Token::Identifier(_)) {
                     self.take();
                     named.push('.');
-                    named.push_str(&self.want_name()?);
+                    named.push_str(&self.require_name()?);
                     let held = self.type_arguments()?;
                     if !held.is_empty() {
                         arguments = held;
@@ -3177,7 +3186,7 @@ impl Parser {
         self.skip_type_arguments()?;
 
         let mut found = self.erasing(base);
-        while self.is_mark("[") && matches!(self.ahead(1), Token::Punctuation("]")) {
+        while self.is_mark("[") && matches!(self.peek_ahead(1), Token::Punctuation("]")) {
             self.take();
             self.take();
             found = Written::Array(Box::new(found));
@@ -3186,13 +3195,13 @@ impl Parser {
     }
 
     fn past_type_arguments(&self, ahead: usize) -> Option<usize> {
-        if !matches!(self.ahead(ahead), Token::Punctuation("<")) {
+        if !matches!(self.peek_ahead(ahead), Token::Punctuation("<")) {
             return Some(ahead);
         }
         let mut ahead = ahead;
         let mut depth = 0usize;
         loop {
-            match self.ahead(ahead) {
+            match self.peek_ahead(ahead) {
                 Token::Punctuation("<") => depth += 1,
                 Token::Punctuation(">") => depth -= 1,
                 Token::Punctuation(">>") => {
@@ -3225,17 +3234,17 @@ impl Parser {
     }
 
     fn looks_like_declaration(&self) -> bool {
-        match &self.here().token {
+        match &self.current_token().token {
             Token::Keyword(word) => Written::of_keyword(word).is_some(),
             Token::Identifier(_) => {
                 let mut ahead = 0usize;
 
                 loop {
-                    if !matches!(self.ahead(ahead), Token::Identifier(_)) {
+                    if !matches!(self.peek_ahead(ahead), Token::Identifier(_)) {
                         return false;
                     }
                     ahead += 1;
-                    if matches!(self.ahead(ahead), Token::Punctuation(".")) {
+                    if matches!(self.peek_ahead(ahead), Token::Punctuation(".")) {
                         ahead += 1;
                         continue;
                     }
@@ -3247,8 +3256,8 @@ impl Parser {
                     None => return false,
                 }
 
-                while matches!(self.ahead(ahead), Token::Punctuation("."))
-                    && matches!(self.ahead(ahead + 1), Token::Identifier(_))
+                while matches!(self.peek_ahead(ahead), Token::Punctuation("."))
+                    && matches!(self.peek_ahead(ahead + 1), Token::Identifier(_))
                 {
                     ahead += 2;
                     match self.past_type_arguments(ahead) {
@@ -3257,12 +3266,12 @@ impl Parser {
                     }
                 }
 
-                while matches!(self.ahead(ahead), Token::Punctuation("["))
-                    && matches!(self.ahead(ahead + 1), Token::Punctuation("]"))
+                while matches!(self.peek_ahead(ahead), Token::Punctuation("["))
+                    && matches!(self.peek_ahead(ahead + 1), Token::Punctuation("]"))
                 {
                     ahead += 2;
                 }
-                matches!(self.ahead(ahead), Token::Identifier(_))
+                matches!(self.peek_ahead(ahead), Token::Identifier(_))
             }
             _ => false,
         }
@@ -3272,7 +3281,7 @@ impl Parser {
         self.skip_annotations()?;
         let package = if self.eat_word("package") {
             let name = self.qualified()?;
-            self.want_mark(";")?;
+            self.require_mark(";")?;
             Some(name)
         } else {
             None
@@ -3283,13 +3292,13 @@ impl Parser {
         let mut through_modules = Vec::new();
         while self.is_word("import") {
             self.take();
-            if matches!(&self.here().token, Token::Identifier(word) if word == "module")
-                && matches!(self.ahead(1), Token::Identifier(_))
+            if matches!(&self.current_token().token, Token::Identifier(word) if word == "module")
+                && matches!(self.peek_ahead(1), Token::Identifier(_))
             {
                 self.take();
                 let (line, column) = (self.line(), self.column());
                 let module = self.qualified()?;
-                self.want_mark(";")?;
+                self.require_mark(";")?;
                 let Some(packages) = packages_of_the_module(&module) else {
                     return Err(at(
                         "EJ259",
@@ -3314,10 +3323,10 @@ impl Parser {
             let is_static = self.eat_word("static");
             let mut name = self.qualified()?;
             if self.eat_mark(".") {
-                self.want_mark("*")?;
+                self.require_mark("*")?;
                 name.push_str(".*");
             }
-            self.want_mark(";")?;
+            self.require_mark(";")?;
             if is_static {
                 static_imports.push(name);
             } else {
@@ -3331,7 +3340,7 @@ impl Parser {
             }
         }
 
-        if matches!(self.here().token, Token::End) {
+        if matches!(self.current_token().token, Token::End) {
             return Ok(Vec::new());
         }
 
@@ -3366,7 +3375,7 @@ impl Parser {
         self.imports = imports.to_vec();
 
         let mut declared = Vec::new();
-        while !matches!(self.here().token, Token::End) {
+        while !matches!(self.current_token().token, Token::End) {
             if self.eat_mark(";") {
                 continue;
             }
@@ -3408,10 +3417,11 @@ impl Parser {
         }
         let annotations = self.take_annotations();
 
-        let is_record = matches!(&self.here().token, Token::Identifier(word) if word == "record")
-            && matches!(self.ahead(1), Token::Identifier(_));
+        let is_record = matches!(&self.current_token().token, Token::Identifier(word) if word == "record")
+            && matches!(self.peek_ahead(1), Token::Identifier(_));
 
-        let annotation = self.is_mark("@") && matches!(self.ahead(1), Token::Keyword("interface"));
+        let annotation =
+            self.is_mark("@") && matches!(self.peek_ahead(1), Token::Keyword("interface"));
         if annotation {
             self.take();
         }
@@ -3425,8 +3435,8 @@ impl Parser {
             self.take();
             Shape::Record
         } else {
-            if matches!(&self.here().token, Token::Identifier(word) if word == "module")
-                || matches!(&self.here().token, Token::Identifier(word) if word == "open")
+            if matches!(&self.current_token().token, Token::Identifier(word) if word == "module")
+                || matches!(&self.current_token().token, Token::Identifier(word) if word == "open")
             {
                 return Err(at(
                     "EJ254",
@@ -3446,7 +3456,7 @@ impl Parser {
                 self.column(),
                 format!(
                     "A class or an interface was expected, and {} was found.",
-                    self.here().token.describe()
+                    self.current_token().token.describe()
                 ),
             )
             .with_suggestion(
@@ -3457,8 +3467,8 @@ impl Parser {
         };
 
         let name = match inside {
-            Some(holder) => format!("{holder}${}", self.want_name()?),
-            None => self.want_name()?,
+            Some(holder) => format!("{holder}${}", self.require_name()?),
+            None => self.require_name()?,
         };
 
         let pushed = self.push_type_parameters(true)?;
@@ -3510,7 +3520,7 @@ impl Parser {
             }
         }
 
-        if matches!(&self.here().token, Token::Identifier(word) if word == "permits") {
+        if matches!(&self.current_token().token, Token::Identifier(word) if word == "permits") {
             self.take();
             loop {
                 permits.push(self.qualified()?);
@@ -3521,25 +3531,26 @@ impl Parser {
             }
         }
 
-        self.want_mark("{")?;
+        self.require_mark("{")?;
 
         let mut constants: Vec<Constant> = Vec::new();
         if shape == Shape::Enum {
             while matches!(
-                self.here().token,
+                self.current_token().token,
                 Token::Identifier(_) | Token::Punctuation("@")
-            ) && !(self.is_mark("@") && matches!(self.ahead(1), Token::Keyword("interface")))
+            ) && !(self.is_mark("@")
+                && matches!(self.peek_ahead(1), Token::Keyword("interface")))
             {
                 self.skip_annotations()?;
                 let (line, column) = (self.line(), self.column());
-                let name = self.want_name()?;
+                let name = self.require_name()?;
                 let arguments = if self.is_mark("(") {
                     self.arguments()?
                 } else {
                     Vec::new()
                 };
                 let body = if self.is_mark("{") {
-                    Some(self.written_out_body(line, column, "An enum constant's body")?)
+                    Some(self.parse_class_body(line, column, "An enum constant's body")?)
                 } else {
                     None
                 };
@@ -3563,7 +3574,7 @@ impl Parser {
         let mut instance_setup = Vec::new();
         let mut static_setup = Vec::new();
         while !self.is_mark("}") {
-            if matches!(self.here().token, Token::End) {
+            if matches!(self.current_token().token, Token::End) {
                 return Err(at(
                     "EJ105",
                     self.line(),
@@ -3586,7 +3597,7 @@ impl Parser {
                 beside,
             )?;
         }
-        self.want_mark("}")?;
+        self.require_mark("}")?;
 
         self.pop_type_parameters(pushed);
 
@@ -3623,19 +3634,19 @@ impl Parser {
 
         if let Some(holder) = inside {
             if !modifiers.static_ && shape == Shape::Class && !inside_an_interface {
-                return Ok(belonging_to_an_instance(unit, holder, package));
+                return Ok(attach_enclosing_instance(unit, holder, package));
             }
         }
         Ok(unit)
     }
 
-    fn a_type_is_declared_here(&self) -> bool {
+    fn at_type_declaration(&self) -> bool {
         self.is_word("class")
             || self.is_word("interface")
             || self.is_word("enum")
-            || (self.is_mark("@") && matches!(self.ahead(1), Token::Keyword("interface")))
-            || (matches!(&self.here().token, Token::Identifier(word) if word == "record")
-                && matches!(self.ahead(1), Token::Identifier(_)))
+            || (self.is_mark("@") && matches!(self.peek_ahead(1), Token::Keyword("interface")))
+            || (matches!(&self.current_token().token, Token::Identifier(word) if word == "record")
+                && matches!(self.peek_ahead(1), Token::Identifier(_)))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -3661,7 +3672,7 @@ impl Parser {
             modifiers.public = true;
         }
 
-        if self.a_type_is_declared_here() {
+        if self.at_type_declaration() {
             self.at = began;
             let mut theirs = Vec::new();
             let one = self.declaration_of_a_type(
@@ -3690,8 +3701,8 @@ impl Parser {
         let whole = class.rsplit('.').next().unwrap_or(class);
 
         if shape == Shape::Record
-            && matches!(&self.here().token, Token::Identifier(found) if found == simple || found == whole)
-            && matches!(self.ahead(1), Token::Punctuation("{"))
+            && matches!(&self.current_token().token, Token::Identifier(found) if found == simple || found == whole)
+            && matches!(self.peek_ahead(1), Token::Punctuation("{"))
         {
             self.take();
             let body = self.braced_block()?;
@@ -3722,8 +3733,8 @@ impl Parser {
             self.held_annotations.truncate(kept);
         }
 
-        if matches!(&self.here().token, Token::Identifier(found) if found == simple || found == whole)
-            && matches!(self.ahead(1), Token::Punctuation("("))
+        if matches!(&self.current_token().token, Token::Identifier(found) if found == simple || found == whole)
+            && matches!(self.peek_ahead(1), Token::Punctuation("("))
         {
             self.take();
             let (parameters, variadic) = self.parameters_and_shape()?;
@@ -3763,8 +3774,8 @@ impl Parser {
             return Ok(());
         }
 
-        let what = self.written_type()?;
-        let name = self.want_name()?;
+        let what = self.parse_written_type()?;
+        let name = self.require_name()?;
 
         if self.is_mark("(") {
             let (parameters, variadic) = self.parameters_and_shape()?;
@@ -3772,7 +3783,7 @@ impl Parser {
 
             let default_value = if self.eat_word("default") {
                 let held = self.annotation_value()?;
-                self.want_mark(";")?;
+                self.require_mark(";")?;
                 Some(held)
             } else {
                 None
@@ -3835,7 +3846,7 @@ impl Parser {
         let mut name = name;
         loop {
             let mut what = what.clone();
-            while self.is_mark("[") && matches!(self.ahead(1), Token::Punctuation("]")) {
+            while self.is_mark("[") && matches!(self.peek_ahead(1), Token::Punctuation("]")) {
                 self.take();
                 self.take();
                 what = Written::Array(Box::new(what));
@@ -3849,9 +3860,9 @@ impl Parser {
             if !self.eat_mark(",") {
                 break;
             }
-            name = self.want_name()?;
+            name = self.require_name()?;
         }
-        self.want_mark(";")?;
+        self.require_mark(";")?;
         for (what, name, value) in declared {
             let mut modifiers = modifiers;
             if shape == Shape::Interface {
@@ -3876,7 +3887,7 @@ impl Parser {
         }
         let began = self.at;
         let mut found = Vec::new();
-        self.want_mark("<")?;
+        self.require_mark("<")?;
 
         if self.is_mark(">") {
             self.take();
@@ -3886,9 +3897,9 @@ impl Parser {
             if self.is_mark("?") {
                 self.take();
                 if self.eat_word("extends") {
-                    found.push(self.written_type()?);
+                    found.push(self.parse_written_type()?);
                 } else if self.eat_word("super") {
-                    let lower = self.written_type()?;
+                    let lower = self.parse_written_type()?;
                     found.push(if self.in_parameters {
                         lower
                     } else {
@@ -3902,7 +3913,7 @@ impl Parser {
                 }
                 break;
             }
-            match self.written_type() {
+            match self.parse_written_type() {
                 Ok(one) => found.push(one),
                 Err(_) => {
                     self.at = began;
@@ -3915,7 +3926,7 @@ impl Parser {
             }
             break;
         }
-        match self.here().token {
+        match self.current_token().token {
             Token::Punctuation(">") => {
                 self.take();
             }
@@ -3937,7 +3948,7 @@ impl Parser {
         let (line, column) = (self.line(), self.column());
         let mut depth = 0usize;
         loop {
-            let closes = match &self.here().token {
+            let closes = match &self.current_token().token {
                 Token::Punctuation("<") => {
                     depth += 1;
                     0
@@ -3973,7 +3984,7 @@ impl Parser {
 
     fn parameters_and_shape(&mut self) -> Result<(Vec<(Written, String)>, bool), Diagnostic> {
         let mut variadic = false;
-        self.want_mark("(")?;
+        self.require_mark("(")?;
         let mut found = Vec::new();
         let mut marked: Vec<Vec<Annotated>> = Vec::new();
         let before = self.held_annotations.len();
@@ -3984,15 +3995,15 @@ impl Parser {
                 self.skip_annotations()?;
                 marked.push(self.held_annotations.split_off(before));
                 self.in_parameters = true;
-                let what = self.written_type();
+                let what = self.parse_written_type();
                 self.in_parameters = false;
                 let mut what = what?;
                 if self.eat_mark("...") {
                     what = Written::Array(Box::new(what));
                     variadic = true;
                 }
-                let name = self.want_name()?;
-                while self.is_mark("[") && matches!(self.ahead(1), Token::Punctuation("]")) {
+                let name = self.require_name()?;
+                while self.is_mark("[") && matches!(self.peek_ahead(1), Token::Punctuation("]")) {
                     self.take();
                     self.take();
                     what = Written::Array(Box::new(what));
@@ -4003,7 +4014,7 @@ impl Parser {
                 }
             }
         }
-        self.want_mark(")")?;
+        self.require_mark(")")?;
         self.parameter_annotations = marked;
         Ok((found, variadic))
     }
@@ -4025,10 +4036,10 @@ impl Parser {
         if self.eat_mark(";") {
             return Ok(None);
         }
-        self.want_mark("{")?;
+        self.require_mark("{")?;
         let mut found = Vec::new();
         while !self.is_mark("}") {
-            if matches!(self.here().token, Token::End) {
+            if matches!(self.current_token().token, Token::End) {
                 return Err(at(
                     "EJ107",
                     self.line(),
@@ -4038,7 +4049,7 @@ impl Parser {
             }
             found.push(self.statement()?);
         }
-        self.want_mark("}")?;
+        self.require_mark("}")?;
         Ok(Some(found))
     }
 
@@ -4053,16 +4064,16 @@ impl Parser {
         self.skip_annotations()?;
         {
             let mut at = 0usize;
-            while matches!(self.ahead(at), Token::Keyword(word) if
+            while matches!(self.peek_ahead(at), Token::Keyword(word) if
                 matches!(*word, "final" | "abstract" | "static"))
             {
                 at += 1;
             }
-            let opens = matches!(self.ahead(at), Token::Keyword(word) if
+            let opens = matches!(self.peek_ahead(at), Token::Keyword(word) if
                 matches!(*word, "class" | "interface" | "enum"))
-                || (matches!(&self.ahead(at), Token::Identifier(word) if *word == "record")
-                    && matches!(self.ahead(at + 1), Token::Identifier(_))
-                    && matches!(self.ahead(at + 2), Token::Punctuation("(")));
+                || (matches!(&self.peek_ahead(at), Token::Identifier(word) if *word == "record")
+                    && matches!(self.peek_ahead(at + 1), Token::Identifier(_))
+                    && matches!(self.peek_ahead(at + 2), Token::Punctuation("(")));
             if opens {
                 let package = self.package.clone();
                 let imports = self.imports.clone();
@@ -4077,9 +4088,9 @@ impl Parser {
         self.held_annotations.truncate(annotated);
 
         if self.eat_word("synchronized") {
-            self.want_mark("(")?;
+            self.require_mark("(")?;
             let on = self.expression()?;
-            self.want_mark(")")?;
+            self.require_mark(")")?;
             let body = self.braced_block()?;
             return Ok(Statement::Synchronized { on, body });
         }
@@ -4091,16 +4102,16 @@ impl Parser {
             } else {
                 None
             };
-            self.want_mark(";")?;
+            self.require_mark(";")?;
             let _ = column;
             return Ok(Statement::Assert { condition, said });
         }
 
-        if matches!(self.here().token, Token::Identifier(_))
-            && matches!(self.ahead(1), Token::Punctuation(":"))
+        if matches!(self.current_token().token, Token::Identifier(_))
+            && matches!(self.peek_ahead(1), Token::Punctuation(":"))
         {
-            let label = self.want_name()?;
-            self.want_mark(":")?;
+            let label = self.require_name()?;
+            self.require_mark(":")?;
             let body = Box::new(self.statement()?);
             return Ok(Statement::Labelled { label, body });
         }
@@ -4109,12 +4120,12 @@ impl Parser {
             self.take();
             let mut found = Vec::new();
             while !self.is_mark("}") {
-                if matches!(self.here().token, Token::End) {
+                if matches!(self.current_token().token, Token::End) {
                     return Err(at("EJ108", line, column, "A block was never closed."));
                 }
                 found.push(self.statement()?);
             }
-            self.want_mark("}")?;
+            self.require_mark("}")?;
             return Ok(Statement::Block(found));
         }
 
@@ -4123,9 +4134,9 @@ impl Parser {
         }
 
         if self.eat_word("if") {
-            self.want_mark("(")?;
+            self.require_mark("(")?;
             let condition = self.expression()?;
-            self.want_mark(")")?;
+            self.require_mark(")")?;
             let then = Box::new(self.statement()?);
             let otherwise = if self.eat_word("else") {
                 Some(Box::new(self.statement()?))
@@ -4140,18 +4151,18 @@ impl Parser {
         }
 
         if self.eat_word("while") {
-            self.want_mark("(")?;
+            self.require_mark("(")?;
             let condition = self.expression()?;
-            self.want_mark(")")?;
+            self.require_mark(")")?;
             let body = Box::new(self.statement()?);
             return Ok(Statement::While { condition, body });
         }
 
         for (word, to_super) in [("super", true), ("this", false)] {
-            if self.is_word(word) && matches!(self.ahead(1), Token::Punctuation("(")) {
+            if self.is_word(word) && matches!(self.peek_ahead(1), Token::Punctuation("(")) {
                 self.take();
                 let arguments = self.arguments()?;
-                self.want_mark(";")?;
+                self.require_mark(";")?;
                 return Ok(Statement::Chain {
                     to_super,
                     arguments,
@@ -4169,10 +4180,10 @@ impl Parser {
                     "A `do` block is followed by `while`.",
                 ));
             }
-            self.want_mark("(")?;
+            self.require_mark("(")?;
             let condition = self.expression()?;
-            self.want_mark(")")?;
-            self.want_mark(";")?;
+            self.require_mark(")")?;
+            self.require_mark(";")?;
             return Ok(Statement::DoWhile { body, condition });
         }
 
@@ -4190,19 +4201,19 @@ impl Parser {
 
         if self.eat_word("throw") {
             let what = self.expression()?;
-            self.want_mark(";")?;
+            self.require_mark(";")?;
             return Ok(Statement::Throw(what));
         }
 
-        if matches!(&self.here().token, Token::Identifier(word) if word == "yield")
+        if matches!(&self.current_token().token, Token::Identifier(word) if word == "yield")
             && !matches!(
-                self.ahead(1),
+                self.peek_ahead(1),
                 Token::Punctuation("(") | Token::Punctuation("=") | Token::Punctuation(".")
             )
         {
             self.take();
             let what = self.expression()?;
-            self.want_mark(";")?;
+            self.require_mark(";")?;
             return Ok(Statement::Yield(what));
         }
 
@@ -4212,48 +4223,48 @@ impl Parser {
             } else {
                 Some(self.expression()?)
             };
-            self.want_mark(";")?;
+            self.require_mark(";")?;
             return Ok(Statement::Return(value));
         }
 
         if self.eat_word("break") {
             let label = self.optional_label()?;
-            self.want_mark(";")?;
+            self.require_mark(";")?;
             return Ok(Statement::Break(label));
         }
 
         if self.eat_word("continue") {
             let label = self.optional_label()?;
-            self.want_mark(";")?;
+            self.require_mark(";")?;
             return Ok(Statement::Continue(label));
         }
 
-        if self.is_word("final") && self.ahead(1) != &Token::End {
+        if self.is_word("final") && self.peek_ahead(1) != &Token::End {
             let fixed = self.eat_final()?;
             let statement = self.declaration(fixed)?;
-            self.want_mark(";")?;
+            self.require_mark(";")?;
             return Ok(statement);
         }
 
         if self.looks_like_declaration() {
             let statement = self.declaration(false)?;
-            self.want_mark(";")?;
+            self.require_mark(";")?;
             return Ok(statement);
         }
 
         let expression = self.expression()?;
-        self.want_mark(";")?;
+        self.require_mark(";")?;
         Ok(Statement::Express(expression))
     }
 
     fn declaration(&mut self, fixed: bool) -> Result<Statement, Diagnostic> {
-        let base = self.written_type()?;
+        let base = self.parse_written_type()?;
         let mut declared = Vec::new();
         loop {
             let (line, column) = (self.line(), self.column());
-            let name = self.want_name()?;
+            let name = self.require_name()?;
             let mut what = base.clone();
-            while self.is_mark("[") && matches!(self.ahead(1), Token::Punctuation("]")) {
+            while self.is_mark("[") && matches!(self.peek_ahead(1), Token::Punctuation("]")) {
                 self.take();
                 self.take();
                 what = Written::Array(Box::new(what));
@@ -4284,22 +4295,22 @@ impl Parser {
     }
 
     fn optional_label(&mut self) -> Result<Option<String>, Diagnostic> {
-        if matches!(self.here().token, Token::Identifier(_)) {
-            return Ok(Some(self.want_name()?));
+        if matches!(self.current_token().token, Token::Identifier(_)) {
+            return Ok(Some(self.require_name()?));
         }
         Ok(None)
     }
 
     fn switch_statement(&mut self, line: u32, column: u32) -> Result<Statement, Diagnostic> {
-        self.want_mark("(")?;
+        self.require_mark("(")?;
         let subject = self.expression()?;
-        self.want_mark(")")?;
-        self.want_mark("{")?;
+        self.require_mark(")")?;
+        self.require_mark("{")?;
 
         let mut arms: Vec<Arm> = Vec::new();
         let mut arrow_form: Option<bool> = None;
         while !self.is_mark("}") {
-            if matches!(self.here().token, Token::End) {
+            if matches!(self.current_token().token, Token::End) {
                 return Err(at("EJ110", line, column, "A `switch` was never closed."));
             }
             let (arm_line, arm_column) = (self.line(), self.column());
@@ -4311,7 +4322,8 @@ impl Parser {
             } else if self.eat_word("case") {
                 if self.looks_like_a_type_pattern() {
                     pattern = Some(self.pattern()?);
-                    if matches!(&self.here().token, Token::Identifier(word) if word == "when") {
+                    if matches!(&self.current_token().token, Token::Identifier(word) if word == "when")
+                    {
                         self.take();
 
                         let outside = std::mem::replace(&mut self.bare_lambda, false);
@@ -4333,7 +4345,7 @@ impl Parser {
                     arm_column,
                     format!(
                         "A `switch` holds `case` and `default` arms, and {} was found.",
-                        self.here().token.describe()
+                        self.current_token().token.describe()
                     ),
                 ));
             }
@@ -4341,7 +4353,7 @@ impl Parser {
             let arrow = if self.eat_mark("->") {
                 true
             } else {
-                self.want_mark(":")?;
+                self.require_mark(":")?;
                 false
             };
             match arrow_form {
@@ -4361,7 +4373,7 @@ impl Parser {
             if arrow {
                 if self.eat_word("throw") {
                     let what = self.expression()?;
-                    self.want_mark(";")?;
+                    self.require_mark(";")?;
                     let (l, c) = (arm_line, arm_column);
                     body.push(Positioned {
                         node: Statement::Throw(what),
@@ -4373,7 +4385,7 @@ impl Parser {
                 }
             } else {
                 while !self.is_mark("}") && !self.is_word("case") && !self.is_word("default") {
-                    if matches!(self.here().token, Token::End) {
+                    if matches!(self.current_token().token, Token::End) {
                         return Err(at("EJ110", line, column, "A `switch` was never closed."));
                     }
                     body.push(self.statement()?);
@@ -4390,7 +4402,7 @@ impl Parser {
                 column: arm_column,
             });
         }
-        self.want_mark("}")?;
+        self.require_mark("}")?;
 
         if arms
             .iter()
@@ -4412,23 +4424,24 @@ impl Parser {
     fn looks_like_a_type_pattern(&self) -> bool {
         let mut at;
 
-        if matches!(self.ahead(0), Token::Keyword(word) if Written::of_keyword(word).is_some()) {
+        if matches!(self.peek_ahead(0), Token::Keyword(word) if Written::of_keyword(word).is_some())
+        {
             at = 1;
         } else {
-            if !matches!(self.ahead(0), Token::Identifier(_)) {
+            if !matches!(self.peek_ahead(0), Token::Identifier(_)) {
                 return false;
             }
             at = 1;
-            while matches!(self.ahead(at), Token::Punctuation("."))
-                && matches!(self.ahead(at + 1), Token::Identifier(_))
+            while matches!(self.peek_ahead(at), Token::Punctuation("."))
+                && matches!(self.peek_ahead(at + 1), Token::Identifier(_))
             {
                 at += 2;
             }
 
-            if matches!(self.ahead(at), Token::Punctuation("<")) {
+            if matches!(self.peek_ahead(at), Token::Punctuation("<")) {
                 let mut depth = 0usize;
                 loop {
-                    match self.ahead(at) {
+                    match self.peek_ahead(at) {
                         Token::Punctuation("<") => depth += 1,
                         Token::Punctuation(">") => depth -= 1,
                         Token::Punctuation(">>") => depth = depth.saturating_sub(2),
@@ -4442,21 +4455,21 @@ impl Parser {
                 }
             }
         }
-        while matches!(self.ahead(at), Token::Punctuation("["))
-            && matches!(self.ahead(at + 1), Token::Punctuation("]"))
+        while matches!(self.peek_ahead(at), Token::Punctuation("["))
+            && matches!(self.peek_ahead(at + 1), Token::Punctuation("]"))
         {
             at += 2;
         }
 
         matches!(
-            self.ahead(at),
+            self.peek_ahead(at),
             Token::Identifier(_) | Token::Punctuation("(")
         )
     }
 
     fn pattern(&mut self) -> Result<Pattern, Diagnostic> {
         self.eat_final()?;
-        let what = self.written_type()?;
+        let what = self.parse_written_type()?;
         if self.is_mark("(") {
             self.take();
             let mut parts = Vec::new();
@@ -4468,7 +4481,7 @@ impl Parser {
                     }
                 }
             }
-            self.want_mark(")")?;
+            self.require_mark(")")?;
             return Ok(Pattern {
                 what,
                 name: String::new(),
@@ -4476,8 +4489,8 @@ impl Parser {
                 taken: true,
             });
         }
-        let name = match &self.here().token {
-            Token::Identifier(_) => self.want_name()?,
+        let name = match &self.current_token().token {
+            Token::Identifier(_) => self.require_name()?,
             _ => String::new(),
         };
         Ok(Pattern {
@@ -4491,7 +4504,7 @@ impl Parser {
     fn case_label(&mut self) -> Result<Expression, Diagnostic> {
         let (line, column) = (self.line(), self.column());
         let begins = matches!(
-            self.here().token,
+            self.current_token().token,
             Token::Int(_)
                 | Token::Long(_)
                 | Token::Float(_)
@@ -4511,11 +4524,11 @@ impl Parser {
                 column,
                 format!(
                     "A `case` answers to a constant, and {} was found.",
-                    self.here().token.describe()
+                    self.current_token().token.describe()
                 ),
             ));
         }
-        if matches!(self.here().token, Token::Null) {
+        if matches!(self.current_token().token, Token::Null) {
             self.take();
             return Ok(Expression::Null);
         }
@@ -4535,10 +4548,10 @@ impl Parser {
                 let (line, column) = (self.line(), self.column());
                 self.eat_final()?;
 
-                if matches!(self.here().token, Token::Identifier(_))
-                    && matches!(self.ahead(1), Token::Punctuation(";" | ")"))
+                if matches!(self.current_token().token, Token::Identifier(_))
+                    && matches!(self.peek_ahead(1), Token::Punctuation(";" | ")"))
                 {
-                    let named = self.want_name()?;
+                    let named = self.require_name()?;
                     resources.push(Positioned {
                         node: Statement::Declare {
                             what: Written::Inferred,
@@ -4568,7 +4581,7 @@ impl Parser {
                     break;
                 }
             }
-            self.want_mark(")")?;
+            self.require_mark(")")?;
             if resources.is_empty() {
                 return Err(at(
                     "EJ118",
@@ -4585,14 +4598,14 @@ impl Parser {
         while self.is_word("catch") {
             let (catch_line, catch_column) = (self.line(), self.column());
             self.take();
-            self.want_mark("(")?;
+            self.require_mark("(")?;
             self.eat_final()?;
-            let mut types = vec![self.written_type()?];
+            let mut types = vec![self.parse_written_type()?];
             while self.eat_mark("|") {
-                types.push(self.written_type()?);
+                types.push(self.parse_written_type()?);
             }
-            let name = self.want_name()?;
-            self.want_mark(")")?;
+            let name = self.require_name()?;
+            self.require_mark(")")?;
             let body = self.braced_block()?;
             catches.push(Catch {
                 types,
@@ -4677,27 +4690,27 @@ impl Parser {
 
     fn braced_block(&mut self) -> Result<Vec<Positioned<Statement>>, Diagnostic> {
         let (line, column) = (self.line(), self.column());
-        self.want_mark("{")?;
+        self.require_mark("{")?;
         let mut found = Vec::new();
         while !self.is_mark("}") {
-            if matches!(self.here().token, Token::End) {
+            if matches!(self.current_token().token, Token::End) {
                 return Err(at("EJ108", line, column, "A block was never closed."));
             }
             found.push(self.statement()?);
         }
-        self.want_mark("}")?;
+        self.require_mark("}")?;
         Ok(found)
     }
 
     fn for_statement(&mut self, line: u32, column: u32) -> Result<Statement, Diagnostic> {
-        self.want_mark("(")?;
+        self.require_mark("(")?;
 
         let enhanced = {
             let mut ahead = 0usize;
             let mut depth = 0usize;
             let mut found = false;
             loop {
-                match self.ahead(ahead) {
+                match self.peek_ahead(ahead) {
                     Token::Punctuation("(") => depth += 1,
                     Token::Punctuation(")") if depth == 0 => break,
                     Token::Punctuation(")") => depth -= 1,
@@ -4716,11 +4729,11 @@ impl Parser {
 
         if enhanced {
             self.eat_final()?;
-            let what = self.written_type()?;
-            let name = self.want_name()?;
-            self.want_mark(":")?;
+            let what = self.parse_written_type()?;
+            let name = self.require_name()?;
+            self.require_mark(":")?;
             let over = self.expression()?;
-            self.want_mark(")")?;
+            self.require_mark(")")?;
             let body = Box::new(self.statement()?);
             let _ = (line, column);
             return Ok(Statement::ForEach {
@@ -4742,14 +4755,14 @@ impl Parser {
             };
             start.push(Positioned { node, line, column });
         }
-        self.want_mark(";")?;
+        self.require_mark(";")?;
 
         let condition = if self.is_mark(";") {
             None
         } else {
             Some(self.expression()?)
         };
-        self.want_mark(";")?;
+        self.require_mark(";")?;
 
         let mut step = Vec::new();
         if !self.is_mark(")") {
@@ -4760,7 +4773,7 @@ impl Parser {
                 }
             }
         }
-        self.want_mark(")")?;
+        self.require_mark(")")?;
 
         let body = Box::new(self.statement()?);
         Ok(Statement::For {
@@ -4777,7 +4790,7 @@ impl Parser {
         if self.is_mark("?") {
             self.take();
             let then = self.expression()?;
-            self.want_mark(":")?;
+            self.require_mark(":")?;
             let otherwise = self.expression()?;
             return Ok(Expression::Conditional {
                 condition: Box::new(left),
@@ -4815,15 +4828,15 @@ impl Parser {
         Ok(left)
     }
 
-    fn written_out_body(&mut self, line: u32, column: u32, what: &str) -> Result<Body, Diagnostic> {
+    fn parse_class_body(&mut self, line: u32, column: u32, what: &str) -> Result<Body, Diagnostic> {
         let mut fields = Vec::new();
         let mut methods = Vec::new();
         let mut instance_setup = Vec::new();
         let mut static_setup = Vec::new();
         let mut nested = Vec::new();
-        self.want_mark("{")?;
+        self.require_mark("{")?;
         while !self.is_mark("}") {
-            if matches!(self.here().token, Token::End) {
+            if matches!(self.current_token().token, Token::End) {
                 return Err(at(
                     "EJ105",
                     line,
@@ -4838,7 +4851,7 @@ impl Parser {
             self.skip_annotations()?;
             self.modifiers()?;
             self.take_annotations();
-            let declares = self.a_type_is_declared_here();
+            let declares = self.at_type_declaration();
             self.at = began;
             if declares {
                 let package = self.package.clone();
@@ -4862,7 +4875,7 @@ impl Parser {
                 &mut Vec::new(),
             )?;
         }
-        self.want_mark("}")?;
+        self.require_mark("}")?;
         Ok(Body {
             fields,
             methods,
@@ -4888,7 +4901,7 @@ impl Parser {
                 };
                 continue;
             }
-            let Token::Punctuation(mark) = self.here().token else {
+            let Token::Punctuation(mark) = self.current_token().token else {
                 break;
             };
             let Some(operator) = Binary::of_mark(mark) else {
@@ -4947,13 +4960,13 @@ impl Parser {
 
         if self.is_mark("(") && self.looks_like_cast() {
             self.take();
-            let to = self.written_type()?;
+            let to = self.parse_written_type()?;
             let mut also = Vec::new();
             while self.is_mark("&") {
                 self.take();
-                also.push(self.written_type()?);
+                also.push(self.parse_written_type()?);
             }
-            self.want_mark(")")?;
+            self.require_mark(")")?;
             let of = self.unary()?;
             return Ok(Expression::Cast {
                 to,
@@ -4966,23 +4979,23 @@ impl Parser {
     }
 
     fn looks_like_cast(&self) -> bool {
-        if let Token::Keyword(word) = self.ahead(1) {
+        if let Token::Keyword(word) = self.peek_ahead(1) {
             if Written::of_keyword(word).is_some() {
                 let mut at = 2usize;
-                while matches!(self.ahead(at), Token::Punctuation("["))
-                    && matches!(self.ahead(at + 1), Token::Punctuation("]"))
+                while matches!(self.peek_ahead(at), Token::Punctuation("["))
+                    && matches!(self.peek_ahead(at + 1), Token::Punctuation("]"))
                 {
                     at += 2;
                 }
-                return !matches!(self.ahead(at), Token::Identifier(_));
+                return !matches!(self.peek_ahead(at), Token::Identifier(_));
             }
         }
-        if !matches!(self.ahead(1), Token::Identifier(_)) {
+        if !matches!(self.peek_ahead(1), Token::Identifier(_)) {
             return false;
         }
         let mut ahead = 1usize;
         loop {
-            if !matches!(self.ahead(ahead), Token::Identifier(_)) {
+            if !matches!(self.peek_ahead(ahead), Token::Identifier(_)) {
                 return false;
             }
             ahead += 1;
@@ -4991,29 +5004,29 @@ impl Parser {
                 Some(past) => ahead = past,
                 None => return false,
             }
-            if matches!(self.ahead(ahead), Token::Punctuation(".")) {
+            if matches!(self.peek_ahead(ahead), Token::Punctuation(".")) {
                 ahead += 1;
                 continue;
             }
-            if matches!(self.ahead(ahead), Token::Punctuation("&"))
-                && matches!(self.ahead(ahead + 1), Token::Identifier(_))
+            if matches!(self.peek_ahead(ahead), Token::Punctuation("&"))
+                && matches!(self.peek_ahead(ahead + 1), Token::Identifier(_))
             {
                 ahead += 1;
                 continue;
             }
             break;
         }
-        while matches!(self.ahead(ahead), Token::Punctuation("["))
-            && matches!(self.ahead(ahead + 1), Token::Punctuation("]"))
+        while matches!(self.peek_ahead(ahead), Token::Punctuation("["))
+            && matches!(self.peek_ahead(ahead + 1), Token::Punctuation("]"))
         {
             ahead += 2;
         }
-        if !matches!(self.ahead(ahead), Token::Punctuation(")")) {
+        if !matches!(self.peek_ahead(ahead), Token::Punctuation(")")) {
             return false;
         }
 
         matches!(
-            self.ahead(ahead + 1),
+            self.peek_ahead(ahead + 1),
             Token::Identifier(_)
                 | Token::Str(_)
                 | Token::Int(_)
@@ -5032,7 +5045,7 @@ impl Parser {
                 | Token::Punctuation("!")
                 | Token::Punctuation("~")
         ) || matches!(
-            self.ahead(ahead + 1),
+            self.peek_ahead(ahead + 1),
             Token::Keyword(word) if Written::of_keyword(word).is_some() || *word == "void"
         )
     }
@@ -5046,15 +5059,15 @@ impl Parser {
                 found = self.method_reference(found, line)?;
                 continue;
             }
-            if self.is_mark("[") && matches!(self.ahead(1), Token::Punctuation("]")) {
+            if self.is_mark("[") && matches!(self.peek_ahead(1), Token::Punctuation("]")) {
                 let mut at = 0usize;
-                while matches!(self.ahead(at), Token::Punctuation("["))
-                    && matches!(self.ahead(at + 1), Token::Punctuation("]"))
+                while matches!(self.peek_ahead(at), Token::Punctuation("["))
+                    && matches!(self.peek_ahead(at + 1), Token::Punctuation("]"))
                 {
                     at += 2;
                 }
-                if matches!(self.ahead(at), Token::Punctuation("::")) {
-                    if let Some(path) = written_as_a_path(&found) {
+                if matches!(self.peek_ahead(at), Token::Punctuation("::")) {
+                    if let Some(path) = dotted_path_of(&found) {
                         let mut named = path;
                         for _ in 0..at / 2 {
                             named.push_str("[]");
@@ -5090,7 +5103,7 @@ impl Parser {
                 }
 
                 if matches!(found, Expression::Super) {
-                    let name = self.want_name()?;
+                    let name = self.require_name()?;
                     found = if self.is_mark("(") {
                         Expression::Call {
                             on: None,
@@ -5110,8 +5123,8 @@ impl Parser {
 
                 if self.is_word("super") {
                     self.take();
-                    self.want_mark(".")?;
-                    let name = self.want_name()?;
+                    self.require_mark(".")?;
+                    let name = self.require_name()?;
                     let arguments = self.arguments()?;
                     found = Expression::Call {
                         on: Some(Box::new(found)),
@@ -5136,7 +5149,7 @@ impl Parser {
                 }
 
                 let witness = self.type_arguments()?;
-                let name = self.want_name()?;
+                let name = self.require_name()?;
                 if self.is_mark("(") {
                     let arguments = self.arguments()?;
                     found = Expression::Call {
@@ -5155,7 +5168,7 @@ impl Parser {
                 continue;
             }
 
-            if self.is_mark("[") && matches!(self.ahead(1), Token::Punctuation("]")) {
+            if self.is_mark("[") && matches!(self.peek_ahead(1), Token::Punctuation("]")) {
                 let Some(mut named) = as_a_written_type(&found) else {
                     return Err(at(
                         "EJ122",
@@ -5164,12 +5177,12 @@ impl Parser {
                         "Only a class can be written in front of this.",
                     ));
                 };
-                while self.is_mark("[") && matches!(self.ahead(1), Token::Punctuation("]")) {
+                while self.is_mark("[") && matches!(self.peek_ahead(1), Token::Punctuation("]")) {
                     self.take();
                     self.take();
                     named = Written::Array(Box::new(named));
                 }
-                self.want_mark(".")?;
+                self.require_mark(".")?;
                 if !self.eat_word("class") {
                     return Err(at(
                         "EJ122",
@@ -5184,7 +5197,7 @@ impl Parser {
             if self.is_mark("[") {
                 self.take();
                 let index = self.expression()?;
-                self.want_mark("]")?;
+                self.require_mark("]")?;
                 found = Expression::Index {
                     of: Box::new(found),
                     at: Box::new(index),
@@ -5207,7 +5220,7 @@ impl Parser {
     }
 
     fn type_name_only(&mut self) -> Result<Written, Diagnostic> {
-        let base = match self.here().token.clone() {
+        let base = match self.current_token().token.clone() {
             Token::Keyword(word) => match Written::of_keyword(word) {
                 Some(one) => {
                     self.take();
@@ -5232,7 +5245,7 @@ impl Parser {
     }
 
     fn array_values(&mut self) -> Result<Vec<Expression>, Diagnostic> {
-        self.want_mark("{")?;
+        self.require_mark("{")?;
         let mut found = Vec::new();
         while !self.is_mark("}") {
             found.push(self.value_or_array()?);
@@ -5240,7 +5253,7 @@ impl Parser {
                 break;
             }
         }
-        self.want_mark("}")?;
+        self.require_mark("}")?;
         Ok(found)
     }
 
@@ -5258,7 +5271,7 @@ impl Parser {
     }
 
     fn arguments(&mut self) -> Result<Vec<Expression>, Diagnostic> {
-        self.want_mark("(")?;
+        self.require_mark("(")?;
         let mut found = Vec::new();
 
         let outside = std::mem::replace(&mut self.bare_lambda, true);
@@ -5273,7 +5286,7 @@ impl Parser {
         } else {
             self.bare_lambda = outside;
         }
-        self.want_mark(")")?;
+        self.require_mark(")")?;
         Ok(found)
     }
 
@@ -5281,12 +5294,12 @@ impl Parser {
         let mut ahead = 1usize;
         let mut depth = 1usize;
         loop {
-            match self.ahead(ahead) {
+            match self.peek_ahead(ahead) {
                 Token::Punctuation("(") => depth += 1,
                 Token::Punctuation(")") => {
                     depth -= 1;
                     if depth == 0 {
-                        return matches!(self.ahead(ahead + 1), Token::Punctuation("->"));
+                        return matches!(self.peek_ahead(ahead + 1), Token::Punctuation("->"));
                     }
                 }
                 Token::End => return false,
@@ -5305,25 +5318,25 @@ impl Parser {
             while !self.is_mark(")") {
                 self.eat_final()?;
 
-                let written = if matches!(self.here().token, Token::Identifier(_))
+                let written = if matches!(self.current_token().token, Token::Identifier(_))
                     && matches!(
-                        self.ahead(1),
+                        self.peek_ahead(1),
                         Token::Punctuation(",") | Token::Punctuation(")")
                     ) {
                     None
                 } else {
-                    Some(self.written_type()?)
+                    Some(self.parse_written_type()?)
                 };
-                parameters.push((written, self.want_name()?));
+                parameters.push((written, self.require_name()?));
                 if !self.eat_mark(",") {
                     break;
                 }
             }
-            self.want_mark(")")?;
+            self.require_mark(")")?;
         } else {
-            parameters.push((None, self.want_name()?));
+            parameters.push((None, self.require_name()?));
         }
-        self.want_mark("->")?;
+        self.require_mark("->")?;
 
         if self.is_mark("{") {
             let body = self.braced_block()?;
@@ -5355,7 +5368,7 @@ impl Parser {
         let name = if self.eat_word("new") {
             "<init>".to_string()
         } else {
-            self.want_name()?
+            self.require_name()?
         };
         Ok(Expression::MethodRef {
             on: Box::new(on),
@@ -5367,20 +5380,21 @@ impl Parser {
     fn primary(&mut self) -> Result<Expression, Diagnostic> {
         let (line, column) = (self.line(), self.column());
 
-        if let Token::Keyword(word) = self.here().token {
+        if let Token::Keyword(word) = self.current_token().token {
             if Written::of_keyword(word).is_some() {
                 let mut at = 1usize;
-                while matches!(self.ahead(at), Token::Punctuation("["))
-                    && matches!(self.ahead(at + 1), Token::Punctuation("]"))
+                while matches!(self.peek_ahead(at), Token::Punctuation("["))
+                    && matches!(self.peek_ahead(at + 1), Token::Punctuation("]"))
                 {
                     at += 2;
                 }
-                if matches!(self.ahead(at), Token::Punctuation("."))
-                    && matches!(self.ahead(at + 1), Token::Keyword("class"))
+                if matches!(self.peek_ahead(at), Token::Punctuation("."))
+                    && matches!(self.peek_ahead(at + 1), Token::Keyword("class"))
                 {
                     let mut of = Written::of_keyword(word).expect("just checked");
                     self.take();
-                    while self.is_mark("[") && matches!(self.ahead(1), Token::Punctuation("]")) {
+                    while self.is_mark("[") && matches!(self.peek_ahead(1), Token::Punctuation("]"))
+                    {
                         self.take();
                         self.take();
                         of = Written::Array(Box::new(of));
@@ -5400,13 +5414,13 @@ impl Parser {
             let outside = std::mem::replace(&mut self.bare_lambda, true);
             let inner = self.expression()?;
             self.bare_lambda = outside;
-            self.want_mark(")")?;
+            self.require_mark(")")?;
             return Ok(inner);
         }
 
         if self.bare_lambda
-            && matches!(self.here().token, Token::Identifier(_))
-            && matches!(self.ahead(1), Token::Punctuation("->"))
+            && matches!(self.current_token().token, Token::Identifier(_))
+            && matches!(self.peek_ahead(1), Token::Punctuation("->"))
         {
             return self.lambda(line);
         }
@@ -5421,7 +5435,7 @@ impl Parser {
 
         if self.eat_word("new") {
             let held = self.at;
-            let mut what = self.written_type()?;
+            let mut what = self.parse_written_type()?;
             if matches!(what, Written::Array(_)) {
                 self.at = held;
                 what = self.type_name_only()?;
@@ -5444,7 +5458,7 @@ impl Parser {
                         ));
                     }
                     lengths.push(self.expression()?);
-                    self.want_mark("]")?;
+                    self.require_mark("]")?;
                 }
                 if lengths.is_empty() {
                     if empty == 0 {
@@ -5469,7 +5483,7 @@ impl Parser {
             }
             let arguments = self.arguments()?;
             if self.is_mark("{") {
-                let body = self.written_out_body(line, column, "An anonymous class")?;
+                let body = self.parse_class_body(line, column, "An anonymous class")?;
                 return Ok(Expression::Anonymous {
                     what,
                     arguments,
@@ -5588,7 +5602,7 @@ fn desktop_only(whole: &str) -> bool {
     })
 }
 
-fn only_on_the_desktop(unit: &Unit, name: &str) -> Option<String> {
+fn desktop_only_api(unit: &Unit, name: &str) -> Option<String> {
     if name.contains('.') {
         let first = name.split('.').next().unwrap_or_default();
         let through = unit
@@ -5613,7 +5627,7 @@ fn only_on_the_desktop(unit: &Unit, name: &str) -> Option<String> {
     desktop_only(&whole).then_some(whole)
 }
 
-fn only_on_the_desktop_diagnostic(whole: &str, line: u32) -> Diagnostic {
+fn desktop_only_api_diagnostic(whole: &str, line: u32) -> Diagnostic {
     at(
         "EJ260",
         line,
@@ -5750,14 +5764,14 @@ pub fn parse_as(source: &str, implicit_name: Option<&str>) -> Result<Vec<Unit>, 
     let mut parser = Parser::new(tokens);
     parser.implicit_name = implicit_name.map(str::to_string);
     let declared = parser.file()?;
-    if !matches!(parser.here().token, Token::End) {
+    if !matches!(parser.current_token().token, Token::End) {
         return Err(at(
             "EJ116",
             parser.line(),
             parser.column(),
             format!(
                 "There is something after the last declaration in this file: {}.",
-                parser.here().token.describe()
+                parser.current_token().token.describe()
             ),
         ));
     }
@@ -5958,7 +5972,7 @@ pub struct KnownClass {
 
 impl Classpath {
     pub fn new() -> Classpath {
-        Classpath::the_library().clone()
+        Classpath::bundled_library().clone()
     }
 
     pub fn nothing() -> Classpath {
@@ -5966,14 +5980,14 @@ impl Classpath {
     }
 
     pub fn everything() -> &'static Classpath {
-        Classpath::the_library()
+        Classpath::bundled_library()
     }
 
     pub fn names(&self) -> impl Iterator<Item = &str> {
         self.known.keys().map(|held| held.as_str())
     }
 
-    fn the_library() -> &'static Classpath {
+    fn bundled_library() -> &'static Classpath {
         static HELD: std::sync::OnceLock<Classpath> = std::sync::OnceLock::new();
         HELD.get_or_init(|| {
             let mut found = Classpath::default();
@@ -6036,7 +6050,7 @@ impl Classpath {
                 interface: unit.shape == Shape::Interface,
                 abstract_: unit.modifiers.abstract_,
                 outer: unit.outer.clone(),
-                kept_at_runtime: kept_at_runtime(unit),
+                kept_at_runtime: has_runtime_retention(unit),
                 ..KnownClass::default()
             },
         );
@@ -6096,7 +6110,7 @@ impl Classpath {
                 interface: unit.shape == Shape::Interface,
                 abstract_: unit.modifiers.abstract_,
                 outer: unit.outer.clone(),
-                kept_at_runtime: kept_at_runtime(unit),
+                kept_at_runtime: has_runtime_retention(unit),
                 ..KnownClass::default()
             },
         };
@@ -6136,7 +6150,7 @@ impl Classpath {
                     .map(|what| {
                         let erased = resolve_written(self, unit, what)
                             .unwrap_or(Type::Object("java/lang/Object".to_string(), Vec::new()));
-                        (erased, standing_of(what))
+                        (erased, type_position_of(what))
                     })
                     .collect();
                 Some((found, held))
@@ -6150,8 +6164,8 @@ impl Classpath {
                 known
                     .fields
                     .push((field.name.clone(), what, field.modifiers.static_));
-                let standing = standing_of(&field.what);
-                if !standing.says_nothing() {
+                let standing = type_position_of(&field.what);
+                if !standing.is_fixed() {
                     known.field_standings.push((field.name.clone(), standing));
                 }
             }
@@ -6181,19 +6195,19 @@ impl Classpath {
                 variadic: method.variadic,
                 abstract_: method.body.is_none() && !method.modifiers.native_,
 
-                returns_variable: which_variable(&method.returns),
+                returns_variable: type_variable_index(&method.returns),
                 parameter_variables: method
                     .parameters
                     .iter()
-                    .map(|(what, _)| which_variable(what))
+                    .map(|(what, _)| type_variable_index(what))
                     .collect(),
 
                 taken_stands_for: method
                     .parameters
                     .iter()
-                    .map(|(what, _)| standing_of(what))
+                    .map(|(what, _)| type_position_of(what))
                     .collect(),
-                returns_stands_for: standing_of(&method.returns),
+                returns_stands_for: type_position_of(&method.returns),
                 own_variables: method.own_variables.clone(),
                 witnessed: Vec::new(),
 
@@ -6212,7 +6226,7 @@ impl Classpath {
                 continue;
             };
             if let Some(found) = constant_within(self, unit, value, 0) {
-                if let Some(held) = held_as(&field.what, found) {
+                if let Some(held) = coerce_constant(&field.what, found) {
                     known.constants.push((field.name.clone(), held));
                 }
             }
@@ -6220,7 +6234,7 @@ impl Classpath {
         self.known.insert(internal, known);
     }
 
-    pub fn learn_jar(&mut self, bytes: &[u8]) -> Result<usize, Diagnostic> {
+    pub fn register_jar(&mut self, bytes: &[u8]) -> Result<usize, Diagnostic> {
         let mut sink = crate::diag::Sink::new();
         let Some(archive) = crate::archive::read(bytes, &mut sink) else {
             return Err(at("EJ255", 1, 1, "That is not an archive this can read.")
@@ -6250,7 +6264,7 @@ impl Classpath {
             let Ok(class) = crate::jvm::read(&held) else {
                 continue;
             };
-            if self.learn(&class).is_ok() {
+            if self.register_class(&class).is_ok() {
                 learned += 1;
             }
         }
@@ -6261,11 +6275,11 @@ impl Classpath {
         Ok(learned)
     }
 
-    pub fn learn(&mut self, class: &crate::jvm::Class) -> Result<(), Diagnostic> {
+    pub fn register_class(&mut self, class: &crate::jvm::Class) -> Result<(), Diagnostic> {
         let interface = class.access_flags & 0x0200 != 0;
         let internal = class.name.replace('.', "/");
         if self.known.contains_key(&internal)
-            && Classpath::the_library().known.contains_key(&internal)
+            && Classpath::bundled_library().known.contains_key(&internal)
         {
             let written: Vec<(String, Expression)> = class
                 .fields
@@ -6352,7 +6366,7 @@ impl Classpath {
             let (taken_stands_for, returns_stands_for) = method
                 .signature
                 .as_deref()
-                .and_then(|held| standings_of(held, &named))
+                .and_then(|held| type_positions_of_signature(held, &named))
                 .unwrap_or_default();
 
             let own_variables = method
@@ -6391,7 +6405,7 @@ impl Classpath {
         known.above = class
             .signature
             .as_deref()
-            .map(above_of_signature)
+            .map(supertypes_of_signature)
             .unwrap_or_default();
         for field in &class.fields {
             let Some(what) = read_type(&field.descriptor, &mut 0) else {
@@ -6404,9 +6418,9 @@ impl Classpath {
                     .map(type_parameters_of)
                     .unwrap_or_default();
                 if let Some((_, standing, _)) =
-                    placed_at(signature.as_bytes(), &mut 0, &variables, &bounds)
+                    read_signature_type(signature.as_bytes(), &mut 0, &variables, &bounds)
                 {
-                    if !standing.says_nothing() {
+                    if !standing.is_fixed() {
                         known.field_standings.push((field.name.clone(), standing));
                     }
                 }
@@ -6436,7 +6450,7 @@ impl Classpath {
         Ok(())
     }
 
-    pub fn how_many(&self) -> usize {
+    pub fn class_count(&self) -> usize {
         self.known.len()
     }
 
@@ -6448,12 +6462,12 @@ impl Classpath {
         self.known.get(name)
     }
 
-    pub fn seen_from(&self, from: &str, held: &[Type], owner: &str) -> Vec<Type> {
-        self.seen_from_within(from, held, owner, 0)
+    pub fn type_arguments_seen_from(&self, from: &str, held: &[Type], owner: &str) -> Vec<Type> {
+        self.type_arguments_seen_from_within(from, held, owner, 0)
             .unwrap_or_else(|| held.to_vec())
     }
 
-    fn seen_from_within(
+    fn type_arguments_seen_from_within(
         &self,
         from: &str,
         held: &[Type],
@@ -6470,9 +6484,11 @@ impl Classpath {
         for (above, arguments) in &known.above {
             let next: Vec<Type> = arguments
                 .iter()
-                .map(|(erased, shape)| shape.filled(erased, held, &[]))
+                .map(|(erased, shape)| shape.substitute_type_variables(erased, held, &[]))
                 .collect();
-            if let Some(found) = self.seen_from_within(above, &next, owner, depth + 1) {
+            if let Some(found) =
+                self.type_arguments_seen_from_within(above, &next, owner, depth + 1)
+            {
                 return Some(found);
             }
         }
@@ -7065,7 +7081,7 @@ impl<'a> Emitter<'a> {
         } else {
             self.stack.push(verified);
         }
-        self.deepest();
+        self.update_max_stack_depth();
     }
 
     fn pushes_raw(&mut self, what: Verified) {
@@ -7074,7 +7090,7 @@ impl<'a> Emitter<'a> {
         if wide {
             self.stack.push(Verified::Top);
         }
-        self.deepest();
+        self.update_max_stack_depth();
     }
 
     fn duplicates(&mut self) {
@@ -7082,7 +7098,7 @@ impl<'a> Emitter<'a> {
         if let Some(top) = self.stack.last().cloned() {
             self.stack.push(top);
         }
-        self.deepest();
+        self.update_max_stack_depth();
     }
 
     fn duplicates_two(&mut self) {
@@ -7092,7 +7108,7 @@ impl<'a> Emitter<'a> {
             let two = self.stack[held - 2..].to_vec();
             self.stack.extend(two);
         }
-        self.deepest();
+        self.update_max_stack_depth();
     }
 
     fn pops(&mut self, slots: i32) {
@@ -7103,17 +7119,17 @@ impl<'a> Emitter<'a> {
 
     fn stack_is(&mut self, what: Vec<Verified>) {
         self.stack = what;
-        self.deepest();
+        self.update_max_stack_depth();
     }
 
-    fn deepest(&mut self) {
+    fn update_max_stack_depth(&mut self) {
         self.depth = self.stack.len() as i32;
         if self.depth > self.max_depth {
             self.max_depth = self.depth;
         }
     }
 
-    fn give_them_null(&mut self, outside: &[Verified], inside: &[Verified]) {
+    fn nullify_diverging_locals(&mut self, outside: &[Verified], inside: &[Verified]) {
         for (at, held) in inside.iter().enumerate() {
             if outside.get(at) == Some(held) {
                 continue;
@@ -7148,7 +7164,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn too_early_at(&mut self, line: u32) -> Result<(), Diagnostic> {
+    fn report_early_reference(&mut self, line: u32) -> Result<(), Diagnostic> {
         if !self.too_early {
             return Ok(());
         }
@@ -7178,7 +7194,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn a_branch_lands_here(&mut self) {
+    fn mark_branch_target(&mut self) {
         self.reachable = true;
         let at = self.code.len();
         let mut locals = Self::as_a_frame_says_it(&self.slots);
@@ -7237,18 +7253,18 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn land(&mut self, pending: Pending) {
+    fn bind_jump(&mut self, pending: Pending) {
         if self.reachable {
-            self.only_what_every_road_agrees_on(&pending.slots);
+            self.merge_frame_types(&pending.slots);
         } else {
             self.slots = pending.slots.clone();
             self.reachable = true;
         }
         let to = self.code.len();
-        self.land_at(pending, to);
+        self.bind_jump_at(pending, to);
     }
 
-    fn only_what_every_road_agrees_on(&mut self, other: &[Verified]) {
+    fn merge_frame_types(&mut self, other: &[Verified]) {
         let wide = self.slots.len().max(other.len());
         self.slots.resize(wide, Verified::Top);
         for at in 0..wide {
@@ -7258,7 +7274,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn land_at(&mut self, pending: Pending, to: usize) {
+    fn bind_jump_at(&mut self, pending: Pending, to: usize) {
         let offset = (to as i64 - pending.from as i64) as i16;
         self.code[pending.at..pending.at + 2].copy_from_slice(&offset.to_be_bytes());
     }
@@ -7311,7 +7327,7 @@ impl<'a> Emitter<'a> {
         slot
     }
 
-    fn hold_constant(&mut self, what: &Written, value: &Expression) {
+    fn record_constant(&mut self, what: &Written, value: &Expression) {
         let Some(local) = self.locals.last() else {
             return;
         };
@@ -7332,7 +7348,7 @@ impl<'a> Emitter<'a> {
         let Some(found) = self.constant_of(value) else {
             return;
         };
-        let Some(held) = held_as(what, found) else {
+        let Some(held) = coerce_constant(what, found) else {
             return;
         };
         if let Some(local) = self.locals.last_mut() {
@@ -7394,8 +7410,8 @@ impl<'a> Emitter<'a> {
             return Ok(held.internal.clone());
         }
         resolve_named(self.classpath, self.unit, name).ok_or_else(|| {
-            if let Some(whole) = only_on_the_desktop(self.unit, name) {
-                return only_on_the_desktop_diagnostic(&whole, line);
+            if let Some(whole) = desktop_only_api(self.unit, name) {
+                return desktop_only_api_diagnostic(&whole, line);
             }
             at(
                 "EJ200",
@@ -8392,10 +8408,10 @@ fn built_in_field(owner: &str, name: &str) -> Option<Type> {
     read_type(descriptor, &mut at)
 }
 
-fn written_as_a_path(expression: &Expression) -> Option<String> {
+fn dotted_path_of(expression: &Expression) -> Option<String> {
     match expression {
         Expression::Name(name) => Some(name.clone()),
-        Expression::Field { of, name } => Some(format!("{}.{name}", written_as_a_path(of)?)),
+        Expression::Field { of, name } => Some(format!("{}.{name}", dotted_path_of(of)?)),
         _ => None,
     }
 }
@@ -8415,24 +8431,26 @@ pub enum Standing {
 }
 
 impl Standing {
-    fn mentions_the_class(&self) -> bool {
+    fn references_class_type_parameter(&self) -> bool {
         match self {
             Standing::OfTheClass(_) => true,
-            Standing::Holding(inside) => inside.iter().any(Standing::mentions_the_class),
-            Standing::ArrayOf(of) => of.mentions_the_class(),
+            Standing::Holding(inside) => {
+                inside.iter().any(Standing::references_class_type_parameter)
+            }
+            Standing::ArrayOf(of) => of.references_class_type_parameter(),
             _ => false,
         }
     }
 
     pub fn as_seen(&self, erased: &Type, of_the_class: &[Type]) -> Type {
-        self.filled(erased, of_the_class, &[])
+        self.substitute_type_variables(erased, of_the_class, &[])
     }
 
-    fn says_nothing(&self) -> bool {
+    fn is_fixed(&self) -> bool {
         match self {
             Standing::Fixed => true,
-            Standing::Holding(inside) => inside.iter().all(Standing::says_nothing),
-            Standing::ArrayOf(of) => of.says_nothing(),
+            Standing::Holding(inside) => inside.iter().all(Standing::is_fixed),
+            Standing::ArrayOf(of) => of.is_fixed(),
             _ => false,
         }
     }
@@ -8473,7 +8491,7 @@ impl Standing {
         }
     }
 
-    fn filled(
+    fn substitute_type_variables(
         &self,
         erased: &Type,
         of_the_class: &[Type],
@@ -8496,7 +8514,7 @@ impl Standing {
                     .iter()
                     .enumerate()
                     .map(|(at, one)| {
-                        one.filled(
+                        one.substitute_type_variables(
                             arguments.get(at).unwrap_or(&object),
                             of_the_class,
                             of_the_method,
@@ -8506,9 +8524,11 @@ impl Standing {
                 Type::Object(named.clone(), filled)
             }
             Standing::ArrayOf(of) => match erased {
-                Type::Array(held) => {
-                    Type::Array(Box::new(of.filled(held, of_the_class, of_the_method)))
-                }
+                Type::Array(held) => Type::Array(Box::new(of.substitute_type_variables(
+                    held,
+                    of_the_class,
+                    of_the_method,
+                ))),
                 _ => erased.clone(),
             },
             Standing::Fixed => erased.clone(),
@@ -8516,21 +8536,21 @@ impl Standing {
     }
 }
 
-fn standing_of(written: &Written) -> Standing {
+fn type_position_of(written: &Written) -> Standing {
     match written {
         Written::Variable(at, _) => Standing::OfTheClass(*at),
         Written::OwnVariable(name, _) => Standing::OfTheMethod(name.clone()),
         Written::Array(of) => {
-            let inside = standing_of(of);
-            if inside.says_nothing() {
+            let inside = type_position_of(of);
+            if inside.is_fixed() {
                 Standing::Fixed
             } else {
                 Standing::ArrayOf(Box::new(inside))
             }
         }
         Written::Named(_, arguments) if !arguments.is_empty() => {
-            let inside: Vec<Standing> = arguments.iter().map(standing_of).collect();
-            if inside.iter().all(Standing::says_nothing) {
+            let inside: Vec<Standing> = arguments.iter().map(type_position_of).collect();
+            if inside.iter().all(Standing::is_fixed) {
                 Standing::Fixed
             } else {
                 Standing::Holding(inside)
@@ -8540,7 +8560,7 @@ fn standing_of(written: &Written) -> Standing {
     }
 }
 
-fn standing_in(bytes: &[u8], at: &mut usize, of_the_class: &[String]) -> Option<Standing> {
+fn read_type_position(bytes: &[u8], at: &mut usize, of_the_class: &[String]) -> Option<Standing> {
     match *bytes.get(*at)? {
         b'T' => {
             *at += 1;
@@ -8557,8 +8577,8 @@ fn standing_in(bytes: &[u8], at: &mut usize, of_the_class: &[String]) -> Option<
         }
         b'[' => {
             *at += 1;
-            let inside = standing_in(bytes, at, of_the_class)?;
-            Some(if inside.says_nothing() {
+            let inside = read_type_position(bytes, at, of_the_class)?;
+            Some(if inside.is_fixed() {
                 Standing::Fixed
             } else {
                 Standing::ArrayOf(Box::new(inside))
@@ -8573,7 +8593,7 @@ fn standing_in(bytes: &[u8], at: &mut usize, of_the_class: &[String]) -> Option<
                         while *bytes.get(*at)? != b'>' {
                             if matches!(*bytes.get(*at)?, b'+' | b'-') {
                                 *at += 1;
-                                inside.push(standing_in(bytes, at, of_the_class)?);
+                                inside.push(read_type_position(bytes, at, of_the_class)?);
                                 continue;
                             }
                             if *bytes.get(*at)? == b'*' {
@@ -8581,7 +8601,7 @@ fn standing_in(bytes: &[u8], at: &mut usize, of_the_class: &[String]) -> Option<
                                 inside.push(Standing::Fixed);
                                 continue;
                             }
-                            inside.push(standing_in(bytes, at, of_the_class)?);
+                            inside.push(read_type_position(bytes, at, of_the_class)?);
                         }
                         *at += 1;
                     }
@@ -8592,7 +8612,7 @@ fn standing_in(bytes: &[u8], at: &mut usize, of_the_class: &[String]) -> Option<
                     _ => *at += 1,
                 }
             }
-            Some(if inside.iter().all(Standing::says_nothing) {
+            Some(if inside.iter().all(Standing::is_fixed) {
                 Standing::Fixed
             } else {
                 Standing::Holding(inside)
@@ -8619,7 +8639,10 @@ fn not_shadowed(signature: &str, of_the_class: &[String]) -> Vec<String> {
         .collect()
 }
 
-fn standings_of(signature: &str, of_the_class: &[String]) -> Option<(Vec<Standing>, Standing)> {
+fn type_positions_of_signature(
+    signature: &str,
+    of_the_class: &[String],
+) -> Option<(Vec<Standing>, Standing)> {
     let of_the_class = &not_shadowed(signature, of_the_class);
     let bytes = signature.as_bytes();
     let mut at = 0usize;
@@ -8647,10 +8670,10 @@ fn standings_of(signature: &str, of_the_class: &[String]) -> Option<(Vec<Standin
     at += 1;
     let mut taken = Vec::new();
     while *bytes.get(at)? != b')' {
-        taken.push(standing_in(bytes, &mut at, of_the_class)?);
+        taken.push(read_type_position(bytes, &mut at, of_the_class)?);
     }
     at += 1;
-    let returns = standing_in(bytes, &mut at, of_the_class)?;
+    let returns = read_type_position(bytes, &mut at, of_the_class)?;
     Some((taken, returns))
 }
 
@@ -8744,7 +8767,7 @@ fn bounds_of(signature: &str) -> Vec<(String, Type)> {
 
 type Placed = (Type, Standing, Vec<(Type, Standing)>);
 
-fn placed_at(
+fn read_signature_type(
     bytes: &[u8],
     at: &mut usize,
     variables: &[String],
@@ -8773,7 +8796,7 @@ fn placed_at(
         }
         b'[' => {
             *at += 1;
-            let (inner, standing, _) = placed_at(bytes, at, variables, bounds)?;
+            let (inner, standing, _) = read_signature_type(bytes, at, variables, bounds)?;
             let standing = match standing {
                 Standing::Fixed => Standing::Fixed,
                 other => Standing::ArrayOf(Box::new(other)),
@@ -8803,18 +8826,18 @@ fn placed_at(
                                 b'-' => {
                                     *at += 1;
                                     let (erased, standing, _) =
-                                        placed_at(bytes, at, variables, bounds)?;
+                                        read_signature_type(bytes, at, variables, bounds)?;
                                     arguments.push((erased, standing));
                                 }
                                 b'+' => {
                                     *at += 1;
                                     let (erased, standing, _) =
-                                        placed_at(bytes, at, variables, bounds)?;
+                                        read_signature_type(bytes, at, variables, bounds)?;
                                     arguments.push((erased, standing));
                                 }
                                 _ => {
                                     let (erased, standing, _) =
-                                        placed_at(bytes, at, variables, bounds)?;
+                                        read_signature_type(bytes, at, variables, bounds)?;
                                     arguments.push((erased, standing));
                                 }
                             }
@@ -8832,7 +8855,7 @@ fn placed_at(
                     }
                 }
             }
-            let standing = if arguments.iter().all(|(_, one)| one.says_nothing()) {
+            let standing = if arguments.iter().all(|(_, one)| one.is_fixed()) {
                 Standing::Fixed
             } else {
                 Standing::Holding(arguments.iter().map(|(_, one)| one.clone()).collect())
@@ -8880,20 +8903,20 @@ fn fixed_parts(signature: &str, of_the_class: &[String]) -> Option<Parts> {
     at += 1;
     let mut parameters = Vec::new();
     while *bytes.get(at)? != b')' {
-        let (erased, standing, _) = placed_at(bytes, &mut at, &variables, &[])?;
+        let (erased, standing, _) = read_signature_type(bytes, &mut at, &variables, &[])?;
         parameters.push(matches!(standing, Standing::Fixed).then_some(erased));
     }
     at += 1;
     let returns = if *bytes.get(at)? == b'V' {
         None
     } else {
-        let (erased, standing, _) = placed_at(bytes, &mut at, &variables, &[])?;
+        let (erased, standing, _) = read_signature_type(bytes, &mut at, &variables, &[])?;
         matches!(standing, Standing::Fixed).then_some(erased)
     };
     Some((parameters, returns))
 }
 
-fn above_of_signature(signature: &str) -> Vec<(String, Vec<(Type, Standing)>)> {
+fn supertypes_of_signature(signature: &str) -> Vec<(String, Vec<(Type, Standing)>)> {
     let variables = type_parameters_of(signature);
     let bounds = bounds_of(signature);
     let bytes = signature.as_bytes();
@@ -8918,7 +8941,7 @@ fn above_of_signature(signature: &str) -> Vec<(String, Vec<(Type, Standing)>)> {
     let mut out = Vec::new();
     while at < bytes.len() {
         let Some((Type::Object(name, _), _, arguments)) =
-            placed_at(bytes, &mut at, &variables, &bounds)
+            read_signature_type(bytes, &mut at, &variables, &bounds)
         else {
             break;
         };
@@ -9102,7 +9125,7 @@ fn variables_of(signature: &str, parameters: &[String]) -> (Option<usize>, Vec<O
     (returns, taken)
 }
 
-fn which_variable(written: &Written) -> Option<usize> {
+fn type_variable_index(written: &Written) -> Option<usize> {
     match written {
         Written::Variable(at, _) => Some(*at),
         _ => None,
@@ -12286,13 +12309,18 @@ impl Emitter<'_> {
         self.slot_holds(slot, what);
     }
 
-    fn fit(&mut self, found: &Type, wanted: &Type, line: u32) -> Result<bool, Diagnostic> {
+    fn check_assignment(
+        &mut self,
+        found: &Type,
+        wanted: &Type,
+        line: u32,
+    ) -> Result<bool, Diagnostic> {
         if self.may_be_given(found, wanted) {
             if !found.is_reference() && !wanted.is_reference() {
                 self.convert(found, wanted, line)?;
             }
 
-            if found.is_reference() && *wanted != *found && !self.reaches(found, wanted) {
+            if found.is_reference() && *wanted != *found && !self.is_subtype(found, wanted) {
                 if let Type::Object(named, _) = wanted {
                     let index = self.pool.class(named);
                     self.op2(0xc0, index);
@@ -12315,8 +12343,8 @@ impl Emitter<'_> {
         if !found.is_reference() || !wanted.is_reference() {
             return found.may_be_given_to(wanted);
         }
-        if !self.reaches(found, wanted) {
-            return self.reaches(wanted, found);
+        if !self.is_subtype(found, wanted) {
+            return self.is_subtype(wanted, found);
         }
 
         true
@@ -12377,7 +12405,7 @@ impl Emitter<'_> {
         None
     }
 
-    fn what_both_sides_come_to(
+    fn conditional_type(
         &mut self,
         then: &Expression,
         otherwise: &Expression,
@@ -12441,20 +12469,20 @@ impl Emitter<'_> {
 
             return Ok(object);
         }
-        if self.reaches(&there, &here) {
+        if self.is_subtype(&there, &here) {
             return Ok(here);
         }
-        if self.reaches(&here, &there) {
+        if self.is_subtype(&here, &there) {
             return Ok(there);
         }
         if let (Type::Object(left, held), Type::Object(right, _)) = (&here, &there) {
-            if self.a_class_this_knows(left) && self.a_class_this_knows(right) {
+            if self.is_known_class(left) && self.is_known_class(right) {
                 for above in self.classpath.ancestors(left).into_iter().skip(1) {
-                    if above == "java/lang/Object" || !self.a_class_this_knows(&above) {
+                    if above == "java/lang/Object" || !self.is_known_class(&above) {
                         continue;
                     }
-                    if self.reaches(&there, &Type::Object(above.clone(), Vec::new())) {
-                        let arguments = self.classpath.seen_from(left, held, &above);
+                    if self.is_subtype(&there, &Type::Object(above.clone(), Vec::new())) {
+                        let arguments = self.classpath.type_arguments_seen_from(left, held, &above);
                         return Ok(Type::Object(above, arguments));
                     }
                 }
@@ -12635,15 +12663,15 @@ impl Emitter<'_> {
             Expression::Name(name) => self.name_value(name, line),
             Expression::Field { of, name } => {
                 if let Expression::Name(maybe_class) = of.as_ref() {
-                    if self.meant_as_a_class(maybe_class) {
+                    if self.refers_to_class(maybe_class) {
                         let owner = self.resolve_class(maybe_class, line)?;
                         return self.read_static_field(&owner, name, line);
                     }
                 }
 
-                if let Some(path) = written_as_a_path(of) {
+                if let Some(path) = dotted_path_of(of) {
                     let head = path.split('.').next().unwrap_or_default();
-                    if self.meant_as_a_class(head) {
+                    if self.refers_to_class(head) {
                         if let Some(owner) = resolve_named(self.classpath, self.unit, &path) {
                             return self.read_static_field(&owner, name, line);
                         }
@@ -12682,7 +12710,9 @@ impl Emitter<'_> {
                     let functional = bounds
                         .iter()
                         .position(|one| match one {
-                            Type::Object(named, _) => self.the_one_method_of(named, line).is_ok(),
+                            Type::Object(named, _) => {
+                                self.single_abstract_method(named, line).is_ok()
+                            }
                             _ => false,
                         })
                         .unwrap_or(0);
@@ -12859,15 +12889,15 @@ impl Emitter<'_> {
                         let beneath = self.stack.clone();
                         self.push_int(0);
                         let over = self.jump(0xa7);
-                        self.land(jump);
+                        self.bind_jump(jump);
                         self.stack_is(beneath.clone());
-                        self.a_branch_lands_here();
+                        self.mark_branch_target();
                         self.push_int(1);
-                        self.land(over);
+                        self.bind_jump(over);
                         let mut settled = beneath;
                         settled.push(Verified::Integer);
                         self.stack_is(settled);
-                        self.a_branch_lands_here();
+                        self.mark_branch_target();
                         Ok(Type::Boolean)
                     }
                 }
@@ -12892,7 +12922,7 @@ impl Emitter<'_> {
                 otherwise,
             } => {
                 let wanted = self.expecting.take();
-                let found = self.truth(condition, line)?;
+                let found = self.require_boolean(condition, line)?;
                 if found != Type::Boolean {
                     return Err(at(
                         "EJ206",
@@ -12919,7 +12949,7 @@ impl Emitter<'_> {
                         target.clone()
                     }
                     _ => {
-                        let both = self.what_both_sides_come_to(then, otherwise, line)?;
+                        let both = self.conditional_type(then, otherwise, line)?;
                         match &wanted {
                             Some(target) if target.is_reference() && both.is_reference() => {
                                 target.clone()
@@ -12932,7 +12962,7 @@ impl Emitter<'_> {
 
                 let beneath = self.stack.clone();
                 let taken = self.value_for(then, &landed, line)?;
-                if !self.fit(&taken, &landed, line)? {
+                if !self.check_assignment(&taken, &landed, line)? {
                     return Err(at(
                         "EJ207",
                         line,
@@ -12949,11 +12979,11 @@ impl Emitter<'_> {
                     )));
                 }
                 let over = self.jump(0xa7);
-                self.land(to_else);
+                self.bind_jump(to_else);
                 self.stack_is(beneath.clone());
-                self.a_branch_lands_here();
+                self.mark_branch_target();
                 let other = self.value_for(otherwise, &landed, line)?;
-                if !self.fit(&other, &landed, line)? {
+                if !self.check_assignment(&other, &landed, line)? {
                     return Err(at(
                         "EJ207",
                         line,
@@ -12976,7 +13006,7 @@ impl Emitter<'_> {
                             .collect::<String>()
                     )));
                 }
-                self.land(over);
+                self.bind_jump(over);
                 let mut settled = beneath;
                 let held = Verified::of(&landed);
                 let wide = held.is_wide();
@@ -12985,12 +13015,12 @@ impl Emitter<'_> {
                     settled.push(Verified::Top);
                 }
                 self.stack_is(settled);
-                self.a_branch_lands_here();
+                self.mark_branch_target();
                 Ok(landed)
             }
             Expression::InstanceOf { of, pattern } => {
                 if pattern.taken {
-                    let held = self.the_whole_pattern(of, pattern, line)?;
+                    let held = self.lower_pattern_test(of, pattern, line)?;
                     return self.value(&held, line);
                 }
                 let (what, binds) = (&pattern.what, &pattern.name);
@@ -12998,7 +13028,7 @@ impl Emitter<'_> {
                 let found = self.value(of, line)?;
                 let target = self.resolve(what, line)?;
                 if !found.is_reference() {
-                    return self.a_primitive_tested(&found, &target, binds, line);
+                    return self.check_primitive_type_test(&found, &target, binds, line);
                 }
                 let named = match &target {
                     Type::Object(name, _) => name.clone(),
@@ -13039,8 +13069,8 @@ impl Emitter<'_> {
                     }
                     self.store(slot, &target);
 
-                    self.land(over);
-                    self.a_branch_lands_here();
+                    self.bind_jump(over);
+                    self.mark_branch_target();
                     return Ok(Type::Boolean);
                 }
                 let index = self.pool.class(&named);
@@ -13052,7 +13082,7 @@ impl Emitter<'_> {
             Expression::Bind { name, what, value } => {
                 let wanted = self.resolve(what, line)?;
                 let found = self.value_for(value, &wanted, line)?;
-                if !self.fit(&found, &wanted, line)? {
+                if !self.check_assignment(&found, &wanted, line)? {
                     return Err(at(
                         "EJ228",
                         line,
@@ -13241,7 +13271,9 @@ impl Emitter<'_> {
                     self.op2(0xb4, index);
                     self.pops(1);
                     self.pushes(&what);
-                    let arguments = self.classpath.seen_from(&owner, &[], &holder);
+                    let arguments = self
+                        .classpath
+                        .type_arguments_seen_from(&owner, &[], &holder);
                     if holder != owner && !arguments.is_empty() {
                         return Ok(self.narrowed_field(standing, &what, &arguments));
                     }
@@ -13250,7 +13282,7 @@ impl Emitter<'_> {
             }
         }
 
-        for enclosing in self.the_classes_around() {
+        for enclosing in self.enclosing_classes() {
             if let Some((holder, (_, what, static_))) = self.classpath.find_field(&enclosing, name)
             {
                 let standing = holder
@@ -13264,12 +13296,14 @@ impl Emitter<'_> {
                     self.get_static(&holder, name, &what, line)?;
                     return Ok(what);
                 }
-                self.reach_the_enclosing_instance(&enclosing)?;
+                self.load_enclosing_instance(&enclosing)?;
                 let index = self.pool.field(&holder, name, &descriptor);
                 self.op2(0xb4, index);
                 self.pops(1);
                 self.pushes(&what);
-                let arguments = self.classpath.seen_from(&enclosing, &[], &holder);
+                let arguments = self
+                    .classpath
+                    .type_arguments_seen_from(&enclosing, &[], &holder);
                 if holder != enclosing && !arguments.is_empty() {
                     return Ok(self.narrowed_field(standing, &what, &arguments));
                 }
@@ -13308,7 +13342,7 @@ impl Emitter<'_> {
         ))
     }
 
-    fn meant_as_a_class(&self, name: &str) -> bool {
+    fn refers_to_class(&self, name: &str) -> bool {
         if self.local(name).is_some() {
             return false;
         }
@@ -13325,13 +13359,13 @@ impl Emitter<'_> {
             return false;
         }
 
-        for enclosing in self.the_classes_around() {
+        for enclosing in self.enclosing_classes() {
             if self.classpath.find_field(&enclosing, name).is_some() {
                 return false;
             }
         }
 
-        for holder in self.holders() {
+        for holder in self.outer_class_names() {
             if self
                 .classpath
                 .find_field(&holder, name)
@@ -13378,7 +13412,7 @@ impl Emitter<'_> {
         let (holder, what, static_) = (holder.name.clone(), what.clone(), *static_);
 
         if !static_ {
-            self.reach_the_enclosing_instance(enclosing)?;
+            self.load_enclosing_instance(enclosing)?;
         }
         let found = match operator {
             None => self.value_for(value, &what, line)?,
@@ -13389,7 +13423,7 @@ impl Emitter<'_> {
                 self.narrowed_by_the_operator(&now, &what, line)?
             }
         };
-        if !self.fit(&found, &what, line)? {
+        if !self.check_assignment(&found, &what, line)? {
             return Err(at(
                 "EJ228",
                 line,
@@ -13443,7 +13477,7 @@ impl Emitter<'_> {
         found
     }
 
-    fn holders(&self) -> Vec<String> {
+    fn outer_class_names(&self) -> Vec<String> {
         let mut found = Vec::new();
         let mut holder = self.this_class.as_str();
         while let Some((outside, _)) = holder.rsplit_once('$') {
@@ -13455,7 +13489,7 @@ impl Emitter<'_> {
 
     fn read_from_a_holder(&mut self, name: &str, line: u32) -> Result<Option<Type>, Diagnostic> {
         let _ = line;
-        for holder in self.holders() {
+        for holder in self.outer_class_names() {
             let Some((known, (_, what, static_))) = self.classpath.find_field(&holder, name) else {
                 continue;
             };
@@ -13478,20 +13512,20 @@ impl Emitter<'_> {
         }
         let wanted = Type::Object(enclosing.to_string(), Vec::new());
         let this = Type::Object(self.this_class.clone(), Vec::new());
-        if !self.early && self.reaches(&this, &wanted) {
+        if !self.early && self.is_subtype(&this, &wanted) {
             self.load(0, &this);
             return Ok(true);
         }
-        for named in self.the_classes_around() {
-            if self.reaches(&Type::Object(named.clone(), Vec::new()), &wanted) {
-                self.reach_the_enclosing_instance(&named)?;
+        for named in self.enclosing_classes() {
+            if self.is_subtype(&Type::Object(named.clone(), Vec::new()), &wanted) {
+                self.load_enclosing_instance(&named)?;
                 return Ok(true);
             }
         }
         Ok(false)
     }
 
-    fn reaching_up_from_a_lambda(
+    fn call_super_from_lambda(
         &mut self,
         around: &str,
         name: &str,
@@ -13516,9 +13550,9 @@ impl Emitter<'_> {
         else {
             return Err(self.no_such_method(&owner, name, arguments.len(), line));
         };
-        self.reach_the_enclosing_instance(around)?;
+        self.load_enclosing_instance(around)?;
         let first = with_what_the_arguments_say(&signature, &[], &[], going.as_ref());
-        let given = self.what_was_handed_over(&first, arguments, line)?;
+        let given = self.check_arguments(&first, arguments, line)?;
         let shaped = with_what_the_arguments_say(&signature, &[], &given, going.as_ref());
         self.arguments_for_signature(&shaped, arguments, line)?;
         let descriptor = signature.descriptor();
@@ -13536,8 +13570,8 @@ impl Emitter<'_> {
         Ok(signature.returns)
     }
 
-    fn reach_the_enclosing_instance(&mut self, enclosing: &str) -> Result<(), Diagnostic> {
-        let around = self.the_classes_around();
+    fn load_enclosing_instance(&mut self, enclosing: &str) -> Result<(), Diagnostic> {
+        let around = self.enclosing_classes();
         let handed_in = self.early.then(|| self.local(OUTER)).flatten();
         if let (Some(held), Some(first)) = (handed_in, around.first()) {
             let first = first.clone();
@@ -13620,32 +13654,36 @@ impl Emitter<'_> {
         true
     }
 
-    fn written_in_kotlin(&self) -> bool {
+    fn is_kotlin_class(&self) -> bool {
         self.unit
             .source
             .as_deref()
             .is_some_and(|held| held.ends_with(".kt"))
     }
 
-    fn covers(&self, held: &[String], thrown: &str) -> bool {
+    fn handles_exception(&self, held: &[String], thrown: &str) -> bool {
         held.iter().any(|one| {
             one == thrown
-                || self.reaches(
+                || self.is_subtype(
                     &Type::Object(thrown.to_string(), Vec::new()),
                     &Type::Object(one.clone(), Vec::new()),
                 )
         })
     }
 
-    fn it_can_throw(&mut self, named: &str, line: u32) -> Result<(), Diagnostic> {
-        if self.written_in_kotlin() || !self.is_answered_for(named) {
+    fn record_thrown_exception(&mut self, named: &str, line: u32) -> Result<(), Diagnostic> {
+        if self.is_kotlin_class() || !self.is_answered_for(named) {
             return Ok(());
         }
-        if self.caught.iter().any(|held| self.covers(held, named)) {
+        if self
+            .caught
+            .iter()
+            .any(|held| self.handles_exception(held, named))
+        {
             return Ok(());
         }
         let said = self.said_to_throw.clone();
-        if self.covers(&said, named) {
+        if self.handles_exception(&said, named) {
             return Ok(());
         }
         Err(at(
@@ -13663,7 +13701,7 @@ impl Emitter<'_> {
         ))
     }
 
-    fn the_classes_around(&self) -> Vec<String> {
+    fn enclosing_classes(&self) -> Vec<String> {
         let mut around = Vec::new();
         let mut outer = self.unit.outer.clone();
 
@@ -13823,7 +13861,9 @@ impl Emitter<'_> {
         self.pops(1);
         self.pushes(&what);
         let arguments = match owner {
-            Type::Object(_, held) => self.classpath.seen_from(class, held, &holder),
+            Type::Object(_, held) => self
+                .classpath
+                .type_arguments_seen_from(class, held, &holder),
             _ => Vec::new(),
         };
         Ok(self.narrowed_field(standing, &what, &arguments))
@@ -13836,7 +13876,9 @@ impl Emitter<'_> {
         arguments: &[Type],
     ) -> Type {
         let seen = match standing {
-            Some(standing) if !arguments.is_empty() => standing.filled(what, arguments, &[]),
+            Some(standing) if !arguments.is_empty() => {
+                standing.substitute_type_variables(what, arguments, &[])
+            }
             _ => what.clone(),
         };
         if let (Type::Object(erased, _), Type::Object(narrower, _)) = (what, &seen) {
@@ -13850,7 +13892,7 @@ impl Emitter<'_> {
         seen
     }
 
-    fn truth(&mut self, expression: &Expression, line: u32) -> Result<Type, Diagnostic> {
+    fn require_boolean(&mut self, expression: &Expression, line: u32) -> Result<Type, Diagnostic> {
         let found = self.value(expression, line)?;
         Ok(self.unboxed_truth(found))
     }
@@ -13874,7 +13916,7 @@ impl Emitter<'_> {
         self.expecting = None;
         if matches!(operator, Binary::AndAlso | Binary::OrElse) {
             let outside = self.slots.clone();
-            let first = self.truth(left, line)?;
+            let first = self.require_boolean(left, line)?;
             if first != Type::Boolean {
                 return Err(at("EJ214", line, 1, "`&&` and `||` want booleans."));
             }
@@ -13885,25 +13927,25 @@ impl Emitter<'_> {
                 0x9a
             });
             let beneath = self.stack.clone();
-            let second = self.truth(right, line)?;
+            let second = self.require_boolean(right, line)?;
             if second != Type::Boolean {
                 return Err(at("EJ214", line, 1, "`&&` and `||` want booleans."));
             }
             let inside = self.slots.clone();
             let over = self.jump(0xa7);
-            self.land(shortcut);
+            self.bind_jump(shortcut);
             self.slots = outside.clone();
             self.stack_is(beneath.clone());
-            self.a_branch_lands_here();
+            self.mark_branch_target();
 
-            self.give_them_null(&outside, &inside);
+            self.nullify_diverging_locals(&outside, &inside);
             self.push_int(i64::from(operator == Binary::OrElse));
-            self.land(over);
+            self.bind_jump(over);
             let mut settled = beneath;
             settled.push(Verified::Integer);
             self.slots = inside;
             self.stack_is(settled);
-            self.a_branch_lands_here();
+            self.mark_branch_target();
             return Ok(Type::Boolean);
         }
 
@@ -14146,15 +14188,15 @@ impl Emitter<'_> {
         let beneath = self.stack.clone();
         self.push_int(0);
         let over = self.jump(0xa7);
-        self.land(jump);
+        self.bind_jump(jump);
         self.stack_is(beneath.clone());
-        self.a_branch_lands_here();
+        self.mark_branch_target();
         self.push_int(1);
-        self.land(over);
+        self.bind_jump(over);
         let mut settled = beneath;
         settled.push(Verified::Integer);
         self.stack_is(settled);
-        self.a_branch_lands_here();
+        self.mark_branch_target();
         Ok(Type::Boolean)
     }
 
@@ -14378,7 +14420,7 @@ impl Emitter<'_> {
                 found.descriptor()
             }
             Some(found) => {
-                self.what_the_call_can_throw(&found, line)?;
+                self.record_call_exceptions(&found, line)?;
 
                 let wanted = if found.parameters.is_empty() {
                     &found.parameters[..]
@@ -14412,7 +14454,7 @@ impl Emitter<'_> {
             .unwrap_or(0);
         self.pops(taken + 1);
 
-        self.now_initialized(made_at, &class);
+        self.mark_initialized(made_at, &class);
         Ok(target)
     }
 
@@ -14433,7 +14475,7 @@ impl Emitter<'_> {
         if let Some(enclosing) = &held.outer {
             let what = Type::Object(enclosing.clone(), Vec::new());
             if held.through_the_one_around {
-                self.reach_the_enclosing_instance(enclosing)?;
+                self.load_enclosing_instance(enclosing)?;
             } else {
                 self.load(0, &what);
             }
@@ -14583,11 +14625,11 @@ impl Emitter<'_> {
             .map(|(parameters, _)| parameters.iter().map(|one| i32::from(one.width())).sum())
             .unwrap_or(0);
         self.pops(taken + 1);
-        self.now_initialized(made_at, &held.internal);
+        self.mark_initialized(made_at, &held.internal);
         Ok(target)
     }
 
-    fn now_initialized(&mut self, made_at: u16, class: &str) {
+    fn mark_initialized(&mut self, made_at: u16, class: &str) {
         let settled = Verified::Object(class.to_string());
         for held in self.stack.iter_mut().chain(self.slots.iter_mut()) {
             if *held == Verified::Uninitialized(made_at) {
@@ -14596,13 +14638,13 @@ impl Emitter<'_> {
         }
     }
 
-    fn what_the_call_can_throw(
+    fn record_call_exceptions(
         &mut self,
         signature: &Signature,
         line: u32,
     ) -> Result<(), Diagnostic> {
         for named in signature.throws.clone() {
-            self.it_can_throw(&named, line)?;
+            self.record_thrown_exception(&named, line)?;
         }
         Ok(())
     }
@@ -14613,7 +14655,7 @@ impl Emitter<'_> {
         given: &[Expression],
         line: u32,
     ) -> Result<(), Diagnostic> {
-        self.what_the_call_can_throw(signature, line)?;
+        self.record_call_exceptions(signature, line)?;
         let wanted = &signature.parameters;
         if !signature.variadic || wanted.is_empty() {
             return self.arguments_for(wanted, given, line);
@@ -14627,7 +14669,7 @@ impl Emitter<'_> {
             if let Some(last) = given.last() {
                 let peeked = self.type_of(last, line)?;
 
-                if self.reaches(&peeked, &Type::Array(element.clone())) {
+                if self.is_subtype(&peeked, &Type::Array(element.clone())) {
                     return self.arguments_for(wanted, given, line);
                 }
             }
@@ -14669,7 +14711,7 @@ impl Emitter<'_> {
         }
         for (want, expression) in wanted.iter().zip(given.iter()) {
             let found = self.value_for(expression, want, line)?;
-            if !self.fit(&found, want, line)? {
+            if !self.check_assignment(&found, want, line)? {
                 let shown = format!("{expression:?}");
                 let shown: String = shown.chars().take(240).collect();
                 return Err(at(
@@ -14764,7 +14806,7 @@ impl Emitter<'_> {
 
         if super_call && on.is_none() && self.unit.stands_for_a_lambda && !self.static_ {
             if let Some(around) = self.unit.outer.clone() {
-                return self.reaching_up_from_a_lambda(&around, name, arguments, held, going, line);
+                return self.call_super_from_lambda(&around, name, arguments, held, going, line);
             }
         }
 
@@ -14778,7 +14820,7 @@ impl Emitter<'_> {
                 ));
             }
 
-            let owner = match on.and_then(written_as_a_path) {
+            let owner = match on.and_then(dotted_path_of) {
                 Some(named) => self.resolve_class(&named, line)?,
                 None => match self.unit.extends.clone() {
                     Some(parent) => self.resolve_class(&parent, line)?,
@@ -14807,7 +14849,7 @@ impl Emitter<'_> {
             };
             self.load(0, &Type::Object(self.this_class.clone(), Vec::new()));
             let first = with_what_the_arguments_say(&signature, &[], &[], going.as_ref());
-            let given = self.what_was_handed_over(&first, arguments, line)?;
+            let given = self.check_arguments(&first, arguments, line)?;
             let shaped = with_what_the_arguments_say(&signature, &[], &given, going.as_ref());
             self.arguments_for_signature(&shaped, arguments, line)?;
             let descriptor = signature.descriptor();
@@ -14867,7 +14909,7 @@ impl Emitter<'_> {
                         .find_methods(&parent, name, arguments.len())
                         .is_empty()
                 });
-            let own = self.which_one_of_ours(&theirs, arguments, inherited, line)?;
+            let own = self.select_overload(&theirs, arguments, inherited, line)?;
             let Some(own) = own else {
                 if let Some(parent) = self.unit.extends.clone() {
                     let owner = self.resolve_class(&parent, line)?;
@@ -14888,14 +14930,16 @@ impl Emitter<'_> {
                             }
                             self.load(0, &Type::Object(self.this_class.clone(), Vec::new()));
                         }
-                        let above =
-                            self.classpath
-                                .seen_from(&self.this_class, &[], &signature.owner);
+                        let above = self.classpath.type_arguments_seen_from(
+                            &self.this_class,
+                            &[],
+                            &signature.owner,
+                        );
                         let mut written = as_written(&signature, &above);
                         written.witnessed = signature.witnessed.clone();
                         let first =
                             with_what_the_arguments_say(&written, &above, &[], going.as_ref());
-                        let given = self.what_was_handed_over(&first, arguments, line)?;
+                        let given = self.check_arguments(&first, arguments, line)?;
                         let shaped =
                             with_what_the_arguments_say(&written, &above, &given, going.as_ref());
                         self.arguments_for_signature(&shaped, arguments, line)?;
@@ -14916,7 +14960,7 @@ impl Emitter<'_> {
                         let popped = taken + i32::from(!signature.static_);
                         self.pops(popped);
                         self.pushes(&signature.returns);
-                        return self.what_it_really_gives_back(
+                        return self.resolved_return_type(
                             &signature,
                             &above,
                             &given,
@@ -14925,16 +14969,16 @@ impl Emitter<'_> {
                         );
                     }
                 }
-                for enclosing in self.the_classes_around() {
+                for enclosing in self.enclosing_classes() {
                     if let Some(signature) =
                         self.signature_written_out(&enclosing, name, arguments, held, line)?
                     {
                         if !signature.static_ {
-                            self.reach_the_enclosing_instance(&enclosing)?;
+                            self.load_enclosing_instance(&enclosing)?;
                         }
                         let first =
                             with_what_the_arguments_say(&signature, &[], &[], going.as_ref());
-                        let given = self.what_was_handed_over(&first, arguments, line)?;
+                        let given = self.check_arguments(&first, arguments, line)?;
                         let shaped =
                             with_what_the_arguments_say(&signature, &[], &given, going.as_ref());
                         self.arguments_for_signature(&shaped, arguments, line)?;
@@ -14964,7 +15008,7 @@ impl Emitter<'_> {
                         let popped = taken + i32::from(!signature.static_);
                         self.pops(popped);
                         self.pushes(&signature.returns);
-                        return self.what_it_really_gives_back(
+                        return self.resolved_return_type(
                             &signature,
                             &[],
                             &given,
@@ -14984,7 +15028,7 @@ impl Emitter<'_> {
                         continue;
                     }
                     let first = with_what_the_arguments_say(&signature, &[], &[], going.as_ref());
-                    let given = self.what_was_handed_over(&first, arguments, line)?;
+                    let given = self.check_arguments(&first, arguments, line)?;
                     let shaped =
                         with_what_the_arguments_say(&signature, &[], &given, going.as_ref());
                     self.arguments_for_signature(&shaped, arguments, line)?;
@@ -15000,7 +15044,7 @@ impl Emitter<'_> {
                         .sum();
                     self.pops(taken);
                     self.pushes(&signature.returns);
-                    return self.what_it_really_gives_back(
+                    return self.resolved_return_type(
                         &signature,
                         &[],
                         &given,
@@ -15028,7 +15072,7 @@ impl Emitter<'_> {
                         self.load(0, &Type::Object(mine.clone(), Vec::new()));
                     }
                     let first = with_what_the_arguments_say(&signature, &[], &[], going.as_ref());
-                    let given = self.what_was_handed_over(&first, arguments, line)?;
+                    let given = self.check_arguments(&first, arguments, line)?;
                     let shaped =
                         with_what_the_arguments_say(&signature, &[], &given, going.as_ref());
                     self.arguments_for_signature(&shaped, arguments, line)?;
@@ -15058,7 +15102,7 @@ impl Emitter<'_> {
                     }
                     self.pops(taken + i32::from(!signature.static_));
                     self.pushes(&signature.returns);
-                    return self.what_it_really_gives_back(
+                    return self.resolved_return_type(
                         &signature,
                         &[],
                         &given,
@@ -15067,7 +15111,7 @@ impl Emitter<'_> {
                     );
                 }
 
-                for holder in self.holders() {
+                for holder in self.outer_class_names() {
                     let Some(signature) =
                         self.signature_written_out(&holder, name, arguments, held, line)?
                     else {
@@ -15077,7 +15121,7 @@ impl Emitter<'_> {
                         continue;
                     }
                     let first = with_what_the_arguments_say(&signature, &[], &[], going.as_ref());
-                    let given = self.what_was_handed_over(&first, arguments, line)?;
+                    let given = self.check_arguments(&first, arguments, line)?;
                     let shaped =
                         with_what_the_arguments_say(&signature, &[], &given, going.as_ref());
                     self.arguments_for_signature(&shaped, arguments, line)?;
@@ -15093,7 +15137,7 @@ impl Emitter<'_> {
                         .sum();
                     self.pops(taken);
                     self.pushes(&signature.returns);
-                    return self.what_it_really_gives_back(
+                    return self.resolved_return_type(
                         &signature,
                         &[],
                         &given,
@@ -15131,18 +15175,18 @@ impl Emitter<'_> {
                 variadic: own.variadic,
                 abstract_: false,
 
-                returns_variable: which_variable(&own.returns),
+                returns_variable: type_variable_index(&own.returns),
                 parameter_variables: own
                     .parameters
                     .iter()
-                    .map(|(what, _)| which_variable(what))
+                    .map(|(what, _)| type_variable_index(what))
                     .collect(),
                 taken_stands_for: own
                     .parameters
                     .iter()
-                    .map(|(what, _)| standing_of(what))
+                    .map(|(what, _)| type_position_of(what))
                     .collect(),
-                returns_stands_for: standing_of(&own.returns),
+                returns_stands_for: type_position_of(&own.returns),
                 own_variables: own.own_variables.clone(),
                 witnessed: Vec::new(),
 
@@ -15167,7 +15211,7 @@ impl Emitter<'_> {
             }
 
             let first = with_what_the_arguments_say(&signature, &[], &[], going.as_ref());
-            let given = self.what_was_handed_over(&first, arguments, line)?;
+            let given = self.check_arguments(&first, arguments, line)?;
             let shaped = with_what_the_arguments_say(&signature, &[], &given, going.as_ref());
             self.arguments_for_signature(&shaped, arguments, line)?;
             let owner = self.this_class.clone();
@@ -15198,13 +15242,13 @@ impl Emitter<'_> {
             let popped = taken + i32::from(!own.modifiers.static_);
             self.pops(popped);
             self.pushes(&returns);
-            return self.what_it_really_gives_back(&signature, &[], &given, going.as_ref(), line);
+            return self.resolved_return_type(&signature, &[], &given, going.as_ref(), line);
         };
 
         if !matches!(on, Expression::Name(_)) {
-            if let Some(path) = written_as_a_path(on) {
+            if let Some(path) = dotted_path_of(on) {
                 let head = path.split('.').next().unwrap_or_default();
-                if self.meant_as_a_class(head) {
+                if self.refers_to_class(head) {
                     if let Some(owner) = resolve_named(self.classpath, self.unit, &path) {
                         if let Some(signature) =
                             self.signature_written_out(&owner, name, arguments, held, line)?
@@ -15216,7 +15260,7 @@ impl Emitter<'_> {
                                     &[],
                                     going.as_ref(),
                                 );
-                                let given = self.what_was_handed_over(&first, arguments, line)?;
+                                let given = self.check_arguments(&first, arguments, line)?;
                                 let shaped = with_what_the_arguments_say(
                                     &signature,
                                     &[],
@@ -15244,7 +15288,7 @@ impl Emitter<'_> {
                                     .sum();
                                 self.pops(taken);
                                 self.pushes(&signature.returns);
-                                return self.what_it_really_gives_back(
+                                return self.resolved_return_type(
                                     &signature,
                                     &[],
                                     &given,
@@ -15259,7 +15303,7 @@ impl Emitter<'_> {
         }
 
         if let Expression::Name(maybe_class) = on {
-            if self.meant_as_a_class(maybe_class) {
+            if self.refers_to_class(maybe_class) {
                 let owner = self.resolve_class(maybe_class, line)?;
                 let Some(signature) =
                     self.signature_written_out(&owner, name, arguments, held, line)?
@@ -15278,7 +15322,7 @@ impl Emitter<'_> {
                     ));
                 }
                 let first = with_what_the_arguments_say(&signature, &[], &[], going.as_ref());
-                let given = self.what_was_handed_over(&first, arguments, line)?;
+                let given = self.check_arguments(&first, arguments, line)?;
                 let shaped = with_what_the_arguments_say(&signature, &[], &given, going.as_ref());
                 self.arguments_for_signature(&shaped, arguments, line)?;
                 let descriptor = signature.descriptor();
@@ -15299,13 +15343,7 @@ impl Emitter<'_> {
                     .sum();
                 self.pops(taken);
                 self.pushes(&signature.returns);
-                return self.what_it_really_gives_back(
-                    &signature,
-                    &[],
-                    &given,
-                    going.as_ref(),
-                    line,
-                );
+                return self.resolved_return_type(&signature, &[], &given, going.as_ref(), line);
             }
         }
 
@@ -15329,15 +15367,15 @@ impl Emitter<'_> {
             return Err(self.no_such_method(&owner, name, arguments.len(), line));
         };
 
-        let held = self
-            .classpath
-            .seen_from(&owner, &on_the_receiver, &signature.owner);
+        let held =
+            self.classpath
+                .type_arguments_seen_from(&owner, &on_the_receiver, &signature.owner);
         let mut shaped = as_written(&signature, &held);
 
         shaped.witnessed = signature.witnessed.clone();
 
         let first = with_what_the_arguments_say(&shaped, &held, &[], going.as_ref());
-        let given = self.what_was_handed_over(&first, arguments, line)?;
+        let given = self.check_arguments(&first, arguments, line)?;
         let shaped = with_what_the_arguments_say(&shaped, &held, &given, going.as_ref());
         self.arguments_for_signature(&shaped, arguments, line)?;
 
@@ -15368,7 +15406,7 @@ impl Emitter<'_> {
             self.pushes(&signature.returns);
         }
 
-        self.what_it_really_gives_back(&signature, &held, &given, going.as_ref(), line)
+        self.resolved_return_type(&signature, &held, &given, going.as_ref(), line)
     }
 
     fn value_for(
@@ -15484,7 +15522,7 @@ impl Emitter<'_> {
             return Ok(candidates.into_iter().next());
         }
 
-        let mut anything = self.how_loosely_here(arguments);
+        let mut anything = self.argument_flexibility_in_scope(arguments);
         let mut given = Vec::with_capacity(arguments.len());
         for (at, expression) in arguments.iter().enumerate() {
             if anything[at] != Loosely::No {
@@ -15509,10 +15547,10 @@ impl Emitter<'_> {
         for round in 0..3 {
             let mut best: Option<(u32, &Signature)> = None;
             for candidate in &candidates {
-                if !self.could_take(candidate, &given, &anything, round) {
+                if !self.is_applicable_candidate(candidate, &given, &anything, round) {
                     continue;
                 }
-                let cost = self.what_it_costs(candidate, &given, &anything);
+                let cost = self.conversion_cost(candidate, &given, &anything);
                 if best.is_none_or(|(held, _)| cost < held) {
                     best = Some((cost, candidate));
                 }
@@ -15524,7 +15562,7 @@ impl Emitter<'_> {
         Ok(candidates.into_iter().next())
     }
 
-    fn what_it_really_gives_back(
+    fn resolved_return_type(
         &mut self,
         signature: &Signature,
         held: &[Type],
@@ -15541,13 +15579,15 @@ impl Emitter<'_> {
                 || limit == "java/lang/Object"
                 || self.classpath.get(asked).is_none()
                 || self.classpath.get(limit).is_none()
-                || self.reaches(wanted, &declared)
+                || self.is_subtype(wanted, &declared)
         });
 
-        if !signature.returns_stands_for.says_nothing() {
-            let bound = what_the_call_says(signature, given, going);
+        if !signature.returns_stands_for.is_fixed() {
+            let bound = infer_call_type_arguments(signature, given, going);
             if !bound.is_empty() {
-                let found = signature.returns_stands_for.filled(&declared, held, &bound);
+                let found = signature
+                    .returns_stands_for
+                    .substitute_type_variables(&declared, held, &bound);
 
                 if found == declared {
                     return Ok(found);
@@ -15556,8 +15596,15 @@ impl Emitter<'_> {
             }
         }
 
-        if !held.is_empty() && signature.returns_stands_for.mentions_the_class() {
-            let found = signature.returns_stands_for.filled(&declared, held, &[]);
+        if !held.is_empty()
+            && signature
+                .returns_stands_for
+                .references_class_type_parameter()
+        {
+            let found =
+                signature
+                    .returns_stands_for
+                    .substitute_type_variables(&declared, held, &[]);
             if found == declared {
                 return Ok(found);
             }
@@ -15597,17 +15644,14 @@ impl Emitter<'_> {
         self.cast_to(argument.clone(), declared)
     }
 
-    fn what_was_handed_over(
+    fn check_arguments(
         &mut self,
         signature: &Signature,
         arguments: &[Expression],
         line: u32,
     ) -> Result<Vec<Type>, Diagnostic> {
-        if signature.returns_stands_for.says_nothing()
-            && signature
-                .taken_stands_for
-                .iter()
-                .all(Standing::says_nothing)
+        if signature.returns_stands_for.is_fixed()
+            && signature.taken_stands_for.iter().all(Standing::is_fixed)
         {
             return Ok(Vec::new());
         }
@@ -15623,7 +15667,7 @@ impl Emitter<'_> {
                 let want = signature.parameters.get(at.min(last)).cloned();
                 let said = want
                     .filter(|_| at <= last)
-                    .and_then(|want| self.what_it_would_come_to(one, &want, line));
+                    .and_then(|want| self.lambda_return_type_for(one, &want, line));
                 given.push(
                     said.unwrap_or_else(|| {
                         Type::Object("java/lang/Object".to_string(), Vec::new())
@@ -15659,14 +15703,14 @@ impl Emitter<'_> {
         if wanted == have || !self.classpath.ancestors(have).contains(wanted) {
             return found;
         }
-        let seen = self.classpath.seen_from(have, held, wanted);
+        let seen = self.classpath.type_arguments_seen_from(have, held, wanted);
         if seen.is_empty() {
             return found;
         }
         Type::Object(wanted.clone(), seen)
     }
 
-    fn what_it_would_come_to(
+    fn lambda_return_type_for(
         &mut self,
         written: &Expression,
         want: &Type,
@@ -15675,7 +15719,7 @@ impl Emitter<'_> {
         let Type::Object(named, held) = want else {
             return None;
         };
-        let sam = self.the_one_method_of(named, line).ok()?;
+        let sam = self.single_abstract_method(named, line).ok()?;
 
         let Standing::OfTheClass(which) = sam.returns_stands_for else {
             return None;
@@ -15743,12 +15787,12 @@ impl Emitter<'_> {
             }
             Expression::MethodRef { on, name, .. } => {
                 let owner = match on.as_ref() {
-                    Expression::Name(maybe) if self.meant_as_a_class(maybe) => {
+                    Expression::Name(maybe) if self.refers_to_class(maybe) => {
                         self.resolve_class(maybe, line).ok()?
                     }
-                    other => match written_as_a_path(other)
+                    other => match dotted_path_of(other)
                         .filter(|path| {
-                            self.meant_as_a_class(path.split('.').next().unwrap_or_default())
+                            self.refers_to_class(path.split('.').next().unwrap_or_default())
                         })
                         .and_then(|path| resolve_named(self.classpath, self.unit, &path))
                     {
@@ -15800,10 +15844,10 @@ impl Emitter<'_> {
         Ok(found)
     }
 
-    fn reaches(&self, have: &Type, want: &Type) -> bool {
+    fn is_subtype(&self, have: &Type, want: &Type) -> bool {
         if let Type::Array(to) = want {
             return match have {
-                Type::Array(from) => from == to || self.reaches(from, to),
+                Type::Array(from) => from == to || self.is_subtype(from, to),
                 _ => false,
             };
         }
@@ -15846,10 +15890,10 @@ impl Emitter<'_> {
             }
         }
 
-        !self.a_class_this_knows(from) || !self.a_class_this_knows(to)
+        !self.is_known_class(from) || !self.is_known_class(to)
     }
 
-    fn a_class_this_knows(&self, name: &str) -> bool {
+    fn is_known_class(&self, name: &str) -> bool {
         self.classpath.get(name).is_some()
             || WELL_KNOWN.contains(&name)
             || BUILT_IN_INTERFACES.contains(&name)
@@ -15870,7 +15914,7 @@ impl Emitter<'_> {
         found
     }
 
-    fn which_one_of_ours(
+    fn select_overload(
         &mut self,
         theirs: &[Method],
         arguments: &[Expression],
@@ -15881,7 +15925,7 @@ impl Emitter<'_> {
             return Ok(theirs.first().cloned());
         }
 
-        let anything = self.how_loosely_here(arguments);
+        let anything = self.argument_flexibility_in_scope(arguments);
         let mut given = Vec::with_capacity(arguments.len());
         for (at, one) in arguments.iter().enumerate() {
             if anything[at] != Loosely::No {
@@ -15920,10 +15964,10 @@ impl Emitter<'_> {
         for round in 0..3 {
             let mut able: Vec<(u32, usize)> = Vec::new();
             for (at, shape) in shapes.iter().enumerate() {
-                if !self.could_take(shape, &given, &anything, round) {
+                if !self.is_applicable_candidate(shape, &given, &anything, round) {
                     continue;
                 }
-                able.push((self.what_it_costs(shape, &given, &anything), at));
+                able.push((self.conversion_cost(shape, &given, &anything), at));
             }
             let Some(cheapest) = able.iter().map(|(cost, _)| *cost).min() else {
                 continue;
@@ -15990,10 +16034,10 @@ impl Emitter<'_> {
         mine.parameters
             .iter()
             .zip(other.parameters.iter())
-            .all(|(held, wanted)| held == wanted || self.reaches(held, wanted))
+            .all(|(held, wanted)| held == wanted || self.is_subtype(held, wanted))
     }
 
-    fn what_it_costs(&self, candidate: &Signature, given: &[Type], anything: &[Loosely]) -> u32 {
+    fn conversion_cost(&self, candidate: &Signature, given: &[Type], anything: &[Loosely]) -> u32 {
         let mut total = 0u32;
         let last = candidate.parameters.len().saturating_sub(1);
         for (at, have) in given.iter().enumerate() {
@@ -16015,13 +16059,13 @@ impl Emitter<'_> {
                 Type::Array(element) if candidate.variadic && at >= last => element.as_ref(),
                 other => other,
             };
-            total = total.saturating_add(how_far(have, want));
+            total = total.saturating_add(conversion_distance(have, want));
         }
 
         total.saturating_add(u32::from(candidate.variadic))
     }
 
-    fn could_take(
+    fn is_applicable_candidate(
         &self,
         candidate: &Signature,
         given: &[Type],
@@ -16031,7 +16075,7 @@ impl Emitter<'_> {
         let matched = |at: usize, have: &Type, want: &Type| match anything.get(at) {
             Some(Loosely::Anywhere(counts)) => {
                 counts.is_empty()
-                    || match self.how_many_the_one_method_takes(want) {
+                    || match self.functional_interface_arity(want) {
                         Some(takes) => counts.contains(&takes),
                         None => true,
                     }
@@ -16040,7 +16084,7 @@ impl Emitter<'_> {
                 let Type::Object(named, _) = want else {
                     return false;
                 };
-                match self.the_one_method_of(named, 1) {
+                match self.single_abstract_method(named, 1) {
                     Ok(single) => {
                         single.parameters.len() == *count
                             && match gives {
@@ -16055,12 +16099,12 @@ impl Emitter<'_> {
             Some(Loosely::AnyReference) => want.is_reference(),
             _ => match round {
                 0 => want == have,
-                1 => self.reaches(have, want),
+                1 => self.is_subtype(have, want),
                 _ => {
-                    self.reaches(have, want)
+                    self.is_subtype(have, want)
                         || boxed_name(have)
                             .map(|boxed| Type::Object(boxed.to_string(), Vec::new()))
-                            .is_some_and(|boxed| self.reaches(&boxed, want))
+                            .is_some_and(|boxed| self.is_subtype(&boxed, want))
                         || primitive_inside(have).is_some_and(|inside| inside.may_be_given_to(want))
                 }
             },
@@ -16169,7 +16213,7 @@ impl Emitter<'_> {
 
     fn no_such_method(&self, owner: &str, name: &str, arity: usize, line: u32) -> Diagnostic {
         if ONLY_ON_THE_DESKTOP_METHODS.contains(&(owner, name)) {
-            return only_on_the_desktop_diagnostic(
+            return desktop_only_api_diagnostic(
                 &format!("{}.{name}", owner.replace(['/', '$'], ".")),
                 line,
             );
@@ -16225,7 +16269,7 @@ impl Emitter<'_> {
                 self.narrowed_by_the_operator(&now, &what, line)?
             }
         };
-        if !self.fit(&found, &what, line)? {
+        if !self.check_assignment(&found, &what, line)? {
             return Err(at(
                 "EJ228",
                 line,
@@ -16285,7 +16329,7 @@ impl Emitter<'_> {
                         self.narrowed_by_the_operator(&now, &local.what, line)?
                     }
                 };
-                if !self.fit(&found, &local.what, line)? {
+                if !self.check_assignment(&found, &local.what, line)? {
                     return Err(at(
                         "EJ228",
                         line,
@@ -16337,7 +16381,7 @@ impl Emitter<'_> {
                         }
                     }
 
-                    for enclosing in self.the_classes_around() {
+                    for enclosing in self.enclosing_classes() {
                         if self.classpath.find_field(&enclosing, name).is_some() {
                             return self.assign_through_the_enclosing_instance(
                                 &enclosing, name, operator, value, line, wanted,
@@ -16345,7 +16389,7 @@ impl Emitter<'_> {
                         }
                     }
 
-                    for holder in self.holders() {
+                    for holder in self.outer_class_names() {
                         let held = self
                             .classpath
                             .find_field(&holder, name)
@@ -16387,12 +16431,12 @@ impl Emitter<'_> {
                 }
 
                 let named = match of.as_ref() {
-                    Expression::Name(maybe) if self.meant_as_a_class(maybe) => {
+                    Expression::Name(maybe) if self.refers_to_class(maybe) => {
                         Some(self.resolve_class(maybe, line)?)
                     }
-                    other => written_as_a_path(other)
+                    other => dotted_path_of(other)
                         .filter(|path| {
-                            self.meant_as_a_class(path.split('.').next().unwrap_or_default())
+                            self.refers_to_class(path.split('.').next().unwrap_or_default())
                         })
                         .and_then(|path| resolve_named(self.classpath, self.unit, &path)),
                 };
@@ -16463,7 +16507,7 @@ impl Emitter<'_> {
                         self.narrowed_by_the_operator(&now, &what, line)?
                     }
                 };
-                if !self.fit(&found, &what, line)? {
+                if !self.check_assignment(&found, &what, line)? {
                     return Err(at(
                         "EJ228",
                         line,
@@ -16520,7 +16564,7 @@ impl Emitter<'_> {
                     None => {
                         let given = self.value_for(value, &element, line)?;
                         if given.is_reference() != element.is_reference() {
-                            self.fit(&given, &element, line)?;
+                            self.check_assignment(&given, &element, line)?;
                         } else if !given.is_reference() {
                             self.convert(&given, &element, line)?;
                         }
@@ -16583,7 +16627,7 @@ impl Emitter<'_> {
         }
 
         self.open();
-        let target = self.reached_once(target, line)?;
+        let target = self.evaluate_target_once(target, line)?;
         let was = self.value(&target, line)?;
         let slot = self.declare("$was", was.clone());
         self.store(slot, &was);
@@ -16593,7 +16637,11 @@ impl Emitter<'_> {
         Ok(was)
     }
 
-    fn reached_once(&mut self, target: &Expression, line: u32) -> Result<Expression, Diagnostic> {
+    fn evaluate_target_once(
+        &mut self,
+        target: &Expression,
+        line: u32,
+    ) -> Result<Expression, Diagnostic> {
         match target {
             Expression::Index { of, at } => Ok(Expression::Index {
                 of: Box::new(self.put_in_a_slot(of, "$of", line)?),
@@ -16613,7 +16661,7 @@ impl Emitter<'_> {
         called: &str,
         line: u32,
     ) -> Result<Expression, Diagnostic> {
-        if reached_the_same_way_twice(part) {
+        if is_side_effect_free_target(part) {
             return Ok(part.clone());
         }
         let what = self.value(part, line)?;
@@ -16698,7 +16746,7 @@ impl Emitter<'_> {
     fn set_depth(&mut self, depth: i32) {
         debug_assert_eq!(depth, 0);
         self.stack.clear();
-        self.deepest();
+        self.update_max_stack_depth();
     }
 
     fn protect(
@@ -16814,7 +16862,7 @@ impl Emitter<'_> {
                     let slot = self.declare(name, found.clone());
                     self.store(slot, &found);
                     if *fixed {
-                        self.hold_constant(what, expression);
+                        self.record_constant(what, expression);
                     }
                     return Ok(());
                 }
@@ -16822,7 +16870,7 @@ impl Emitter<'_> {
                 match value {
                     Some(expression) => {
                         let found = self.value_for(expression, &target, line)?;
-                        if !self.fit(&found, &target, line)? {
+                        if !self.check_assignment(&found, &target, line)? {
                             return Err(at(
                                 "EJ230",
                                 line,
@@ -16843,7 +16891,7 @@ impl Emitter<'_> {
                 let slot = self.declare(name, target.clone());
                 self.store(slot, &target);
                 if let (true, Some(expression)) = (*fixed, value) {
-                    self.hold_constant(what, expression);
+                    self.record_constant(what, expression);
                 }
                 Ok(())
             }
@@ -16881,7 +16929,7 @@ impl Emitter<'_> {
                 then,
                 otherwise,
             } => {
-                let found = self.truth(condition, line)?;
+                let found = self.require_boolean(condition, line)?;
                 if found != Type::Boolean {
                     return Err(at(
                         "EJ206",
@@ -16898,19 +16946,19 @@ impl Emitter<'_> {
                 self.statement(then)?;
                 match otherwise {
                     Some(otherwise) => {
-                        let over = (self.reachable && !never_completes(&then.node))
+                        let over = (self.reachable && !cannot_complete_normally(&then.node))
                             .then(|| self.jump(0xa7));
-                        self.land(to_else);
-                        self.a_branch_lands_here();
+                        self.bind_jump(to_else);
+                        self.mark_branch_target();
                         self.statement(otherwise)?;
                         if let Some(over) = over {
-                            self.land(over);
-                            self.a_branch_lands_here();
+                            self.bind_jump(over);
+                            self.mark_branch_target();
                         }
                     }
                     None => {
-                        self.land(to_else);
-                        self.a_branch_lands_here();
+                        self.bind_jump(to_else);
+                        self.mark_branch_target();
                     }
                 }
                 Ok(())
@@ -16918,12 +16966,12 @@ impl Emitter<'_> {
             Statement::While { condition, body } => {
                 let top = self.code.len();
 
-                self.a_branch_lands_here();
+                self.mark_branch_target();
 
                 let out = if matches!(condition, Expression::Boolean(true)) {
                     None
                 } else {
-                    let found = self.truth(condition, line)?;
+                    let found = self.require_boolean(condition, line)?;
                     if found != Type::Boolean {
                         return Err(at("EJ206", line, 1, "A `while` wants a boolean."));
                     }
@@ -16934,20 +16982,20 @@ impl Emitter<'_> {
                 self.statement(body)?;
                 let level = self.leave();
                 for pending in level.continues {
-                    self.land(pending);
+                    self.bind_jump(pending);
                 }
-                self.a_branch_lands_here();
+                self.mark_branch_target();
                 self.jump_back(0xa7, top);
                 let leaves = !level.breaks.is_empty() || out.is_some();
                 if let Some(out) = out {
-                    self.land(out);
+                    self.bind_jump(out);
                 }
                 for pending in level.breaks {
-                    self.land(pending);
+                    self.bind_jump(pending);
                 }
 
                 if leaves {
-                    self.a_branch_lands_here();
+                    self.mark_branch_target();
                 } else {
                     self.reachable = false;
                 }
@@ -16964,10 +17012,10 @@ impl Emitter<'_> {
                     self.statement(one)?;
                 }
                 let top = self.code.len();
-                self.a_branch_lands_here();
+                self.mark_branch_target();
                 let out = match condition {
                     Some(condition) => {
-                        let found = self.truth(condition, line)?;
+                        let found = self.require_boolean(condition, line)?;
                         if found != Type::Boolean {
                             return Err(at("EJ206", line, 1, "A `for` condition is a boolean."));
                         }
@@ -16981,9 +17029,9 @@ impl Emitter<'_> {
                 self.statement(body)?;
                 let level = self.leave();
                 for pending in level.continues {
-                    self.land(pending);
+                    self.bind_jump(pending);
                 }
-                self.a_branch_lands_here();
+                self.mark_branch_target();
                 for expression in step {
                     match expression {
                         Expression::Step { target, by, after } => {
@@ -17014,27 +17062,27 @@ impl Emitter<'_> {
                 }
                 self.jump_back(0xa7, top);
                 if let Some(out) = out {
-                    self.land(out);
+                    self.bind_jump(out);
                 }
                 for pending in level.breaks {
-                    self.land(pending);
+                    self.bind_jump(pending);
                 }
-                self.a_branch_lands_here();
+                self.mark_branch_target();
                 self.close();
                 Ok(())
             }
             Statement::DoWhile { body, condition } => {
                 let top = self.code.len();
-                self.a_branch_lands_here();
+                self.mark_branch_target();
                 self.enter(true);
                 self.statement(body)?;
 
                 let level = self.leave();
                 for pending in level.continues {
-                    self.land(pending);
+                    self.bind_jump(pending);
                 }
-                self.a_branch_lands_here();
-                let found = self.truth(condition, line)?;
+                self.mark_branch_target();
+                let found = self.require_boolean(condition, line)?;
                 if found != Type::Boolean {
                     return Err(at("EJ206", line, 1, "A `do`/`while` wants a boolean."));
                 }
@@ -17042,9 +17090,9 @@ impl Emitter<'_> {
                 self.jump_back(0x9a, top);
                 self.pops(1);
                 for pending in level.breaks {
-                    self.land(pending);
+                    self.bind_jump(pending);
                 }
-                self.a_branch_lands_here();
+                self.mark_branch_target();
                 Ok(())
             }
             Statement::ForEach {
@@ -17069,7 +17117,7 @@ impl Emitter<'_> {
                     ));
                 };
                 let found = self.value(what, line)?;
-                self.agree_on_yield(level, &found, line)?;
+                self.unify_yield_type(level, &found, line)?;
                 let down_to = self.yields[level].finallys;
                 self.run_finallys(down_to)?;
                 let jump = self.jump(0xa7);
@@ -17104,7 +17152,8 @@ impl Emitter<'_> {
                 for one in body {
                     self.statement(one)?;
                 }
-                let leaves = !self.reachable || body.iter().any(|one| never_completes(&one.node));
+                let leaves =
+                    !self.reachable || body.iter().any(|one| cannot_complete_normally(&one.node));
                 self.finallys.truncate(outer);
                 if !leaves {
                     self.load(held, &found);
@@ -17120,7 +17169,7 @@ impl Emitter<'_> {
                 let throwable = Type::Object("java/lang/Throwable".to_string(), Vec::new());
                 self.slots = outside;
                 self.stack_is(vec![Verified::of(&throwable)]);
-                self.a_branch_lands_here();
+                self.mark_branch_target();
                 let thrown = self.declare("$thrown", throwable.clone());
                 self.store(thrown, &throwable);
                 self.load(held, &found);
@@ -17132,9 +17181,9 @@ impl Emitter<'_> {
 
                 self.close();
                 if let Some(over) = over {
-                    self.land(over);
+                    self.bind_jump(over);
                     self.set_depth(0);
-                    self.a_branch_lands_here();
+                    self.mark_branch_target();
                 }
                 Ok(())
             }
@@ -17147,7 +17196,7 @@ impl Emitter<'_> {
                 self.pops(1);
                 let over = self.jump(0x9a);
 
-                let found = self.truth(condition, line)?;
+                let found = self.require_boolean(condition, line)?;
                 if found != Type::Boolean {
                     return Err(at(
                         "EJ206",
@@ -17201,10 +17250,10 @@ impl Emitter<'_> {
                 self.op(0xbf);
                 self.set_depth(0);
 
-                self.land(over);
-                self.land(held);
+                self.bind_jump(over);
+                self.bind_jump(held);
                 self.set_depth(0);
-                self.a_branch_lands_here();
+                self.mark_branch_target();
                 self.wants_assertions = true;
                 Ok(())
             }
@@ -17222,13 +17271,13 @@ impl Emitter<'_> {
                 match precise {
                     Some(classes) => {
                         for named in &classes {
-                            self.it_can_throw(named, line)?;
+                            self.record_thrown_exception(named, line)?;
                         }
                     }
                     None => {
                         let found = self.type_of(what, line)?;
                         if let Type::Object(named, _) = &found {
-                            self.it_can_throw(named, line)?;
+                            self.record_thrown_exception(named, line)?;
                         }
                     }
                 }
@@ -17268,9 +17317,9 @@ impl Emitter<'_> {
                 let level = self.leave();
                 if !level.breaks.is_empty() {
                     for pending in level.breaks {
-                        self.land(pending);
+                        self.bind_jump(pending);
                     }
-                    self.a_branch_lands_here();
+                    self.mark_branch_target();
                 }
                 Ok(())
             }
@@ -17329,7 +17378,7 @@ impl Emitter<'_> {
                             ));
                         }
                         let found = self.value_for(expression, &wanted, line)?;
-                        if !self.fit(&found, &wanted, line)? {
+                        if !self.check_assignment(&found, &wanted, line)? {
                             return Err(at(
                                 "EJ201",
                                 line,
@@ -17405,36 +17454,38 @@ fn stack_map_table(frames: &[Frame], pool: &mut Pool) -> Option<Vec<u8>> {
     Some(body)
 }
 
-fn never_completes(statement: &Statement) -> bool {
+fn cannot_complete_normally(statement: &Statement) -> bool {
     match statement {
         Statement::Return(_) | Statement::Throw(_) => true,
 
         Statement::Break(_) | Statement::Continue(_) => true,
-        Statement::Block(inside) => inside.iter().any(|one| never_completes(&one.node)),
+        Statement::Block(inside) => inside.iter().any(|one| cannot_complete_normally(&one.node)),
         Statement::If {
             then,
             otherwise: Some(otherwise),
             ..
-        } => never_completes(&then.node) && never_completes(&otherwise.node),
+        } => cannot_complete_normally(&then.node) && cannot_complete_normally(&otherwise.node),
 
         Statement::For {
             condition: None,
             body,
             ..
-        } => !holds_a_break(&body.node),
+        } => !contains_break(&body.node),
         Statement::For {
             condition: Some(condition),
             body,
             ..
         }
         | Statement::While { condition, body } => {
-            matches!(condition, Expression::Boolean(true)) && !holds_a_break(&body.node)
+            matches!(condition, Expression::Boolean(true)) && !contains_break(&body.node)
         }
         Statement::DoWhile { body, condition } => {
-            matches!(condition, Expression::Boolean(true)) && !holds_a_break(&body.node)
+            matches!(condition, Expression::Boolean(true)) && !contains_break(&body.node)
         }
 
-        Statement::Synchronized { body, .. } => body.iter().any(|one| never_completes(&one.node)),
+        Statement::Synchronized { body, .. } => {
+            body.iter().any(|one| cannot_complete_normally(&one.node))
+        }
 
         Statement::Assert { .. } => false,
 
@@ -17445,14 +17496,17 @@ fn never_completes(statement: &Statement) -> bool {
         } => {
             if finally
                 .as_ref()
-                .is_some_and(|inside| inside.iter().any(|one| never_completes(&one.node)))
+                .is_some_and(|inside| inside.iter().any(|one| cannot_complete_normally(&one.node)))
             {
                 return true;
             }
-            body.iter().any(|one| never_completes(&one.node))
-                && catches
-                    .iter()
-                    .all(|catch| catch.body.iter().any(|one| never_completes(&one.node)))
+            body.iter().any(|one| cannot_complete_normally(&one.node))
+                && catches.iter().all(|catch| {
+                    catch
+                        .body
+                        .iter()
+                        .any(|one| cannot_complete_normally(&one.node))
+                })
         }
 
         Statement::Switch { arms, .. } => {
@@ -17465,83 +17519,88 @@ fn never_completes(statement: &Statement) -> bool {
             }
             if arms
                 .iter()
-                .any(|arm| arm.body.iter().any(|one| holds_a_break(&one.node)))
+                .any(|arm| arm.body.iter().any(|one| contains_break(&one.node)))
             {
                 return false;
             }
             if arms.iter().any(|arm| arm.arrow) {
-                return arms
-                    .iter()
-                    .all(|arm| arm.body.iter().any(|one| never_completes(&one.node)));
+                return arms.iter().all(|arm| {
+                    arm.body
+                        .iter()
+                        .any(|one| cannot_complete_normally(&one.node))
+                });
             }
-            arms.last()
-                .is_some_and(|arm| arm.body.iter().any(|one| never_completes(&one.node)))
+            arms.last().is_some_and(|arm| {
+                arm.body
+                    .iter()
+                    .any(|one| cannot_complete_normally(&one.node))
+            })
         }
         _ => false,
     }
 }
 
-fn holds_a_yield(statement: &Statement) -> bool {
+fn contains_yield(statement: &Statement) -> bool {
     match statement {
         Statement::Yield(_) => true,
         Statement::Block(inside) | Statement::Several(inside) => {
-            inside.iter().any(|one| holds_a_yield(&one.node))
+            inside.iter().any(|one| contains_yield(&one.node))
         }
-        Statement::Labelled { body, .. } => holds_a_yield(&body.node),
+        Statement::Labelled { body, .. } => contains_yield(&body.node),
         Statement::If {
             then, otherwise, ..
         } => {
-            holds_a_yield(&then.node)
+            contains_yield(&then.node)
                 || otherwise
                     .as_ref()
-                    .is_some_and(|otherwise| holds_a_yield(&otherwise.node))
+                    .is_some_and(|otherwise| contains_yield(&otherwise.node))
         }
         Statement::While { body, .. }
         | Statement::DoWhile { body, .. }
         | Statement::For { body, .. }
-        | Statement::ForEach { body, .. } => holds_a_yield(&body.node),
+        | Statement::ForEach { body, .. } => contains_yield(&body.node),
         Statement::Try {
             body,
             catches,
             finally,
         } => {
-            body.iter().any(|one| holds_a_yield(&one.node))
+            body.iter().any(|one| contains_yield(&one.node))
                 || catches
                     .iter()
-                    .any(|catch| catch.body.iter().any(|one| holds_a_yield(&one.node)))
+                    .any(|catch| catch.body.iter().any(|one| contains_yield(&one.node)))
                 || finally
                     .as_ref()
-                    .is_some_and(|inside| inside.iter().any(|one| holds_a_yield(&one.node)))
+                    .is_some_and(|inside| inside.iter().any(|one| contains_yield(&one.node)))
         }
         _ => false,
     }
 }
 
-fn holds_a_break(statement: &Statement) -> bool {
+fn contains_break(statement: &Statement) -> bool {
     match statement {
         Statement::Break(_) => true,
-        Statement::Block(inside) => inside.iter().any(|one| holds_a_break(&one.node)),
-        Statement::Labelled { body, .. } => holds_a_break(&body.node),
+        Statement::Block(inside) => inside.iter().any(|one| contains_break(&one.node)),
+        Statement::Labelled { body, .. } => contains_break(&body.node),
         Statement::If {
             then, otherwise, ..
         } => {
-            holds_a_break(&then.node)
+            contains_break(&then.node)
                 || otherwise
                     .as_ref()
-                    .is_some_and(|otherwise| holds_a_break(&otherwise.node))
+                    .is_some_and(|otherwise| contains_break(&otherwise.node))
         }
         Statement::Try {
             body,
             catches,
             finally,
         } => {
-            body.iter().any(|one| holds_a_break(&one.node))
+            body.iter().any(|one| contains_break(&one.node))
                 || catches
                     .iter()
-                    .any(|catch| catch.body.iter().any(|one| holds_a_break(&one.node)))
+                    .any(|catch| catch.body.iter().any(|one| contains_break(&one.node)))
                 || finally
                     .as_ref()
-                    .is_some_and(|inside| inside.iter().any(|one| holds_a_break(&one.node)))
+                    .is_some_and(|inside| inside.iter().any(|one| contains_break(&one.node)))
         }
         _ => false,
     }
@@ -17591,7 +17650,7 @@ impl Emitter<'_> {
         self.store(index, &Type::Int);
 
         let top = self.code.len();
-        self.a_branch_lands_here();
+        self.mark_branch_target();
         self.load(index, &Type::Int);
         self.load(array, &found);
         self.op(0xbe);
@@ -17623,26 +17682,26 @@ impl Emitter<'_> {
         self.close();
 
         for pending in level.continues {
-            self.land(pending);
+            self.bind_jump(pending);
         }
-        self.a_branch_lands_here();
+        self.mark_branch_target();
         self.bump_local(index, 1);
         self.jump_back(0xa7, top);
-        self.land(out);
+        self.bind_jump(out);
         for pending in level.breaks {
-            self.land(pending);
+            self.bind_jump(pending);
         }
         self.close();
-        self.a_branch_lands_here();
+        self.mark_branch_target();
         Ok(())
     }
 
     fn switch(&mut self, subject: &Expression, arms: &[Arm], line: u32) -> Result<(), Diagnostic> {
         let found = self.value(subject, line)?;
-        let found = self.opened_for_a_switch(found, arms);
-        let over = self.what_a_switch_is_over(&found, arms, line)?;
+        let found = self.unboxed_switch_type(found, arms);
+        let over = self.switch_selector(&found, arms, line)?;
 
-        let answers_for_everything = self.covers_everything(&over, &found, arms);
+        let answers_for_everything = self.is_switch_exhaustive(&over, &found, arms);
 
         self.open();
         self.enter(false);
@@ -17662,12 +17721,12 @@ impl Emitter<'_> {
                 default_at = Some(at_here);
             }
             if self.reachable {
-                self.only_what_every_road_agrees_on(&at_the_dispatch);
+                self.merge_frame_types(&at_the_dispatch);
             } else {
                 self.slots = at_the_dispatch.clone();
             }
             self.set_depth(0);
-            self.a_branch_lands_here();
+            self.mark_branch_target();
             let scoped = arm.arrow || arm.pattern.is_some();
             if scoped {
                 self.open();
@@ -17680,7 +17739,12 @@ impl Emitter<'_> {
                 self.close();
             }
 
-            if arm.arrow && self.reachable && !arm.body.iter().any(|one| never_completes(&one.node))
+            if arm.arrow
+                && self.reachable
+                && !arm
+                    .body
+                    .iter()
+                    .any(|one| cannot_complete_normally(&one.node))
             {
                 ends.push(self.jump(0xa7));
             }
@@ -17689,8 +17753,8 @@ impl Emitter<'_> {
         if default_at.is_none() && answers_for_everything {
             let here = self.code.len();
             self.set_depth(0);
-            self.a_branch_lands_here();
-            self.nothing_else_is_possible(&over_held, line)?;
+            self.mark_branch_target();
+            self.require_exhaustive_switch(&over_held, line)?;
             default_at = Some(here);
         }
 
@@ -17699,7 +17763,7 @@ impl Emitter<'_> {
 
         if default_at.is_none() {
             if self.reachable {
-                self.only_what_every_road_agrees_on(&at_the_dispatch);
+                self.merge_frame_types(&at_the_dispatch);
             } else {
                 self.slots = at_the_dispatch.clone();
                 self.reachable = true;
@@ -17707,18 +17771,18 @@ impl Emitter<'_> {
         }
         dispatch.settle(self, &targets, default_at.unwrap_or(after));
         for pending in ends {
-            self.land(pending);
+            self.bind_jump(pending);
         }
         let level = self.leave();
         let arrives = arrives || !level.breaks.is_empty();
         for pending in level.breaks {
-            self.land(pending);
+            self.bind_jump(pending);
         }
         self.close();
 
         if arrives {
             self.set_depth(0);
-            self.a_branch_lands_here();
+            self.mark_branch_target();
         } else {
             self.reachable = false;
         }
@@ -17736,9 +17800,9 @@ impl Emitter<'_> {
             .any(|arm| arm.labels.is_empty() && arm.pattern.is_none());
 
         let found = self.value(subject, line)?;
-        let found = self.opened_for_a_switch(found, arms);
-        let over = self.what_a_switch_is_over(&found, arms, line)?;
-        if !written_default && !self.covers_everything(&over, &found, arms) {
+        let found = self.unboxed_switch_type(found, arms);
+        let over = self.switch_selector(&found, arms, line)?;
+        if !written_default && !self.is_switch_exhaustive(&over, &found, arms) {
             return Err(at(
                 "EJ245",
                 line,
@@ -17774,7 +17838,7 @@ impl Emitter<'_> {
                 default_at = Some(at_here);
             }
             self.stack_is(beneath.clone());
-            self.a_branch_lands_here();
+            self.mark_branch_target();
             self.open();
             self.bind_a_pattern_here(arm)?;
 
@@ -17788,7 +17852,7 @@ impl Emitter<'_> {
             match bare {
                 Some(expression) => {
                     let produced = self.value(&expression, arm.line)?;
-                    self.agree_on_yield(level, &produced, arm.line)?;
+                    self.unify_yield_type(level, &produced, arm.line)?;
                     let down_to = self.yields[level].finallys;
                     self.run_finallys(down_to)?;
                     let jump = self.jump(0xa7);
@@ -17798,8 +17862,11 @@ impl Emitter<'_> {
                     for one in &arm.body {
                         self.statement(one)?;
                     }
-                    if !arm.body.iter().any(|one| never_completes(&one.node))
-                        && !arm.body.iter().any(|one| holds_a_yield(&one.node))
+                    if !arm
+                        .body
+                        .iter()
+                        .any(|one| cannot_complete_normally(&one.node))
+                        && !arm.body.iter().any(|one| contains_yield(&one.node))
                     {
                         return Err(at(
                             "EJ246",
@@ -17817,8 +17884,8 @@ impl Emitter<'_> {
         if default_at.is_none() {
             let here = self.code.len();
             self.stack_is(beneath.clone());
-            self.a_branch_lands_here();
-            self.nothing_else_is_possible(&over_held, line)?;
+            self.mark_branch_target();
+            self.require_exhaustive_switch(&over_held, line)?;
             default_at = Some(here);
         }
         let after = self.code.len();
@@ -17826,7 +17893,7 @@ impl Emitter<'_> {
 
         let level = self.yields.pop().expect("the level was pushed");
         for pending in level.pending {
-            self.land(pending);
+            self.bind_jump(pending);
         }
         self.close();
 
@@ -17846,11 +17913,16 @@ impl Emitter<'_> {
             settled.push(Verified::Top);
         }
         self.stack_is(settled);
-        self.a_branch_lands_here();
+        self.mark_branch_target();
         Ok(produced)
     }
 
-    fn agree_on_yield(&mut self, level: usize, found: &Type, line: u32) -> Result<(), Diagnostic> {
+    fn unify_yield_type(
+        &mut self,
+        level: usize,
+        found: &Type,
+        line: u32,
+    ) -> Result<(), Diagnostic> {
         match self.yields[level].produced.clone() {
             None => {
                 self.yields[level].produced = Some(found.clone());
@@ -17877,7 +17949,7 @@ impl Emitter<'_> {
         }
     }
 
-    fn covers_everything(&mut self, over: &Chooser, found: &Type, arms: &[Arm]) -> bool {
+    fn is_switch_exhaustive(&mut self, over: &Chooser, found: &Type, arms: &[Arm]) -> bool {
         if let Chooser::Primitive(kind) = over {
             let total = arms.iter().any(|arm| {
                 if arm.guard.is_some() {
@@ -17959,7 +18031,7 @@ impl Emitter<'_> {
         }
     }
 
-    fn nothing_else_is_possible(&mut self, over: &Chooser, line: u32) -> Result<(), Diagnostic> {
+    fn require_exhaustive_switch(&mut self, over: &Chooser, line: u32) -> Result<(), Diagnostic> {
         let named = match over {
             Chooser::Constant(_) => "java/lang/IncompatibleClassChangeError",
             _ => "java/lang/MatchException",
@@ -17987,7 +18059,7 @@ impl Emitter<'_> {
         Ok(())
     }
 
-    fn opened_for_a_switch(&mut self, found: Type, arms: &[Arm]) -> Type {
+    fn unboxed_switch_type(&mut self, found: Type, arms: &[Arm]) -> Type {
         let Type::Object(named, _) = &found else {
             return found;
         };
@@ -18008,7 +18080,7 @@ impl Emitter<'_> {
         self.box_or_unbox(&found, &Type::Int).unwrap_or(found)
     }
 
-    fn what_a_switch_is_over(
+    fn switch_selector(
         &mut self,
         found: &Type,
         arms: &[Arm],
@@ -18147,12 +18219,12 @@ impl Emitter<'_> {
                 ));
             }
             let target = self.resolve(&pattern.what, arm.line)?;
-            let test = self.how_a_primitive_is_tested(kind, &target, arm.line)?;
+            let test = self.primitive_type_test(kind, &target, arm.line)?;
 
             self.open();
             let past = match test {
                 Some(test) => {
-                    let found = self.truth(&test, arm.line)?;
+                    let found = self.require_boolean(&test, arm.line)?;
                     if found != Type::Boolean {
                         return Err(at(
                             "EJ206",
@@ -18175,7 +18247,7 @@ impl Emitter<'_> {
                 }
                 Some(guard) => {
                     self.bind_the_pattern(arm, held)?;
-                    let found = self.truth(guard, arm.line)?;
+                    let found = self.require_boolean(guard, arm.line)?;
                     if found != Type::Boolean {
                         return Err(at(
                             "EJ206",
@@ -18190,10 +18262,10 @@ impl Emitter<'_> {
                 }
             }
             if let Some(past) = past {
-                self.land(past);
-                self.a_branch_lands_here();
+                self.bind_jump(past);
+                self.mark_branch_target();
             } else if arm.guard.is_some() {
-                self.a_branch_lands_here();
+                self.mark_branch_target();
             }
         }
         let _ = line;
@@ -18227,7 +18299,7 @@ impl Emitter<'_> {
         self.pushes(what);
     }
 
-    fn a_primitive_tested(
+    fn check_primitive_type_test(
         &mut self,
         found: &Type,
         target: &Type,
@@ -18238,7 +18310,7 @@ impl Emitter<'_> {
         self.taken_apart += 1;
         let held = self.declare(&named, found.clone());
         self.store(held, found);
-        let test = self.how_a_named_primitive_is_tested(found, target, &named, line)?;
+        let test = self.named_primitive_type_test(found, target, &named, line)?;
         let slot = match binds {
             Some(binding) => {
                 self.zero_of(target);
@@ -18253,7 +18325,7 @@ impl Emitter<'_> {
             if target.is_reference() {
                 emitter.box_or_unbox(found, target);
             } else {
-                emitter.converted_for_a_pattern(found, target, line)?;
+                emitter.check_pattern_conversion(found, target, line)?;
             }
             emitter.store(slot, target);
             Ok(())
@@ -18266,7 +18338,7 @@ impl Emitter<'_> {
                 self.push_int(1);
             }
             Some(test) => {
-                let said = self.truth(&test, line)?;
+                let said = self.require_boolean(&test, line)?;
                 if said != Type::Boolean {
                     return Err(at("EJ206", line, 1, "A test here wants a boolean."));
                 }
@@ -18275,15 +18347,15 @@ impl Emitter<'_> {
                     self.pops(1);
                     let over = self.jump(0x99);
                     bind(self, slot)?;
-                    self.land(over);
-                    self.a_branch_lands_here();
+                    self.bind_jump(over);
+                    self.mark_branch_target();
                 }
             }
         }
         Ok(Type::Boolean)
     }
 
-    fn how_a_primitive_is_tested(
+    fn primitive_type_test(
         &mut self,
         kind: &Type,
         target: &Type,
@@ -18316,10 +18388,10 @@ impl Emitter<'_> {
             }
             return Ok(None);
         }
-        self.how_a_named_primitive_is_tested(kind, target, PATTERN_SUBJECT, line)
+        self.named_primitive_type_test(kind, target, PATTERN_SUBJECT, line)
     }
 
-    fn how_a_named_primitive_is_tested(
+    fn named_primitive_type_test(
         &mut self,
         kind: &Type,
         target: &Type,
@@ -18327,7 +18399,7 @@ impl Emitter<'_> {
         line: u32,
     ) -> Result<Option<Expression>, Diagnostic> {
         if target.is_reference() {
-            return self.how_a_primitive_is_tested(kind, target, line);
+            return self.primitive_type_test(kind, target, line);
         }
         match exactness(kind, target, name) {
             Some(test) => Ok(test),
@@ -18344,7 +18416,7 @@ impl Emitter<'_> {
         }
     }
 
-    fn converted_for_a_pattern(
+    fn check_pattern_conversion(
         &mut self,
         from: &Type,
         to: &Type,
@@ -18403,7 +18475,7 @@ impl Emitter<'_> {
 
             self.open();
             if pattern.taken {
-                let whole = self.the_whole_pattern(
+                let whole = self.lower_pattern_test(
                     &Expression::Name(PATTERN_SUBJECT.to_string()),
                     &pattern,
                     arm.line,
@@ -18432,7 +18504,7 @@ impl Emitter<'_> {
                     if !pattern.taken {
                         self.bind_the_pattern(arm, held)?;
                     }
-                    let found = self.truth(guard, arm.line)?;
+                    let found = self.require_boolean(guard, arm.line)?;
                     if found != Type::Boolean {
                         return Err(at(
                             "EJ206",
@@ -18444,8 +18516,8 @@ impl Emitter<'_> {
                     self.pops(1);
                     waiting.push((self.jump(0x9a), index));
                     self.close();
-                    self.land(past);
-                    self.a_branch_lands_here();
+                    self.bind_jump(past);
+                    self.mark_branch_target();
                 }
             }
         }
@@ -18505,7 +18577,7 @@ impl Emitter<'_> {
                 self.box_or_unbox(&wrapper, &target);
             }
         } else if !from.is_reference() && !target.is_reference() {
-            self.converted_for_a_pattern(from, &target, line)?;
+            self.check_pattern_conversion(from, &target, line)?;
         } else if target.is_reference() && target != *from {
             let named = match &target {
                 Type::Object(named, _) => named.clone(),
@@ -18536,7 +18608,7 @@ impl Emitter<'_> {
         };
         let whole = self.declare("$took", target.clone());
         self.store(whole, &target);
-        let components = self.what_a_record_holds(&class, line)?;
+        let components = self.record_components(&class, line)?;
         for (part, (component, declared)) in pattern.parts.iter().zip(components.iter()) {
             self.load(whole, &target);
             let Some(signature) = self.signature_for(&class, component, &[], line)? else {
@@ -18628,8 +18700,8 @@ impl Emitter<'_> {
                     return None;
                 }
                 let mut owners = vec![self.this_class.clone()];
-                owners.extend(self.the_classes_around());
-                owners.extend(self.holders());
+                owners.extend(self.enclosing_classes());
+                owners.extend(self.outer_class_names());
                 owners.extend(self.imported_statically(name));
                 owners
                     .iter()
@@ -18827,7 +18899,7 @@ impl Emitter<'_> {
         let ended = self.code.len();
 
         let mut outs: Vec<Pending> = Vec::new();
-        if self.reachable && !body.iter().any(|one| never_completes(&one.node)) {
+        if self.reachable && !body.iter().any(|one| cannot_complete_normally(&one.node)) {
             self.run_finallys(outer)?;
             if self.reachable {
                 outs.push(self.jump(0xa7));
@@ -18867,7 +18939,7 @@ impl Emitter<'_> {
 
             self.slots = before.clone();
             self.stack_is(vec![Verified::of(&held)]);
-            self.a_branch_lands_here();
+            self.mark_branch_target();
             self.open();
             let slot = self.declare(&catch.name, held.clone());
             self.store(slot, &held);
@@ -18882,7 +18954,12 @@ impl Emitter<'_> {
             self.close();
             caught.push((body_begun, body_ended));
 
-            if self.reachable && !catch.body.iter().any(|one| never_completes(&one.node)) {
+            if self.reachable
+                && !catch
+                    .body
+                    .iter()
+                    .any(|one| cannot_complete_normally(&one.node))
+            {
                 self.run_finallys(outer)?;
                 if self.reachable {
                     outs.push(self.jump(0xa7));
@@ -18899,7 +18976,7 @@ impl Emitter<'_> {
 
             self.slots = before.clone();
             self.stack_is(vec![Verified::of(&throwable)]);
-            self.a_branch_lands_here();
+            self.mark_branch_target();
             self.open();
             let slot = self.declare("$thrown", throwable.clone());
             self.store(slot, &throwable);
@@ -18926,10 +19003,10 @@ impl Emitter<'_> {
             return Ok(());
         }
         for pending in outs {
-            self.land(pending);
+            self.bind_jump(pending);
         }
         self.set_depth(0);
-        self.a_branch_lands_here();
+        self.mark_branch_target();
         Ok(())
     }
 
@@ -18973,7 +19050,7 @@ impl Emitter<'_> {
             ));
         };
 
-        let single = self.the_one_method_of(&named, line)?;
+        let single = self.single_abstract_method(&named, line)?;
         let single = as_written(&single, &holds);
         if single.parameters.len() != parameters.len() {
             return Err(at(
@@ -19008,7 +19085,7 @@ impl Emitter<'_> {
                     ));
                 }
             }
-            let Some(shape) = written_for(wanted) else {
+            let Some(shape) = written_type_of(wanted) else {
                 return Err(at(
                     "EJ251",
                     line,
@@ -19038,7 +19115,7 @@ impl Emitter<'_> {
             }
         }
 
-        let Some(returns) = written_for(&single.returns).or(Some(Written::Void)) else {
+        let Some(returns) = written_type_of(&single.returns).or(Some(Written::Void)) else {
             unreachable!("void is nameable")
         };
         let made = Body {
@@ -19105,7 +19182,7 @@ impl Emitter<'_> {
                 "A method reference cannot stand for something that is not a class.",
             ));
         };
-        let single = self.the_one_method_of(&named, line)?;
+        let single = self.single_abstract_method(&named, line)?;
 
         let single = as_written(&single, &holds);
 
@@ -19113,7 +19190,7 @@ impl Emitter<'_> {
         let mut arguments = Vec::new();
         for (position, wanted) in single.parameters.iter().enumerate() {
             let held = format!("$given{position}");
-            let Some(shape) = written_for(wanted) else {
+            let Some(shape) = written_type_of(wanted) else {
                 return Err(at(
                     "EJ251",
                     line,
@@ -19126,7 +19203,7 @@ impl Emitter<'_> {
         }
 
         let call = if name == "<init>" {
-            let Some(class) = written_as_a_path(on) else {
+            let Some(class) = dotted_path_of(on) else {
                 return Err(at(
                     "EJ251",
                     line,
@@ -19161,7 +19238,7 @@ impl Emitter<'_> {
                     outer: None,
                 }
             }
-        } else if self.called_on_the_first_one_handed_over(on, name, arguments.len()) {
+        } else if self.is_invoked_on_first_argument(on, name, arguments.len()) {
             let receiver = arguments.remove(0);
             Expression::Call {
                 on: Some(Box::new(receiver)),
@@ -19189,12 +19266,7 @@ impl Emitter<'_> {
         self.lambda(&parameters, &body, true, line)
     }
 
-    fn called_on_the_first_one_handed_over(
-        &mut self,
-        on: &Expression,
-        name: &str,
-        handed: usize,
-    ) -> bool {
+    fn is_invoked_on_first_argument(&mut self, on: &Expression, name: &str, handed: usize) -> bool {
         if handed == 0 {
             return false;
         }
@@ -19216,19 +19288,19 @@ impl Emitter<'_> {
     fn class_a_reference_names(&mut self, on: &Expression) -> Option<String> {
         match on {
             Expression::Name(maybe) => {
-                if !self.meant_as_a_class(maybe) {
+                if !self.refers_to_class(maybe) {
                     return None;
                 }
                 self.resolve_class(maybe, 1).ok()
             }
-            other => written_as_a_path(other)
-                .filter(|path| self.meant_as_a_class(path.split('.').next().unwrap_or_default()))
+            other => dotted_path_of(other)
+                .filter(|path| self.refers_to_class(path.split('.').next().unwrap_or_default()))
                 .and_then(|path| resolve_named(self.classpath, self.unit, &path)),
         }
     }
 
-    fn how_loosely_here(&mut self, arguments: &[Expression]) -> Vec<Loosely> {
-        let mut said = how_loosely(arguments);
+    fn argument_flexibility_in_scope(&mut self, arguments: &[Expression]) -> Vec<Loosely> {
+        let mut said = argument_flexibility(arguments);
         for (at, argument) in arguments.iter().enumerate() {
             let Expression::Lambda {
                 parameters,
@@ -19259,13 +19331,11 @@ impl Emitter<'_> {
                 continue;
             };
             let named = match on.as_ref() {
-                Expression::Name(maybe) if self.meant_as_a_class(maybe) => {
+                Expression::Name(maybe) if self.refers_to_class(maybe) => {
                     self.resolve_class(maybe, 1).ok()
                 }
-                other => written_as_a_path(other)
-                    .filter(|path| {
-                        self.meant_as_a_class(path.split('.').next().unwrap_or_default())
-                    })
+                other => dotted_path_of(other)
+                    .filter(|path| self.refers_to_class(path.split('.').next().unwrap_or_default()))
                     .and_then(|path| resolve_named(self.classpath, self.unit, &path)),
             };
             let Some(owner) = named else {
@@ -19297,16 +19367,16 @@ impl Emitter<'_> {
         said
     }
 
-    fn how_many_the_one_method_takes(&self, what: &Type) -> Option<usize> {
+    fn functional_interface_arity(&self, what: &Type) -> Option<usize> {
         let Type::Object(named, _) = what else {
             return None;
         };
-        self.the_one_method_of(named, 1)
+        self.single_abstract_method(named, 1)
             .ok()
             .map(|found| found.parameters.len())
     }
 
-    fn the_one_method_of(&self, named: &str, line: u32) -> Result<Signature, Diagnostic> {
+    fn single_abstract_method(&self, named: &str, line: u32) -> Result<Signature, Diagnostic> {
         let an_interface = match self.classpath.get(named) {
             Some(known) => known.interface,
             None => BUILT_IN_INTERFACES.contains(&named),
@@ -19582,7 +19652,7 @@ impl Emitter<'_> {
             filling.push(fill(OUTER, line));
         }
         for local in &captured {
-            let Some(written) = written_for(&local.what) else {
+            let Some(written) = written_type_of(&local.what) else {
                 return Err(at(
                     "EJ249",
                     line,
@@ -19599,7 +19669,7 @@ impl Emitter<'_> {
             filling.push(fill(&local.name, line));
         }
         for (name, what) in &copied {
-            let Some(written) = written_for(what) else {
+            let Some(written) = written_type_of(what) else {
                 return Err(at(
                     "EJ249",
                     line,
@@ -19617,7 +19687,7 @@ impl Emitter<'_> {
 
         let mut chain = Vec::new();
         for (position, one) in given.iter().enumerate() {
-            let Some(written) = written_for(one) else {
+            let Some(written) = written_type_of(one) else {
                 return Err(at(
                     "EJ248",
                     line,
@@ -19633,7 +19703,7 @@ impl Emitter<'_> {
             chain.push(Expression::Name(argument));
         }
 
-        let constructor_body = filled_before_the_chain(
+        let constructor_body = insert_before_constructor_chain(
             vec![Positioned {
                 node: Statement::Chain {
                     to_super: true,
@@ -19717,7 +19787,7 @@ impl Emitter<'_> {
             held.static_imports = self.unit.static_imports.clone();
             held.source = self.unit.source.clone();
             if own && held.shape == Shape::Class && !held.modifiers.static_ {
-                held = belonging_to_an_instance(held, &name, &self.unit.package);
+                held = attach_enclosing_instance(held, &name, &self.unit.package);
             }
             self.made.push(held);
         }
@@ -19735,7 +19805,7 @@ impl Emitter<'_> {
         if let Some(enclosing) = &outer {
             let held = Type::Object(enclosing.clone(), Vec::new());
             if through_the_one_around {
-                self.reach_the_enclosing_instance(enclosing)?;
+                self.load_enclosing_instance(enclosing)?;
             } else {
                 self.load(0, &held);
             }
@@ -19763,7 +19833,7 @@ impl Emitter<'_> {
             if !found.is_reference() {
                 self.convert(&found, want, line)?;
             } else if let (Type::Object(had, _), Type::Object(wanted, _)) = (&found, want) {
-                if had != wanted && !self.reaches(&found, want) {
+                if had != wanted && !self.is_subtype(&found, want) {
                     let index = self.pool.class(wanted);
                     self.op2(0xc0, index);
                     self.pops(1);
@@ -19884,7 +19954,7 @@ impl Emitter<'_> {
             filling.push(fill(OUTER));
         }
         for local in &captured {
-            let Some(written) = written_for(&local.what) else {
+            let Some(written) = written_type_of(&local.what) else {
                 return Err(at(
                     "EJ249",
                     line,
@@ -19960,7 +20030,9 @@ impl Emitter<'_> {
             method.parameters = taken;
             let body = method.body.take().unwrap_or_default();
             let handed_on: Vec<String> = parameters.iter().map(|(_, name)| name.clone()).collect();
-            method.body = Some(filled_before_the_chain(body, &filling, &handed_on, line));
+            method.body = Some(insert_before_constructor_chain(
+                body, &filling, &handed_on, line,
+            ));
         }
 
         self.made.push(made);
@@ -19986,7 +20058,7 @@ impl Emitter<'_> {
         Ok(())
     }
 
-    fn the_whole_pattern(
+    fn lower_pattern_test(
         &mut self,
         on: &Expression,
         pattern: &Pattern,
@@ -20012,7 +20084,7 @@ impl Emitter<'_> {
                 format!("A {} has no components to take apart.", target.readable()),
             ));
         };
-        let components = self.what_a_record_holds(&class, line)?;
+        let components = self.record_components(&class, line)?;
         if components.len() != pattern.parts.len() {
             return Err(at(
                 "EJ208",
@@ -20036,7 +20108,7 @@ impl Emitter<'_> {
             };
 
             let inside = if part.taken {
-                self.the_whole_pattern(&reach, part, line)?
+                self.lower_pattern_test(&reach, part, line)?
             } else {
                 let wanted = match part.what {
                     Written::Inferred => declared.clone(),
@@ -20056,7 +20128,9 @@ impl Emitter<'_> {
                     Expression::Bind {
                         name: part.name.clone(),
                         what: match part.what {
-                            Written::Inferred => written_for(declared).unwrap_or(Written::Inferred),
+                            Written::Inferred => {
+                                written_type_of(declared).unwrap_or(Written::Inferred)
+                            }
                             ref other => other.clone(),
                         },
                         value: Box::new(reach),
@@ -20072,11 +20146,7 @@ impl Emitter<'_> {
         Ok(held)
     }
 
-    fn what_a_record_holds(
-        &self,
-        class: &str,
-        line: u32,
-    ) -> Result<Vec<(String, Type)>, Diagnostic> {
+    fn record_components(&self, class: &str, line: u32) -> Result<Vec<(String, Type)>, Diagnostic> {
         let Some(known) = self.classpath.get(class) else {
             return Err(at(
                 "EJ208",
@@ -20341,7 +20411,7 @@ impl Emitter<'_> {
             Some(found) if *found != object => Some(found.clone()),
             _ => self
                 .classpath
-                .seen_from(&class, &arguments, "java/lang/Iterable")
+                .type_arguments_seen_from(&class, &arguments, "java/lang/Iterable")
                 .into_iter()
                 .next()
                 .filter(|found| *found != object),
@@ -20374,7 +20444,7 @@ impl Emitter<'_> {
         };
 
         let top = self.code.len();
-        self.a_branch_lands_here();
+        self.mark_branch_target();
         self.load(held, &iterator.returns);
         self.call_signature(&has_next, line);
         self.pops(1);
@@ -20422,16 +20492,16 @@ impl Emitter<'_> {
         self.close();
 
         for pending in level.continues {
-            self.land(pending);
+            self.bind_jump(pending);
         }
-        self.a_branch_lands_here();
+        self.mark_branch_target();
         self.jump_back(0xa7, top);
-        self.land(out);
+        self.bind_jump(out);
         for pending in level.breaks {
-            self.land(pending);
+            self.bind_jump(pending);
         }
         self.close();
-        self.a_branch_lands_here();
+        self.mark_branch_target();
         Ok(())
     }
 
@@ -20478,7 +20548,7 @@ impl Emitter<'_> {
             self.load(0, &Type::Object(self.this_class.clone(), Vec::new()));
             return Ok(wanted);
         }
-        let around = self.the_classes_around();
+        let around = self.enclosing_classes();
         if !around.contains(&named) {
             return Err(at(
                 "EJ252",
@@ -20497,7 +20567,7 @@ impl Emitter<'_> {
                 },
             ));
         }
-        self.reach_the_enclosing_instance(&named)?;
+        self.load_enclosing_instance(&named)?;
         Ok(wanted)
     }
 
@@ -20603,7 +20673,7 @@ impl Emitter<'_> {
         self.store(at, &Type::Int);
 
         let top = self.code.len();
-        self.a_branch_lands_here();
+        self.mark_branch_target();
         self.load(at, &Type::Int);
         self.load(how_many, &Type::Int);
         self.pops(2);
@@ -20618,8 +20688,8 @@ impl Emitter<'_> {
 
         self.bump_local(at, 1);
         self.jump_back(0xa7, top);
-        self.land(out);
-        self.a_branch_lands_here();
+        self.bind_jump(out);
+        self.mark_branch_target();
 
         self.load(made, whole);
         self.close();
@@ -20641,7 +20711,7 @@ impl Emitter<'_> {
             ));
         };
 
-        let of = written_for(&element).ok_or_else(|| {
+        let of = written_type_of(&element).ok_or_else(|| {
             at(
                 "EJ121",
                 line,
@@ -20665,7 +20735,7 @@ impl Emitter<'_> {
                 other => self.value_for(other, &element, line)?,
             };
 
-            if !self.fit(&found, &element, line)? {
+            if !self.check_assignment(&found, &element, line)? {
                 return Err(at(
                     "EJ121",
                     line,
@@ -20748,15 +20818,15 @@ impl Dispatch {
             } => {
                 for (pending, arm) in waiting {
                     let to = targets.get(arm).copied().unwrap_or(default_at);
-                    emitter.land_at(pending, to);
+                    emitter.bind_jump_at(pending, to);
                 }
-                emitter.land_at(fallthrough, default_at);
+                emitter.bind_jump_at(fallthrough, default_at);
             }
         }
     }
 }
 
-fn held_as(what: &Written, value: Expression) -> Option<Expression> {
+fn coerce_constant(what: &Written, value: Expression) -> Option<Expression> {
     let whole = match &value {
         Expression::Int(held) => Some(*held),
         Expression::Char(held) => Some(i64::from(*held)),
@@ -20828,7 +20898,7 @@ fn constant_within(
                 .value
                 .as_ref()
                 .and_then(|value| constant_within(classpath, unit, value, depth + 1))
-                .and_then(|found| held_as(&field.what, found)),
+                .and_then(|found| coerce_constant(&field.what, found)),
         )
     };
     fold_constant(expression, &mut |named| match named {
@@ -20887,7 +20957,7 @@ fn fold_constant(
     expression: &Expression,
     look: &mut dyn FnMut(&Expression) -> Option<Expression>,
 ) -> Option<Expression> {
-    fn whole(expression: &Expression) -> Option<i64> {
+    fn integer_constant_of(expression: &Expression) -> Option<i64> {
         match expression {
             Expression::Int(value) => Some(*value),
             Expression::Char(value) => Some(i64::from(*value)),
@@ -20897,10 +20967,10 @@ fn fold_constant(
     fn wide(expression: &Expression) -> Option<i64> {
         match expression {
             Expression::Long(value) => Some(*value),
-            other => whole(other),
+            other => integer_constant_of(other),
         }
     }
-    fn spoken(expression: &Expression) -> Option<String> {
+    fn constant_as_text(expression: &Expression) -> Option<String> {
         Some(match expression {
             Expression::Str(text) => text.clone(),
             Expression::Int(value) | Expression::Long(value) => value.to_string(),
@@ -20952,9 +21022,9 @@ fn fold_constant(
                 (Unary::Negate, Expression::Long(value)) => Expression::Long(value.wrapping_neg()),
                 (Unary::Complement, Expression::Long(value)) => Expression::Long(!value),
                 (Unary::Plus, Expression::Long(value)) => Expression::Long(value),
-                (Unary::Negate, other) => narrow(whole(&other)?.wrapping_neg()),
-                (Unary::Complement, other) => narrow(!whole(&other)?),
-                (Unary::Plus, other) => narrow(whole(&other)?),
+                (Unary::Negate, other) => narrow(integer_constant_of(&other)?.wrapping_neg()),
+                (Unary::Complement, other) => narrow(!integer_constant_of(&other)?),
+                (Unary::Plus, other) => narrow(integer_constant_of(&other)?),
             }
         }
         Expression::Conditional {
@@ -20995,7 +21065,9 @@ fn fold_constant(
                 if *operator != Binary::Add {
                     return None;
                 }
-                return Some(Expression::Str(spoken(&left)? + &spoken(&right)?));
+                return Some(Expression::Str(
+                    constant_as_text(&left)? + &constant_as_text(&right)?,
+                ));
             }
             let long = matches!(left, Expression::Long(_)) || matches!(right, Expression::Long(_));
             let (one, two) = (wide(&left)?, wide(&right)?);
@@ -21114,15 +21186,14 @@ fn as_a_written_type(expression: &Expression) -> Option<Written> {
     Some(Written::Named(dotted(expression)?, Vec::new()))
 }
 
-fn kept_at_runtime(unit: &Unit) -> bool {
+fn has_runtime_retention(unit: &Unit) -> bool {
     if !unit.annotation {
         return false;
     }
     unit.annotations.iter().any(|held| {
         held.name.rsplit('.').next() == Some("Retention")
             && held.values.iter().any(|(_, value)| {
-                written_as_a_path(value)
-                    .is_some_and(|path| path.rsplit('.').next() == Some("RUNTIME"))
+                dotted_path_of(value).is_some_and(|path| path.rsplit('.').next() == Some("RUNTIME"))
             })
     })
 }
@@ -21144,14 +21215,10 @@ fn with_what_the_arguments_say(
     given: &[Type],
     going: Option<&Type>,
 ) -> Signature {
-    if signature
-        .taken_stands_for
-        .iter()
-        .all(Standing::says_nothing)
-    {
+    if signature.taken_stands_for.iter().all(Standing::is_fixed) {
         return signature.clone();
     }
-    let bound = what_the_call_says(signature, given, going);
+    let bound = infer_call_type_arguments(signature, given, going);
     if bound.is_empty() {
         return signature.clone();
     }
@@ -21160,12 +21227,12 @@ fn with_what_the_arguments_say(
         let Some(shape) = signature.taken_stands_for.get(at) else {
             continue;
         };
-        *one = shape.filled(one, held, &bound);
+        *one = shape.substitute_type_variables(one, held, &bound);
     }
     shaped
 }
 
-fn what_the_call_says(
+fn infer_call_type_arguments(
     signature: &Signature,
     given: &[Type],
     going: Option<&Type>,
@@ -21214,24 +21281,31 @@ fn as_written(signature: &Signature, held: &[Type]) -> Signature {
         && (signature
             .taken_stands_for
             .iter()
-            .any(Standing::mentions_the_class)
-            || signature.returns_stands_for.mentions_the_class())
+            .any(Standing::references_class_type_parameter)
+            || signature
+                .returns_stands_for
+                .references_class_type_parameter())
     {
         let mut shaped = signature.clone();
         for (at, one) in shaped.parameters.iter_mut().enumerate() {
             let Some(shape) = signature.taken_stands_for.get(at) else {
                 continue;
             };
-            if !shape.mentions_the_class() {
+            if !shape.references_class_type_parameter() {
                 continue;
             }
-            *one = shape.filled(one, held, &[]);
+            *one = shape.substitute_type_variables(one, held, &[]);
         }
 
-        if signature.returns_stands_for.mentions_the_class() {
-            shaped.returns = signature
-                .returns_stands_for
-                .filled(&signature.returns, held, &[]);
+        if signature
+            .returns_stands_for
+            .references_class_type_parameter()
+        {
+            shaped.returns = signature.returns_stands_for.substitute_type_variables(
+                &signature.returns,
+                held,
+                &[],
+            );
         }
         return shaped;
     }
@@ -21369,7 +21443,7 @@ fn exactness(from: &Type, to: &Type, name: &str) -> Option<Option<Expression>> {
         arguments: vec![Expression::Name(name.to_string())],
         held: Vec::new(),
     };
-    let narrow = |to: &Type| written_for(to).unwrap_or(Written::Int);
+    let narrow = |to: &Type| written_type_of(to).unwrap_or(Written::Int);
     match (from, to) {
         (Boolean, _) | (_, Boolean) => return None,
         (Byte, Short | Int | Long | Float | Double)
@@ -21549,10 +21623,10 @@ fn boxed_name(what: &Type) -> Option<&'static str> {
     })
 }
 
-fn reached_the_same_way_twice(expression: &Expression) -> bool {
+fn is_side_effect_free_target(expression: &Expression) -> bool {
     match expression {
         Expression::This | Expression::Name(_) | Expression::Int(_) => true,
-        Expression::Field { of, .. } => reached_the_same_way_twice(of),
+        Expression::Field { of, .. } => is_side_effect_free_target(of),
         _ => false,
     }
 }
@@ -21674,7 +21748,7 @@ enum Gives {
     Either,
 }
 
-fn what_a_lambda_gives(body: &[Positioned<Statement>], expression: bool) -> Gives {
+fn lambda_result_kind(body: &[Positioned<Statement>], expression: bool) -> Gives {
     fn returns_in(statement: &Statement, bare: &mut bool, valued: &mut bool) {
         let all = |held: &[Positioned<Statement>], bare: &mut bool, valued: &mut bool| {
             for one in held {
@@ -21739,14 +21813,18 @@ fn what_a_lambda_gives(body: &[Positioned<Statement>], expression: bool) -> Give
     match (bare, valued) {
         (true, _) => Gives::Nothing,
         (false, true) => Gives::Something,
-        (false, false) if body.last().is_some_and(|one| never_completes(&one.node)) => {
+        (false, false)
+            if body
+                .last()
+                .is_some_and(|one| cannot_complete_normally(&one.node)) =>
+        {
             Gives::Either
         }
         (false, false) => Gives::Nothing,
     }
 }
 
-fn how_loosely(arguments: &[Expression]) -> Vec<Loosely> {
+fn argument_flexibility(arguments: &[Expression]) -> Vec<Loosely> {
     arguments
         .iter()
         .map(|one| match one {
@@ -21755,7 +21833,7 @@ fn how_loosely(arguments: &[Expression]) -> Vec<Loosely> {
                 body,
                 expression,
                 ..
-            } => Loosely::Shaped(parameters.len(), what_a_lambda_gives(body, *expression)),
+            } => Loosely::Shaped(parameters.len(), lambda_result_kind(body, *expression)),
 
             Expression::MethodRef { .. } => Loosely::Anywhere(Vec::new()),
             Expression::Null => Loosely::AnyReference,
@@ -21764,11 +21842,11 @@ fn how_loosely(arguments: &[Expression]) -> Vec<Loosely> {
         .collect()
 }
 
-fn how_far(have: &Type, want: &Type) -> u32 {
+fn conversion_distance(have: &Type, want: &Type) -> u32 {
     if have == want {
         return 0;
     }
-    if let (Some(from), Some(to)) = (how_wide(have), how_wide(want)) {
+    if let (Some(from), Some(to)) = (primitive_width(have), primitive_width(want)) {
         return to.saturating_sub(from);
     }
     match want {
@@ -21777,7 +21855,7 @@ fn how_far(have: &Type, want: &Type) -> u32 {
     }
 }
 
-fn how_wide(what: &Type) -> Option<u32> {
+fn primitive_width(what: &Type) -> Option<u32> {
     Some(match what {
         Type::Byte => 1,
         Type::Short | Type::Char => 2,
@@ -21838,16 +21916,16 @@ fn folded_constant(field: &Field, what: &Type, pool: &mut Pool) -> Option<u16> {
     }
 }
 
-fn says_more_than_the_descriptor(what: &Written) -> bool {
+fn needs_generic_signature(what: &Written) -> bool {
     match what {
         Written::Variable(_, _) | Written::OwnVariable(_, _) => true,
-        Written::Array(of) => says_more_than_the_descriptor(of),
+        Written::Array(of) => needs_generic_signature(of),
         Written::Named(_, held) => !held.is_empty(),
         _ => false,
     }
 }
 
-fn written_as_a_signature(
+fn signature_of_written(
     what: &Written,
     classpath: &Classpath,
     unit: &Unit,
@@ -21868,13 +21946,13 @@ fn written_as_a_signature(
         Written::Array(of) => {
             format!(
                 "[{}",
-                written_as_a_signature(of, classpath, unit, of_the_class, of_the_method)?
+                signature_of_written(of, classpath, unit, of_the_class, of_the_method)?
             )
         }
         Written::Variable(at, bound) => match of_the_class.get(*at) {
             Some(name) => format!("T{name};"),
 
-            None => written_as_a_signature(bound, classpath, unit, of_the_class, of_the_method)?,
+            None => signature_of_written(bound, classpath, unit, of_the_class, of_the_method)?,
         },
         Written::OwnVariable(name, _) => format!("T{name};"),
 
@@ -21890,7 +21968,7 @@ fn written_as_a_signature(
             } else {
                 let mut inside = String::new();
                 for one in held {
-                    inside.push_str(&written_as_a_signature(
+                    inside.push_str(&signature_of_written(
                         one,
                         classpath,
                         unit,
@@ -21904,7 +21982,7 @@ fn written_as_a_signature(
     })
 }
 
-fn what_it_holds_open(
+fn type_parameters_signature(
     held: &[(String, Written)],
     classpath: &Classpath,
     unit: &Unit,
@@ -21927,7 +22005,7 @@ fn what_it_holds_open(
                 out.push(':');
             }
         }
-        out.push_str(&written_as_a_signature(
+        out.push_str(&signature_of_written(
             bound,
             classpath,
             unit,
@@ -21945,11 +22023,11 @@ fn class_signature(classpath: &Classpath, unit: &Unit) -> Option<String> {
         .iter()
         .map(|(name, _)| name.clone())
         .collect();
-    let generic_above = unit.above.iter().any(says_more_than_the_descriptor);
+    let generic_above = unit.above.iter().any(needs_generic_signature);
     if named.is_empty() && !generic_above {
         return None;
     }
-    let mut out = what_it_holds_open(&unit.own_variables, classpath, unit, &named, &[])?;
+    let mut out = type_parameters_signature(&unit.own_variables, classpath, unit, &named, &[])?;
 
     let above_by_name = |written: &String| -> Option<&Written> {
         unit.above.iter().find(|one| match one {
@@ -21962,7 +22040,7 @@ fn class_signature(classpath: &Classpath, unit: &Unit) -> Option<String> {
             let written = above_by_name(named_above);
             match written {
                 Some(one) => {
-                    out.push_str(&written_as_a_signature(one, classpath, unit, &named, &[])?)
+                    out.push_str(&signature_of_written(one, classpath, unit, &named, &[])?)
                 }
                 None => out.push_str(&format!(
                     "L{};",
@@ -21975,7 +22053,7 @@ fn class_signature(classpath: &Classpath, unit: &Unit) -> Option<String> {
     }
     for one in &unit.implements {
         match above_by_name(one) {
-            Some(written) => out.push_str(&written_as_a_signature(
+            Some(written) => out.push_str(&signature_of_written(
                 written,
                 classpath,
                 unit,
@@ -21995,11 +22073,11 @@ fn method_signature(classpath: &Classpath, unit: &Unit, method: &Method) -> Opti
         .map(|(name, _)| name.clone())
         .collect();
     let generic = !method.own_variables.is_empty()
-        || says_more_than_the_descriptor(&method.returns)
+        || needs_generic_signature(&method.returns)
         || method
             .parameters
             .iter()
-            .any(|(what, _)| says_more_than_the_descriptor(what));
+            .any(|(what, _)| needs_generic_signature(what));
     if !generic {
         return None;
     }
@@ -22016,10 +22094,11 @@ fn method_signature(classpath: &Classpath, unit: &Unit, method: &Method) -> Opti
             )
         })
         .collect();
-    let mut out = what_it_holds_open(&mine, classpath, unit, &of_the_class, &method.own_variables)?;
+    let mut out =
+        type_parameters_signature(&mine, classpath, unit, &of_the_class, &method.own_variables)?;
     out.push('(');
     for (what, _) in &method.parameters {
-        out.push_str(&written_as_a_signature(
+        out.push_str(&signature_of_written(
             what,
             classpath,
             unit,
@@ -22028,7 +22107,7 @@ fn method_signature(classpath: &Classpath, unit: &Unit, method: &Method) -> Opti
         )?);
     }
     out.push(')');
-    out.push_str(&written_as_a_signature(
+    out.push_str(&signature_of_written(
         &method.returns,
         classpath,
         unit,
@@ -22209,7 +22288,7 @@ fn annotation_value(
                 out.extend_from_slice(&pool.integer(value).to_be_bytes());
                 return Some(out);
             }
-            let path = written_as_a_path(other)?;
+            let path = dotted_path_of(other)?;
             let (before, last) = path.rsplit_once('.')?;
             let owner = resolve_named(classpath, unit, before)?;
             out.push(b'e');
@@ -22258,7 +22337,7 @@ fn supers_reached_from_lambdas(
     });
 }
 
-fn reaching_up_for_lambdas(unit: &Unit, classpath: &Classpath) -> Vec<Method> {
+fn super_accessors_for_lambdas(unit: &Unit, classpath: &Classpath) -> Vec<Method> {
     if unit.stands_for_a_lambda || unit.shape == Shape::Interface {
         return Vec::new();
     }
@@ -22325,7 +22404,7 @@ fn reaching_up_for_lambdas(unit: &Unit, classpath: &Classpath) -> Vec<Method> {
                     .parameters
                     .iter()
                     .enumerate()
-                    .map(|(at, what)| written_for(what).map(|one| (one, format!("$p{at}"))))
+                    .map(|(at, what)| written_type_of(what).map(|one| (one, format!("$p{at}"))))
                     .collect();
                 let Some(parameters) = parameters else {
                     continue;
@@ -22333,7 +22412,7 @@ fn reaching_up_for_lambdas(unit: &Unit, classpath: &Classpath) -> Vec<Method> {
                 let returns = if found.returns == Type::Void {
                     Written::Void
                 } else {
-                    let Some(one) = written_for(&found.returns) else {
+                    let Some(one) = written_type_of(&found.returns) else {
                         continue;
                     };
                     one
@@ -22437,7 +22516,8 @@ fn bridges_for(unit: &Unit, classpath: &Classpath) -> Vec<Method> {
             let Some(known) = classpath.get(owner) else {
                 continue;
             };
-            let seen = classpath.seen_from_within(&unit.internal_name(), &[], owner, 0);
+            let seen =
+                classpath.type_arguments_seen_from_within(&unit.internal_name(), &[], owner, 0);
             for candidate in &known.methods {
                 if candidate.name != method.name
                     || candidate.static_
@@ -22457,7 +22537,9 @@ fn bridges_for(unit: &Unit, classpath: &Classpath) -> Vec<Method> {
                     Some(Standing::OfTheMethod(_)) => true,
                     Some(standing @ (Standing::OfTheClass(_) | Standing::ArrayOf(_))) => {
                         match &seen {
-                            Some(arguments) => standing.filled(theirs, arguments, &[]) == *ours,
+                            Some(arguments) => {
+                                standing.substitute_type_variables(theirs, arguments, &[]) == *ours
+                            }
                             None => true,
                         }
                     }
@@ -22483,7 +22565,7 @@ fn bridges_for(unit: &Unit, classpath: &Classpath) -> Vec<Method> {
                     .parameters
                     .iter()
                     .enumerate()
-                    .filter_map(|(at, one)| Some((written_for(one)?, format!("$bridge{at}"))))
+                    .filter_map(|(at, one)| Some((written_type_of(one)?, format!("$bridge{at}"))))
                     .collect();
                 if shape.len() != parameters.len() {
                     continue;
@@ -22530,7 +22612,7 @@ fn bridges_for(unit: &Unit, classpath: &Classpath) -> Vec<Method> {
                         public: true,
                         ..Modifiers::default()
                     },
-                    returns: match written_for(&candidate.returns) {
+                    returns: match written_type_of(&candidate.returns) {
                         Some(found) => found,
                         None => Written::Void,
                     },
@@ -22572,7 +22654,7 @@ fn method_shape(unit: &Unit, method: &Method) -> u16 {
     flags
 }
 
-fn everything_abstract_is_implemented(
+fn check_abstract_methods_implemented(
     unit: &Unit,
     superclass: &str,
     interfaces: &[String],
@@ -22692,7 +22774,7 @@ pub fn compile_unit_in_nest(
     nest: &[String],
 ) -> Result<(Vec<u8>, Vec<Unit>), Diagnostic> {
     let held;
-    let unit = if holds_an_assert(unit) {
+    let unit = if contains_assert(unit) {
         held = with_the_assertion_flag(unit);
         &held
     } else {
@@ -22735,7 +22817,7 @@ pub fn compile_unit_in_nest(
     }
 
     if unit.shape == Shape::Class && !unit.modifiers.abstract_ {
-        everything_abstract_is_implemented(unit, &superclass, &interfaces, classpath)?;
+        check_abstract_methods_implemented(unit, &superclass, &interfaces, classpath)?;
     }
 
     let mut field_bytes = Vec::new();
@@ -22762,8 +22844,8 @@ pub fn compile_unit_in_nest(
 
         let constant = folded_constant(field, &what, &mut pool)
             .map(|index| (pool.utf8("ConstantValue"), index));
-        let signature = says_more_than_the_descriptor(&field.what)
-            .then(|| written_as_a_signature(&field.what, classpath, unit, &of_the_class, &[]))
+        let signature = needs_generic_signature(&field.what)
+            .then(|| signature_of_written(&field.what, classpath, unit, &of_the_class, &[]))
             .flatten()
             .map(|written| {
                 let index = pool.utf8(&written);
@@ -22885,7 +22967,7 @@ pub fn compile_unit_in_nest(
     }
 
     methods.extend(bridges_for(unit, classpath));
-    methods.extend(reaching_up_for_lambdas(unit, classpath));
+    methods.extend(super_accessors_for_lambdas(unit, classpath));
 
     let code_name = pool.utf8("Code");
     let mut method_bytes = Vec::new();
@@ -23027,7 +23109,7 @@ pub fn compile_unit_in_nest(
             emitter.early = true;
             for statement in prologue {
                 emitter.statement(statement)?;
-                emitter.too_early_at(statement.line)?;
+                emitter.report_early_reference(statement.line)?;
             }
             let chained = match body.first().map(|one| &one.node) {
                 Some(Statement::Chain {
@@ -23041,7 +23123,7 @@ pub fn compile_unit_in_nest(
                         this_class.clone()
                     };
                     emitter.chain_to(&owner, arguments, line)?;
-                    emitter.too_early_at(line)?;
+                    emitter.report_early_reference(line)?;
                     body = &body[1..];
                     Some(*to_super)
                 }
@@ -23072,7 +23154,8 @@ pub fn compile_unit_in_nest(
             emitter.statement(statement)?;
         }
 
-        let ends_returned = !emitter.reachable || body.iter().any(|one| never_completes(&one.node));
+        let ends_returned =
+            !emitter.reachable || body.iter().any(|one| cannot_complete_normally(&one.node));
         let _ = &instance_setup;
         if returns == Type::Void {
             if !ends_returned {
@@ -23392,7 +23475,7 @@ pub fn compile(source: &str, classpath: &Classpath) -> Result<Vec<(String, Vec<u
 
 type Declared = (Vec<(String, Unit)>, Classpath);
 
-pub fn declared_beside(
+pub fn parse_sources_with_classpath(
     sources: &[(String, String)],
     classpath: &Classpath,
 ) -> (Vec<Unit>, Classpath) {
@@ -23492,11 +23575,11 @@ fn units_declared(declared: Vec<(String, Unit)>, classpath: &Classpath) -> Decla
     (declared, together)
 }
 
-pub fn units_seen_together(declared: Vec<(String, Unit)>, classpath: &Classpath) -> Classpath {
+pub fn classpath_with_units(declared: Vec<(String, Unit)>, classpath: &Classpath) -> Classpath {
     units_declared(declared, classpath).1
 }
 
-pub fn declared_together(
+pub fn classpath_including_sources(
     sources: &[(String, String)],
     classpath: &Classpath,
 ) -> Result<Classpath, Diagnostic> {
@@ -23684,7 +23767,7 @@ impl JavaCompiler {
                 continue;
             }
             let class = crate::jvm::read(&bytes)?;
-            classpath.learn(&class)?;
+            classpath.register_class(&class)?;
         }
         Ok(classpath)
     }
@@ -23759,7 +23842,7 @@ impl Compiler for JavaCompiler {
             let produced = compile(&text, &classpath)
                 .map_err(|error| error.with_context(format!("File: {}", source.path)))?;
             for (name, class) in produced {
-                session.offer(name, Kind::JvmClass, class)?;
+                session.add_input(name, Kind::JvmClass, class)?;
             }
         }
 

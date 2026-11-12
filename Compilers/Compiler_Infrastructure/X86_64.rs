@@ -33305,8 +33305,8 @@ pub mod codegen {
                 let source = instruction.arguments[0];
                 let from = function.value_types[source.index()];
                 let to = function.value_types[result.index()];
-                if !holds_in_register(from)
-                    || !holds_in_register(to)
+                if !uses_general_register(from)
+                    || !uses_general_register(to)
                     || folds.contains_key(&source)
                     || folds.contains_key(&result)
                     || indexed.contains_key(&source)
@@ -33340,14 +33340,14 @@ pub mod codegen {
         )
     }
 
-    fn holds_in_register(ty: Type) -> bool {
+    fn uses_general_register(ty: Type) -> bool {
         match ty {
             Type::Scalar(scalar) => !scalar.is_float() && scalar != Scalar::I128,
             Type::Vector { .. } => false,
         }
     }
 
-    fn holds_in_float(ty: Type) -> bool {
+    fn uses_float_register(ty: Type) -> bool {
         matches!(ty, Type::Scalar(scalar) if scalar.is_float())
     }
 
@@ -33399,7 +33399,7 @@ pub mod codegen {
         bits[index / 64] & (1u64 << (index % 64)) != 0
     }
 
-    fn leaves_extra_registers_alone(operation: &Operation) -> bool {
+    fn preserves_scratch_registers(operation: &Operation) -> bool {
         match operation {
             Operation::IntegerConstant(_)
             | Operation::Null
@@ -33702,7 +33702,7 @@ pub mod codegen {
                 };
                 if aliases.contains_key(&result)
                     || instruction.arguments.is_empty()
-                    || !holds_in_register(function.value_types[result.index()])
+                    || !uses_general_register(function.value_types[result.index()])
                 {
                     continue;
                 }
@@ -33773,7 +33773,7 @@ pub mod codegen {
                     true
                 }
             });
-            if !holds_in_register(function.value_types[value]) {
+            if !uses_general_register(function.value_types[value]) {
                 continue;
             }
             let reuse = tied[value].iter().flatten().find_map(|source| {
@@ -33818,7 +33818,7 @@ pub mod codegen {
                         if let Some(result) = instruction.result {
                             defined_by_call[result.index()] = true;
                         }
-                    } else if !leaves_extra_registers_alone(&instruction.operation) {
+                    } else if !preserves_scratch_registers(&instruction.operation) {
                         unsafe_positions.push(at);
                     }
                 }
@@ -33832,7 +33832,7 @@ pub mod codegen {
                 .copied()
                 .filter(|value| {
                     register_of[*value].is_none()
-                        && holds_in_register(function.value_types[*value])
+                        && uses_general_register(function.value_types[*value])
                         && !hard_crossed[*value]
                         && call_cost[*value] < weight[*value]
                         && !barred[*value]
@@ -33902,7 +33902,7 @@ pub mod codegen {
                         true
                     }
                 });
-                if !holds_in_float(function.value_types[value]) || crossed[value] {
+                if !uses_float_register(function.value_types[value]) || crossed[value] {
                     continue;
                 }
                 if let Some(register) = free.pop() {
@@ -34535,7 +34535,7 @@ pub mod codegen {
         }
 
         fn small_displacement(&self, value: Value, bits: u32) -> Option<i64> {
-            let Home::Constant(constant) = self.home(value) else {
+            let Home::Constant(constant) = self.location_of(value) else {
                 return None;
             };
             let wide = match bits {
@@ -34548,7 +34548,7 @@ pub mod codegen {
         }
 
         fn small_constant(&self, value: Value, limit: u64) -> Option<u64> {
-            match self.home(value) {
+            match self.location_of(value) {
                 Home::Constant(constant) if constant > 0 && constant <= limit => Some(constant),
                 _ => None,
             }
@@ -34597,7 +34597,7 @@ pub mod codegen {
             }
         }
 
-        fn home(&self, value: Value) -> Home {
+        fn location_of(&self, value: Value) -> Home {
             self.homes
                 .get(value.index())
                 .copied()
@@ -34609,7 +34609,7 @@ pub mod codegen {
         }
 
         fn stack_home(&self, value: Value) -> i64 {
-            match self.home(value) {
+            match self.location_of(value) {
                 Home::Stack(index) => Self::stack_offset(index),
                 Home::Register(_) | Home::Constant(_) | Home::Float(_) => {
                     unreachable!("only stack values have a frame offset")
@@ -34618,7 +34618,7 @@ pub mod codegen {
         }
 
         fn source(&self, value: Value, word: bool) -> Option<String> {
-            match self.home(value) {
+            match self.location_of(value) {
                 Home::Stack(index) => Some(format!("{}(%rbp)", Self::stack_offset(index))),
                 Home::Register(held) => {
                     let name = HELD_REGISTERS[held][0];
@@ -34637,7 +34637,7 @@ pub mod codegen {
         }
 
         fn load(&mut self, value: Value, register: &str) {
-            match self.home(value) {
+            match self.location_of(value) {
                 Home::Stack(index) => self.line(&format!(
                     "movq {}(%rbp), %{register}",
                     Self::stack_offset(index)
@@ -34653,7 +34653,7 @@ pub mod codegen {
         }
 
         fn store(&mut self, register: &str, value: Value) {
-            match self.home(value) {
+            match self.location_of(value) {
                 Home::Stack(index) => self.line(&format!(
                     "movq %{register}, {}(%rbp)",
                     Self::stack_offset(index)
@@ -34669,7 +34669,7 @@ pub mod codegen {
         }
 
         fn load_signed(&mut self, value: Value, register: &str, bits: u32) {
-            if let Home::Constant(constant) = self.home(value) {
+            if let Home::Constant(constant) = self.location_of(value) {
                 let extended = match bits {
                     1 => 0u64.wrapping_sub(constant & 1),
                     8 => constant as u8 as i8 as i64 as u64,
@@ -34680,7 +34680,7 @@ pub mod codegen {
                 self.constant(extended, register);
                 return;
             }
-            let source = match self.home(value) {
+            let source = match self.location_of(value) {
                 Home::Stack(index) => format!("{}(%rbp)", Self::stack_offset(index)),
                 Home::Register(held) => {
                     let names = HELD_REGISTERS[held];
@@ -34700,7 +34700,7 @@ pub mod codegen {
             };
             match bits {
                 1 => {
-                    let wide = match self.home(value) {
+                    let wide = match self.location_of(value) {
                         Home::Stack(_) => source,
                         Home::Register(held) => format!("%{}", HELD_REGISTERS[held][0]),
                         Home::Constant(_) | Home::Float(_) => {
@@ -34718,7 +34718,7 @@ pub mod codegen {
         }
 
         fn load_float(&mut self, value: Value, register: &str, ty: Type) {
-            if let Home::Float(held) = self.home(value) {
+            if let Home::Float(held) = self.location_of(value) {
                 let name = format!("xmm{}", 8 + held);
                 if name != register {
                     self.line(&format!("movaps %{name}, %{register}"));
@@ -34733,7 +34733,7 @@ pub mod codegen {
         }
 
         fn store_float(&mut self, register: &str, value: Value, ty: Type) {
-            if let Home::Float(held) = self.home(value) {
+            if let Home::Float(held) = self.location_of(value) {
                 let name = format!("xmm{}", 8 + held);
                 if name != register {
                     self.line(&format!("movaps %{register}, %{name}"));
@@ -34857,7 +34857,7 @@ pub mod codegen {
                     frame.slots.get(index).copied().unwrap_or(0),
                 ),
                 None => (
-                    match self.home(address.base) {
+                    match self.location_of(address.base) {
                         Home::Register(held) => HELD_REGISTERS[held][0].to_string(),
                         _ => {
                             self.load(address.base, "rcx");
@@ -34867,7 +34867,7 @@ pub mod codegen {
                     0,
                 ),
             };
-            let index = match self.home(address.index) {
+            let index = match self.location_of(address.index) {
                 Home::Register(held) => HELD_REGISTERS[held][0].to_string(),
                 _ => {
                     self.load(address.index, "rax");
@@ -35408,7 +35408,9 @@ pub mod codegen {
             let moves: Vec<(Home, Home)> = arguments
                 .iter()
                 .zip(parameters)
-                .map(|(argument, parameter)| (self.home(*argument), self.home(*parameter)))
+                .map(|(argument, parameter)| {
+                    (self.location_of(*argument), self.location_of(*parameter))
+                })
                 .filter(|(source, destination)| source != destination)
                 .collect();
             let Some(steps) = sequence_moves(&moves) else {
@@ -35453,7 +35455,7 @@ pub mod codegen {
                 incoming += 1;
             }
             for argument in &call.arguments {
-                match self.home(*argument) {
+                match self.location_of(*argument) {
                     Home::Stack(index) => {
                         self.line(&format!("pushq {}(%rbp)", Self::stack_offset(index)))
                     }
@@ -35475,7 +35477,7 @@ pub mod codegen {
                 incoming += 1;
             }
             for parameter in parameters.iter().take(incoming).rev() {
-                match self.home(*parameter) {
+                match self.location_of(*parameter) {
                     Home::Stack(index) => {
                         self.line(&format!("popq {}(%rbp)", Self::stack_offset(index)))
                     }
@@ -35766,7 +35768,10 @@ pub mod codegen {
             let argument_type = |at: usize| function.type_of(arguments[at]);
             match &instruction.operation {
                 Operation::IntegerConstant(value) => {
-                    if !matches!(result.map(|held| self.home(held)), Some(Home::Constant(_))) {
+                    if !matches!(
+                        result.map(|held| self.location_of(held)),
+                        Some(Home::Constant(_))
+                    ) {
                         let bits = type_bits(result_type.unwrap_or(Type::I64));
                         self.constant((*value as u64) & all_ones(bits), "rax");
                         self.store_result("rax", result);
@@ -35783,7 +35788,10 @@ pub mod codegen {
                     self.store_result("rax", result);
                 }
                 Operation::Null | Operation::Poison => {
-                    if !matches!(result.map(|held| self.home(held)), Some(Home::Constant(_))) {
+                    if !matches!(
+                        result.map(|held| self.location_of(held)),
+                        Some(Home::Constant(_))
+                    ) {
                         self.line("xorl %eax, %eax");
                         self.store_result("rax", result);
                     }
@@ -35833,7 +35841,7 @@ pub mod codegen {
                     } else {
                         ("q", "rax", "rcx")
                     };
-                    let source = match self.home(arguments[0]) {
+                    let source = match self.location_of(arguments[0]) {
                         Home::Register(held) if bits == 32 => register_32(HELD_REGISTERS[held][0]),
                         Home::Register(held) => HELD_REGISTERS[held][0].to_string(),
                         _ => {
@@ -35867,8 +35875,8 @@ pub mod codegen {
                             | Comparison::GreaterSigned
                             | Comparison::GreaterEqualSigned
                     );
-                    let swapped = matches!(self.home(arguments[0]), Home::Constant(_))
-                        && !matches!(self.home(arguments[1]), Home::Constant(_));
+                    let swapped = matches!(self.location_of(arguments[0]), Home::Constant(_))
+                        && !matches!(self.location_of(arguments[1]), Home::Constant(_));
                     let (first, second) = if swapped {
                         (arguments[1], arguments[0])
                     } else {
@@ -35908,7 +35916,7 @@ pub mod codegen {
                     } else {
                         let word = bits == 32;
                         let suffix = if word { "l" } else { "q" };
-                        let direct = match (self.home(first), self.source(second, word)) {
+                        let direct = match (self.location_of(first), self.source(second, word)) {
                             (Home::Stack(slot), Some(operand)) if !operand.contains('(') => {
                                 Some((slot, operand))
                             }
@@ -35918,7 +35926,7 @@ pub mod codegen {
                             let at = Self::stack_offset(slot);
                             self.line(&format!("cmp{suffix} {operand}, {at}(%rbp)"));
                         } else {
-                            let left = match self.home(first) {
+                            let left = match self.location_of(first) {
                                 Home::Register(held) => HELD_REGISTERS[held][0],
                                 _ => {
                                     self.load(first, "rax");
@@ -36079,11 +36087,12 @@ pub mod codegen {
                 Operation::Store { .. } if self.selection.indexed.contains_key(&arguments[1]) => {
                     let ty = argument_type(0);
                     let address = self.selection.indexed[&arguments[1]];
-                    let value_register = match self.home(arguments[0]) {
+                    let value_register = match self.location_of(arguments[0]) {
                         Home::Register(held) => Some(HELD_REGISTERS[held][0]),
                         _ => None,
                     };
-                    let index_in_register = matches!(self.home(address.index), Home::Register(_));
+                    let index_in_register =
+                        matches!(self.location_of(address.index), Home::Register(_));
                     if value_register.is_some() || index_in_register {
                         if let Some((place, displacement)) =
                             self.indexed_operand(arguments[1], frame)
@@ -36113,7 +36122,7 @@ pub mod codegen {
                 Operation::Load { .. } => {
                     let ty = result_type.unwrap_or(Type::I64);
                     let (address, displacement) = self.address_of(arguments[0], frame);
-                    let base = match address.map(|held| (held, self.home(held))) {
+                    let base = match address.map(|held| (held, self.location_of(held))) {
                         None => "rbp",
                         Some((_, Home::Register(held))) => HELD_REGISTERS[held][0],
                         Some((held, _)) => {
@@ -36131,7 +36140,7 @@ pub mod codegen {
                 }
                 Operation::Store { .. } => {
                     let ty = argument_type(0);
-                    let value = match self.home(arguments[0]) {
+                    let value = match self.location_of(arguments[0]) {
                         Home::Register(held) => HELD_REGISTERS[held][0],
                         _ => {
                             self.load(arguments[0], "rax");
@@ -36139,7 +36148,7 @@ pub mod codegen {
                         }
                     };
                     let (address, displacement) = self.address_of(arguments[1], frame);
-                    let base = match address.map(|held| (held, self.home(held))) {
+                    let base = match address.map(|held| (held, self.location_of(held))) {
                         None => "rbp",
                         Some((_, Home::Register(held))) => HELD_REGISTERS[held][0],
                         Some((held, _)) => {
@@ -36159,7 +36168,7 @@ pub mod codegen {
                     let step = self
                         .small_displacement(arguments[1], type_bits(argument_type(1)))
                         .unwrap_or(0);
-                    let base = match self.home(arguments[0]) {
+                    let base = match self.location_of(arguments[0]) {
                         Home::Register(held) => HELD_REGISTERS[held][0],
                         _ => {
                             self.load(arguments[0], "rax");
@@ -36178,13 +36187,14 @@ pub mod codegen {
                 }
                 Operation::Offset
                     if type_bits(argument_type(1)) == 64
-                        && matches!(self.home(arguments[0]), Home::Register(_))
-                        && matches!(self.home(arguments[1]), Home::Register(_))
+                        && matches!(self.location_of(arguments[0]), Home::Register(_))
+                        && matches!(self.location_of(arguments[1]), Home::Register(_))
                         && self.register_destination(result).is_some() =>
                 {
-                    let (Home::Register(base), Home::Register(index)) =
-                        (self.home(arguments[0]), self.home(arguments[1]))
-                    else {
+                    let (Home::Register(base), Home::Register(index)) = (
+                        self.location_of(arguments[0]),
+                        self.location_of(arguments[1]),
+                    ) else {
                         unreachable!("both operands were checked to be registers")
                     };
                     let destination = self.register_destination(result).unwrap_or("rax");
@@ -36530,7 +36540,7 @@ pub mod codegen {
         }
 
         fn register_destination(&self, result: Option<Value>) -> Option<&'static str> {
-            match result.map(|held| self.home(held)) {
+            match result.map(|held| self.location_of(held)) {
                 Some(Home::Register(held)) => Some(HELD_REGISTERS[held][0]),
                 _ => None,
             }
@@ -36567,33 +36577,33 @@ pub mod codegen {
                         _ => "xor",
                     };
                     let (left, right) = if op != BinaryOp::Subtract
-                        && matches!(self.home(left), Home::Constant(_))
-                        && !matches!(self.home(right), Home::Constant(_))
+                        && matches!(self.location_of(left), Home::Constant(_))
+                        && !matches!(self.location_of(right), Home::Constant(_))
                     {
                         (right, left)
                     } else {
                         (left, right)
                     };
                     let right_in_destination = matches!(
-                        self.home(right),
+                        self.location_of(right),
                         Home::Register(held) if HELD_REGISTERS[held][0] == destination
                     );
                     let (left, right) = if right_in_destination
                         && !matches!(op, BinaryOp::Subtract)
-                        && !matches!(self.home(left), Home::Register(held) if HELD_REGISTERS[held][0] == destination)
+                        && !matches!(self.location_of(left), Home::Register(held) if HELD_REGISTERS[held][0] == destination)
                     {
                         (right, left)
                     } else {
                         (left, right)
                     };
                     let wide = bits == 32 || bits == 64;
-                    let left_register = match self.home(left) {
+                    let left_register = match self.location_of(left) {
                         Home::Register(held) => Some(HELD_REGISTERS[held][0]),
                         _ => None,
                     };
                     if wide && left_register.is_some_and(|name| name != destination) {
                         let from = left_register.unwrap_or("rax");
-                        let immediate = match self.home(right) {
+                        let immediate = match self.location_of(right) {
                             Home::Constant(constant) => {
                                 let value = if word {
                                     i64::from(constant as u32 as i32)
@@ -36604,7 +36614,7 @@ pub mod codegen {
                             }
                             _ => None,
                         };
-                        let right_register = match self.home(right) {
+                        let right_register = match self.location_of(right) {
                             Home::Register(held) => Some(HELD_REGISTERS[held][0]),
                             _ => None,
                         };
@@ -36642,7 +36652,7 @@ pub mod codegen {
                     }
                     if matches!(op, BinaryOp::Multiply) && wide {
                         if let (Home::Stack(slot), Home::Constant(constant)) =
-                            (self.home(left), self.home(right))
+                            (self.location_of(left), self.location_of(right))
                         {
                             let value = if word {
                                 i64::from(constant as u32 as i32)
@@ -36682,7 +36692,7 @@ pub mod codegen {
                     };
                     if op == BinaryOp::ShiftLeft && (bits == 32 || bits == 64) {
                         if let (Home::Register(held), Home::Constant(count)) =
-                            (self.home(left), self.home(right))
+                            (self.location_of(left), self.location_of(right))
                         {
                             let amount = count & u64::from(bits - 1);
                             let from = HELD_REGISTERS[held][0];
@@ -36701,7 +36711,7 @@ pub mod codegen {
                     } else {
                         self.load(left, destination);
                     }
-                    if let Home::Constant(count) = self.home(right) {
+                    if let Home::Constant(count) = self.location_of(right) {
                         let amount = count & u64::from(bits.max(1) - 1);
                         self.line(&format!("{base}{suffix} ${amount}, %{target}"));
                     } else {
@@ -37036,7 +37046,7 @@ pub mod codegen {
                 | BinaryOp::FloatMultiply
                 | BinaryOp::FloatDivide => {
                     self.load_float(left, "xmm0", ty);
-                    let operand = match self.home(right) {
+                    let operand = match self.location_of(right) {
                         Home::Float(held) => format!("%xmm{}", 8 + held),
                         Home::Stack(index) => format!("{}(%rbp)", Self::stack_offset(index)),
                         _ => {
@@ -37288,7 +37298,7 @@ pub mod codegen {
                 }
                 Conversion::Bitcast => {
                     let size = self.layout.size_of(from).min(self.layout.size_of(to));
-                    match self.home(value) {
+                    match self.location_of(value) {
                         Home::Stack(index) => {
                             self.line(&format!("leaq {}(%rbp), %rcx", Self::stack_offset(index)))
                         }

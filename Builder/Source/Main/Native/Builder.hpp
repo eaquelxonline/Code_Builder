@@ -23,11 +23,11 @@ void code_builder_build_expect(const char *timings);
 
 void code_builder_build_stop(void);
 
-char *code_builder_speak(const char *tag);
+char *code_builder_set_language(const char *tag);
 
 char *code_builder_terminal_docs(const char *tag);
 
-char *code_builder_vibe(const char *request);
+char *code_builder_assistant_request(const char *request);
 
 char *code_builder_verify_self(const char *package_path,
                        const char *expected_certificate);
@@ -52,7 +52,7 @@ char *code_builder_project_tree(const char *root);
 
 char *code_builder_project_health(const char *root);
 
-char *code_builder_lay_out(const char *name, const char *text);
+char *code_builder_format_source(const char *name, const char *text);
 
 char *code_builder_dependencies(const char *root);
 
@@ -66,7 +66,7 @@ char *code_builder_manifest_permission(const char *root, const char *name, bool 
 
 char *code_builder_symbols(const char *root, const char *needle);
 
-char *code_builder_where_written(const char *root, const char *qualified);
+char *code_builder_find_declaration(const char *root, const char *qualified);
 
 char *code_builder_inspect_package(const char *path);
 

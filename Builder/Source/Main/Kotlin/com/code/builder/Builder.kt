@@ -294,7 +294,7 @@ class BuilderApplication : Application() {
         Glyphs.open(this)
         AppLog.install(this)
         Builder.load()
-        bindTheSharedKeyToThisDevice()
+        bindSharedKeyToDevice()
         DebuggerHost.configure(this)
         Sentry.arm(this)
     }
@@ -327,7 +327,7 @@ class BuilderApplication : Application() {
         }
     }
 
-    private fun bindTheSharedKeyToThisDevice() {
+    private fun bindSharedKeyToDevice() {
         val identifier = runCatching {
             Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         }.getOrNull().orEmpty()
@@ -625,11 +625,11 @@ object Builder {
 
     external fun nativeBuildStop()
 
-    external fun nativeSpeak(tag: String): String
+    external fun nativeSetLanguage(tag: String): String
 
     external fun nativeTerminalDocs(tag: String): String
 
-    external fun nativeVibe(request: String): String
+    external fun nativeAssistantRequest(request: String): String
 
     external fun nativeShellOpen(folder: String, home: String, rows: Int, columns: Int): Int
 
@@ -664,7 +664,7 @@ object Builder {
     external fun nativeProjectTree(root: String): String
 
 
-    external fun nativeLayOut(name: String, text: String): String
+    external fun nativeFormatSource(name: String, text: String): String
 
     external fun nativeDependencies(root: String): String
 
@@ -678,7 +678,7 @@ object Builder {
 
     external fun nativeSymbols(root: String, needle: String): String
 
-    external fun nativeWhereWritten(root: String, qualified: String): String
+    external fun nativeFindDeclaration(root: String, qualified: String): String
 
     external fun nativeInspectPackage(path: String): String
 
@@ -2292,7 +2292,7 @@ internal object Motion {
 
     private var scale = 1f
 
-    fun readWhatTheDeviceAsksFor(context: Context) {
+    fun readWhatDeviceAsksFor(context: Context) {
         scale = runCatching {
             Settings.Global.getFloat(
                 context.contentResolver,
@@ -2980,7 +2980,7 @@ internal class Mark(
         if (edge <= 0f) return
         val drawn = Glyphs.of(shape)
         if (drawn != null) {
-            paintTheArt(canvas, drawn, edge)
+            paintArt(canvas, drawn, edge)
             return
         }
         val widest = STROKE * heft + if (glow) GLOW_STEPS * GLOW_SWELL else 0f
@@ -3000,7 +3000,7 @@ internal class Mark(
         stamp(canvas, unit, widest)
     }
 
-    private fun paintTheArt(canvas: Canvas, drawn: Bitmap, edge: Float) {
+    private fun paintArt(canvas: Canvas, drawn: Bitmap, edge: Float) {
         val side = edge * (ART_SHARE + ART_HEFT * heft)
         paint.style = Paint.Style.FILL
         paint.color = colour
@@ -3009,15 +3009,15 @@ internal class Mark(
             var step = GLOW_STEPS
             while (step >= 1) {
                 paint.alpha = 44 - step * 10
-                stampTheArt(canvas, drawn, side + side * step * GLOW_SWELL / GRID)
+                stampArt(canvas, drawn, side + side * step * GLOW_SWELL / GRID)
                 step -= 1
             }
         }
         paint.alpha = bleed
-        stampTheArt(canvas, drawn, side)
+        stampArt(canvas, drawn, side)
     }
 
-    private fun stampTheArt(canvas: Canvas, drawn: Bitmap, side: Float) {
+    private fun stampArt(canvas: Canvas, drawn: Bitmap, side: Float) {
         val midX = bounds.exactCenterX()
         val midY = bounds.exactCenterY()
         spread.set(midX - side / 2f, midY - side / 2f, midX + side / 2f, midY + side / 2f)
@@ -4182,8 +4182,8 @@ class BuilderActivity : Activity() {
         super.onCreate(savedInstanceState)
         AppLog.event(LogLevel.INFO, "lifecycle", "Activity created.")
 
-        Motion.readWhatTheDeviceAsksFor(this)
-        speakTheDeviceLanguage()
+        Motion.readWhatDeviceAsksFor(this)
+        applyDeviceLanguage()
         palette = Preferences.palette(this)
         aurora = AuroraView(this, palette)
         content = LinearLayout(this).apply {
@@ -4218,12 +4218,12 @@ class BuilderActivity : Activity() {
             setBackgroundColor(Ink.fade(Color.BLACK, 0.72f))
             visibility = View.GONE
             isClickable = true
-            setOnClickListener { closeTheDrawer() }
+            setOnClickListener { closeDrawer() }
         }
 
         scroller.addOnLayoutChangeListener { _, left, _, right, _, was, _, until, _ ->
             if (right - left != until - was) {
-                fitTheColumn()
+                fitColumn()
             }
         }
 
@@ -4291,22 +4291,22 @@ class BuilderActivity : Activity() {
             addView(veil, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
         setContentView(stack)
-        fitAroundTheSystemBars(stack, roof)
-        hideTheNavigationBar()
+        fitAroundSystemBars(stack, roof)
+        hideNavigationBar()
 
         drawer.translationX = drawerAway(gap(DRAWER_DP / 4).toFloat())
         if (savedInstanceState != null) {
-            takeBackTheKeptState()
+            takeBackKeptState()
         }
         standing = examine()
         provisionSharedKey()
-        answerBackTheWayThisScreenWants()
-        fitTheColumn()
+        handleBackNavigation()
+        fitColumn()
         render(false)
-        renewTheModels()
+        renewModels()
     }
 
-    private fun hideTheNavigationBar() {
+    private fun hideNavigationBar() {
         val pale = Color.luminance(palette.background) > 0.5f
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
@@ -4334,7 +4334,7 @@ class BuilderActivity : Activity() {
                 if (pale) View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR else 0
     }
 
-    private fun fitAroundTheSystemBars(stack: View, roof: View) {
+    private fun fitAroundSystemBars(stack: View, roof: View) {
         stack.setOnApplyWindowInsetsListener { _, insets ->
             val top: Int
             val bottom: Int
@@ -4366,7 +4366,7 @@ class BuilderActivity : Activity() {
             keyboardHeight = keyboard
             barsBelow = bottom
             if (dock.visibility == View.VISIBLE) {
-                fitTheDock()
+                fitDock()
                 scroller.setPadding(0, 0, 0, 0)
             } else {
                 scroller.setPadding(0, 0, 0, keyboard)
@@ -4378,7 +4378,7 @@ class BuilderActivity : Activity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
-            hideTheNavigationBar()
+            hideNavigationBar()
         }
     }
 
@@ -4416,7 +4416,7 @@ class BuilderActivity : Activity() {
         aurora.resumeDrawing()
         if (screen is Screen.Logcat && watchWanted && !watchReading) {
             startWatching()
-            paintTheWatch()
+            paintWatch()
         }
         awaitingInstall?.let { waiting ->
             if (packageManager.canRequestPackageInstalls()) {
@@ -4444,7 +4444,7 @@ class BuilderActivity : Activity() {
         }.start()
     }
 
-    private fun keepTheDraft() {
+    private fun keepDraft() {
         val open = editor ?: return
         val (root, path) = editorAt ?: return
         val held = open.text?.toString().orEmpty()
@@ -4456,18 +4456,18 @@ class BuilderActivity : Activity() {
     override fun onPause() {
         showing = false
         hideOffers()
-        keepTheDraft()
-        pauseTheWatch()
+        keepDraft()
+        pauseWatch()
         aurora.pauseDrawing()
         super.onPause()
         AppLog.flushSession()
     }
 
     override fun onDestroy() {
-        keepTheDraft()
-        stopTheBuild()
-        pauseTheWatch()
-        closeTheShell()
+        keepDraft()
+        stopBuild()
+        pauseWatch()
+        closeShell()
         AppLog.flushSession()
         super.onDestroy()
     }
@@ -4491,8 +4491,8 @@ class BuilderActivity : Activity() {
         rememberWalk(next)
         raised = false
         screen = next
-        closeTheDrawer()
-        answerBackTheWayThisScreenWants()
+        closeDrawer()
+        handleBackNavigation()
         if (navigating) {
             return
         }
@@ -4567,7 +4567,7 @@ class BuilderActivity : Activity() {
     }
 
     private fun render(animated: Boolean) {
-        keepTheDraft()
+        keepDraft()
         hideOffers()
         hideMenus()
         hideBanner()
@@ -4587,10 +4587,10 @@ class BuilderActivity : Activity() {
         leftBox = null
         rightBox = null
         if (screen !is Screen.Logcat) {
-            pauseTheWatch()
+            pauseWatch()
         }
         if (screen !is Screen.Terminal) {
-            closeTheShell()
+            closeShell()
         }
         content.removeAllViews()
         results.removeAllViews()
@@ -4601,7 +4601,7 @@ class BuilderActivity : Activity() {
         if (screen !is Screen.Assistant) {
             scroller.setPadding(0, 0, 0, keyboardHeight)
         }
-        fitTheColumn()
+        fitColumn()
 
         when (val load = Builder.load()) {
             is Builder.LoadState.Failed -> {
@@ -4630,7 +4630,7 @@ class BuilderActivity : Activity() {
         drawCrown()
         drawFooter()
         drawRaise()
-        drawTheDrawer()
+        drawDrawer()
 
         when (val here = screen) {
             is Screen.Projects -> renderProjects()
@@ -4689,7 +4689,7 @@ class BuilderActivity : Activity() {
     private var backHere: Any? = null
     private var backRegistered = false
 
-    private fun answerBackTheWayThisScreenWants() {
+    private fun handleBackNavigation() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             return
         }
@@ -4715,7 +4715,7 @@ class BuilderActivity : Activity() {
             return
         }
         if (drawerIsOpen()) {
-            closeTheDrawer()
+            closeDrawer()
             return
         }
         when (val here = screen) {
@@ -4743,12 +4743,12 @@ class BuilderActivity : Activity() {
             is Screen.NewKey -> go(Screen.Keys)
             is Screen.Legal -> go(Screen.About)
             is Screen.Developer -> go(Screen.About)
-            is Screen.Assistant -> leaveTheAssistant()
+            is Screen.Assistant -> leaveAssistant()
             else -> go(sideCameFrom ?: Screen.Projects)
         }
     }
 
-    private fun leaveTheAssistant() {
+    private fun leaveAssistant() {
         val came = sideCameFrom
         val root = talkRoot
         when {
@@ -4761,7 +4761,7 @@ class BuilderActivity : Activity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        keepTheState()
+        keepState()
     }
 
     private fun screenWord(one: Screen): JSONObject = JSONObject().apply {
@@ -4829,7 +4829,7 @@ class BuilderActivity : Activity() {
         }
     }
 
-    private fun keepTheState() {
+    private fun keepState() {
         val kept = JSONObject()
         kept.put("screen", screenWord(screen))
         sideCameFrom?.let { kept.put("side", screenWord(it)) }
@@ -4847,7 +4847,7 @@ class BuilderActivity : Activity() {
         runCatching { File(filesDir, KEPT_STATE).writeText(kept.toString()) }
     }
 
-    private fun takeBackTheKeptState() {
+    private fun takeBackKeptState() {
         val file = File(filesDir, KEPT_STATE)
         val kept = runCatching { JSONObject(file.readText()) }.getOrNull() ?: return
         runCatching { file.delete() }
@@ -4883,8 +4883,8 @@ class BuilderActivity : Activity() {
         }
         hideMenus()
         hideOffers()
-        fitTheColumn()
-        drawTheDrawer()
+        fitColumn()
+        drawDrawer()
         render(false)
     }
 
@@ -5173,7 +5173,7 @@ class BuilderActivity : Activity() {
         val each = LinearLayout.LayoutParams(gap(10), gap(10))
         if (homeLike(here)) {
             crown.addView(
-                markControl(Mark.Shape.MENU, R.string.menu_title) { openTheDrawer() },
+                markControl(Mark.Shape.MENU, R.string.menu_title) { openDrawer() },
                 each,
             )
             val root = openProject
@@ -5224,7 +5224,7 @@ class BuilderActivity : Activity() {
             if (here is Screen.Assistant) {
                 crown.addView(
                     markControl(Mark.Shape.CHEVRON_LEFT, R.string.action_back) {
-                        leaveTheAssistant()
+                        leaveAssistant()
                     },
                     each,
                 )
@@ -5313,8 +5313,8 @@ class BuilderActivity : Activity() {
                 val opening = markControl(Mark.Shape.MORE, R.string.action_more) { }
                 opening.setOnClickListener { editorMore?.invoke(opening) }
                 crown.addView(opening, small)
-                paintTheSave()
-                paintTheSteps()
+                paintSave()
+                paintSteps()
                 return
             }
             if (here is Screen.HelpTalk) {
@@ -5354,14 +5354,14 @@ class BuilderActivity : Activity() {
         }
     }
 
-    private fun paintTheSave() {
+    private fun paintSave() {
         editorSaveMark?.foreground = Mark(
             Mark.Shape.SAVE,
             if (editorDirty) palette.warning else palette.foreground,
         )
     }
 
-    private fun paintTheSteps() {
+    private fun paintSteps() {
         val held = editor
         val backward = held?.canUndo() ?: false
         val forward = held?.canRedo() ?: false
@@ -5604,7 +5604,7 @@ class BuilderActivity : Activity() {
                 raiseAction(R.string.raise_open, Mark.Shape.FOLDER_OPEN) {
                     raised = false
                     drawRaise()
-                    askForAProjectArchive()
+                    askForProjectArchive()
                 }
             )
             raise.addView(
@@ -5944,7 +5944,7 @@ class BuilderActivity : Activity() {
     private fun wideEnough(): Boolean =
         resources.configuration.screenWidthDp >= WIDE_DP
 
-    private fun fitTheColumn() {
+    private fun fitColumn() {
         val room = scroller.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
         val most = (COLUMN_DP * resources.displayMetrics.density).toInt()
         val bleeds = screen is Screen.Files || screen is Screen.Terminal
@@ -5966,7 +5966,7 @@ class BuilderActivity : Activity() {
 
     private fun drawerAway(wide: Float): Float = if (rightToLeft()) wide else -wide
 
-    private fun openTheDrawer() {
+    private fun openDrawer() {
         if (drawerIsOpen()) {
             return
         }
@@ -5978,10 +5978,10 @@ class BuilderActivity : Activity() {
             .setDuration(Motion.of(Motion.ENTER))
             .setInterpolator(DecelerateInterpolator())
             .start()
-        answerBackTheWayThisScreenWants()
+        handleBackNavigation()
     }
 
-    private fun closeTheDrawer() {
+    private fun closeDrawer() {
         if (!drawerIsOpen()) {
             return
         }
@@ -5995,11 +5995,11 @@ class BuilderActivity : Activity() {
             .setDuration(Motion.of(Motion.LEAVE))
             .setInterpolator(AccelerateInterpolator())
             .start()
-        answerBackTheWayThisScreenWants()
+        handleBackNavigation()
     }
 
     private fun leaveFor(next: Screen) {
-        closeTheDrawer()
+        closeDrawer()
         drawer.postDelayed({ go(next) }, Motion.of(Motion.LEAVE))
     }
 
@@ -6116,7 +6116,7 @@ class BuilderActivity : Activity() {
             }
         }
 
-    private fun drawTheDrawer() {
+    private fun drawDrawer() {
         drawer.removeAllViews()
         val here = screen
         drawer.addView(drawerHeader())
@@ -7494,7 +7494,7 @@ class BuilderActivity : Activity() {
         return here.sortedWith(compareBy<FileEntry> { !it.folder }.then(within))
     }
 
-    private fun looksLikeAPicture(path: String): Boolean {
+    private fun isImageFile(path: String): Boolean {
         val lower = path.lowercase(Locale.US)
         return PICTURE_SUFFIXES.any { lower.endsWith(it) }
     }
@@ -7543,7 +7543,7 @@ class BuilderActivity : Activity() {
     ): View {
         val name = entry.path.substringAfterLast('/')
         val absolute = File(root, entry.path).absolutePath
-        val picture = !entry.folder && looksLikeAPicture(entry.path)
+        val picture = !entry.folder && isImageFile(entry.path)
 
         return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -7616,7 +7616,7 @@ class BuilderActivity : Activity() {
         val name = entry.path.lowercase(Locale.US)
         when {
             entry.folder -> go(Screen.Files(root, entry.path))
-            looksLikeAPicture(entry.path) -> go(Screen.Picture(root, entry.path))
+            isImageFile(entry.path) -> go(Screen.Picture(root, entry.path))
             PACKAGE_SUFFIXES.any { name.endsWith(it) } -> handPackage(root, entry)
             else -> {
                 editorText = ""
@@ -8217,7 +8217,7 @@ class BuilderActivity : Activity() {
         editor.requestFocus()
     }
 
-    private fun askForTheAssistantKey(vendor: Brain.Vendor) {
+    private fun askForAssistantKey(vendor: Brain.Vendor) {
         val editor = styledField("", getString(R.string.talk_key)).apply {
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
                 android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -8303,9 +8303,9 @@ class BuilderActivity : Activity() {
                         results.addView(
                             notice(getString(R.string.vibe_test_ok), palette.ok)
                         )
-                        pickTheVendor(vendor)
+                        pickVendor(vendor)
                         if (Brain.listable(vendor)) {
-                            fetchTheModels(vendor)
+                            fetchModels(vendor)
                         }
                     }
                 }
@@ -8326,7 +8326,7 @@ class BuilderActivity : Activity() {
         if (vendor.copilot) {
             askHowToReachCopilot(vendor)
         } else {
-            askForTheAssistantKey(vendor)
+            askForAssistantKey(vendor)
         }
     }
 
@@ -8347,7 +8347,7 @@ class BuilderActivity : Activity() {
                 addView(
                     subtle(getString(R.string.copilot_by_token), palette.ok) {
                         shown?.dismiss()
-                        askForTheAssistantKey(vendor)
+                        askForAssistantKey(vendor)
                     }
                 )
             },
@@ -8365,14 +8365,14 @@ class BuilderActivity : Activity() {
                     return@runOnUiThread
                 }
                 results.removeAllViews()
-                answer.fold({ coming -> showTheGitHubCode(vendor, coming) }) { why ->
+                answer.fold({ coming -> showGitHubCode(vendor, coming) }) { why ->
                     results.addView(notice(sayWhy(why), palette.error))
                 }
             }
         }.start()
     }
 
-    private fun showTheGitHubCode(vendor: Brain.Vendor, coming: Copilot.Coming) {
+    private fun showGitHubCode(vendor: Brain.Vendor, coming: Copilot.Coming) {
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, gap(1), 0, gap(2))
@@ -8492,8 +8492,8 @@ class BuilderActivity : Activity() {
                     return@runOnUiThread
                 }
                 results.addView(notice(getString(R.string.copilot_done), palette.ok))
-                pickTheVendor(vendor)
-                fetchTheModels(vendor)
+                pickVendor(vendor)
+                fetchModels(vendor)
             }
         }.start()
     }
@@ -8508,7 +8508,7 @@ class BuilderActivity : Activity() {
         else -> null
     }
 
-    private fun pickTheVendor(vendor: Brain.Vendor) {
+    private fun pickVendor(vendor: Brain.Vendor) {
         Preferences.setAssistantVendor(this, vendor.id)
         render(false)
         val (titled, said) = noticeFor(vendor) ?: return
@@ -8585,7 +8585,7 @@ class BuilderActivity : Activity() {
                     }
                     keyed -> {
                         onPicked()
-                        pickTheVendor(vendor)
+                        pickVendor(vendor)
                     }
                     else -> {
                         onPicked()
@@ -8647,7 +8647,7 @@ class BuilderActivity : Activity() {
                         )
                         readAs(Button::class.java.name)
                         setOnClickListener {
-                            forgetTheVendor(vendor)
+                            forgetVendor(vendor)
                             onGone()
                         }
                     },
@@ -8661,7 +8661,7 @@ class BuilderActivity : Activity() {
         }
     }
 
-    private fun forgetTheVendor(vendor: Brain.Vendor) {
+    private fun forgetVendor(vendor: Brain.Vendor) {
         Preferences.forgetVendorKey(this, vendor.id)
         if (vendor.copilot) {
             Copilot.forget()
@@ -8688,12 +8688,12 @@ class BuilderActivity : Activity() {
         render(false)
     }
 
-    private fun chooseTheVendor() {
+    private fun chooseVendor() {
         var shown: AlertDialog? = null
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val gone: () -> Unit = {
             shown?.dismiss()
-            chooseTheVendor()
+            chooseVendor()
         }
         val picked: () -> Unit = { shown?.dismiss() }
         list.addView(vendorRow(null, picked, gone), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
@@ -8729,7 +8729,7 @@ class BuilderActivity : Activity() {
         list.addView(
             subtle(getString(R.string.vibe_custom_add), palette.accent) {
                 shown?.dismiss()
-                showTheDisclaimer()
+                showDisclaimer()
             }
         )
         val closer = View(this).apply {
@@ -8752,7 +8752,7 @@ class BuilderActivity : Activity() {
         )
     }
 
-    private fun showTheDisclaimer() {
+    private fun showDisclaimer() {
         var accepted = false
         val points = listOf(
             R.string.vibe_disclaimer_1,
@@ -8785,7 +8785,7 @@ class BuilderActivity : Activity() {
                 getString(R.string.action_confirm) to { it: AlertDialog ->
                     if (accepted) {
                         it.dismiss()
-                        askForTheCustomVendor(JSONObject())
+                        askForCustomVendor(JSONObject())
                     } else {
                         results.removeAllViews()
                         results.addView(
@@ -8808,7 +8808,7 @@ class BuilderActivity : Activity() {
         else -> R.string.vibe_problem_accepted
     }
 
-    private fun askForTheCustomVendor(was: JSONObject) {
+    private fun askForCustomVendor(was: JSONObject) {
         val formats = listOf(
             "openai" to R.string.vibe_format_openai,
             "anthropic" to R.string.vibe_format_anthropic,
@@ -9001,7 +9001,7 @@ class BuilderActivity : Activity() {
                             }
                             it.dismiss()
                             Brain.vendorOf(this, held.optString("id"))?.let { made ->
-                                pickTheVendor(made)
+                                pickVendor(made)
                             }
                         }
                     }
@@ -9117,7 +9117,7 @@ class BuilderActivity : Activity() {
         }
 
         editorDirty = draft != null
-        paintTheSave()
+        paintSave()
         var overwrite = false
         val keep = Runnable { Drafts.write(this, root, path, editorText) }
 
@@ -9141,7 +9141,7 @@ class BuilderActivity : Activity() {
                 editorDirty = false
                 overwrite = false
                 editorOnDisk = editorText
-                paintTheSave()
+                paintSave()
                 editor.removeCallbacks(keep)
                 Drafts.forget(this, root, path)
             } else {
@@ -9155,7 +9155,7 @@ class BuilderActivity : Activity() {
             val changed = editorText != onDisk
             if (changed != editorDirty) {
                 editorDirty = changed
-                paintTheSave()
+                paintSave()
             }
             editor.removeCallbacks(keep)
             if (changed) {
@@ -9166,7 +9166,7 @@ class BuilderActivity : Activity() {
             editor.removeCallbacks(watch)
             editor.postDelayed(watch, WATCH_CODE_MILLIS)
             offerWhileTyping(root, editor)
-            paintTheSteps()
+            paintSteps()
         }
         editor.onChanged = ::mark
 
@@ -9188,7 +9188,7 @@ class BuilderActivity : Activity() {
             mark()
         }
         editorMore = { under -> editorMenu(path, editor, under) }
-        paintTheSteps()
+        paintSteps()
 
         if (draft != null) {
             content.addView(notice(getString(R.string.editor_restored), palette.warning))
@@ -9253,7 +9253,7 @@ class BuilderActivity : Activity() {
             under,
             listOf(
                 MenuChoice(Mark.Shape.FIND, getString(R.string.editor_find)) {
-                    findInTheEditor(editor)
+                    findInEditor(editor)
                 },
                 MenuChoice(Mark.Shape.SORTED_DOWN, getString(R.string.editor_line)) {
                     askForName(getString(R.string.editor_line_ask), "") { asked ->
@@ -9269,7 +9269,7 @@ class BuilderActivity : Activity() {
                     }
                 },
                 MenuChoice(Mark.Shape.WIDEN, getString(R.string.editor_size)) {
-                    askForTheReadingSize(editor)
+                    askForReadingSize(editor)
                 },
                 MenuChoice(
                     Mark.Shape.WIDEN,
@@ -9315,7 +9315,7 @@ class BuilderActivity : Activity() {
         )
     }
 
-    private fun findInTheEditor(editor: CodeEditor) {
+    private fun findInEditor(editor: CodeEditor) {
         val asking = styledField(findHere, getString(R.string.editor_find_ask))
         val counted = quiet("")
         fun walk(onward: Boolean) {
@@ -9355,7 +9355,7 @@ class BuilderActivity : Activity() {
         asking.requestFocus()
     }
 
-    private fun askForTheReadingSize(editor: CodeEditor) {
+    private fun askForReadingSize(editor: CodeEditor) {
         val shown = TextView(this).apply {
             setTextColor(palette.foreground)
             typeface = Type.data
@@ -9747,7 +9747,7 @@ class BuilderActivity : Activity() {
         sealed.addView(quiet(getString(R.string.device_note)))
         sealed.addView(
             subtle(getString(R.string.device_build), palette.accent) {
-                buildWithTheDeviceKey(root)
+                buildWithDeviceKey(root)
             }
         )
         content.addView(sealed)
@@ -10022,7 +10022,7 @@ class BuilderActivity : Activity() {
             .appendPath(path)
             .build()
 
-    private fun readTheAbout(named: String): Map<String, String> {
+    private fun readAbout(named: String): Map<String, String> {
         val out = linkedMapOf<String, String>()
         val rows = contentResolver.query(debuggerAddress(named, "about"), null, null, null, null)
             ?: throw IllegalStateException(getString(R.string.debugger_gone))
@@ -10034,7 +10034,7 @@ class BuilderActivity : Activity() {
         return out
     }
 
-    private fun readTheEvents(named: String, after: Long): List<Watched> {
+    private fun readEvents(named: String, after: Long): List<Watched> {
         val asked = debuggerAddress(named, "events").buildUpon()
             .appendQueryParameter("after", after.toString())
             .build()
@@ -10058,8 +10058,8 @@ class BuilderActivity : Activity() {
         return out
     }
 
-    private fun fetchTheDebugger(named: String) {
-        val about = readTheAbout(named)
+    private fun fetchDebugger(named: String) {
+        val about = readAbout(named)
         val last = about["last"]?.toLongOrNull() ?: 0L
         synchronized(watchHeld) {
             if (last < watchCursor) {
@@ -10069,7 +10069,7 @@ class BuilderActivity : Activity() {
         }
         for (round in 0 until WATCH_ROUNDS) {
             val after = synchronized(watchHeld) { watchCursor }
-            val found = readTheEvents(named, after)
+            val found = readEvents(named, after)
             if (found.isEmpty()) {
                 break
             }
@@ -10112,7 +10112,7 @@ class BuilderActivity : Activity() {
             watchLinked = linked
             render(false)
         } else {
-            paintTheWatch()
+            paintWatch()
         }
     }
 
@@ -10127,7 +10127,7 @@ class BuilderActivity : Activity() {
         val turn = watchTurn
         Thread {
             while (watchReading && turn == watchTurn) {
-                val failed = runCatching { fetchTheDebugger(named) }.exceptionOrNull()
+                val failed = runCatching { fetchDebugger(named) }.exceptionOrNull()
                 runOnUiThread { fetched(turn, failed) }
                 if (failed != null) {
                     break
@@ -10146,10 +10146,10 @@ class BuilderActivity : Activity() {
 
     private fun stopWatching() {
         watchWanted = false
-        pauseTheWatch()
+        pauseWatch()
     }
 
-    private fun pauseTheWatch() {
+    private fun pauseWatch() {
         watchReading = false
         watchTurn += 1
     }
@@ -10161,12 +10161,12 @@ class BuilderActivity : Activity() {
         }
         val turn = watchTurn
         Thread {
-            val failed = runCatching { fetchTheDebugger(named) }.exceptionOrNull()
+            val failed = runCatching { fetchDebugger(named) }.exceptionOrNull()
             runOnUiThread { fetched(turn, failed) }
         }.apply { isDaemon = true }.start()
     }
 
-    private fun askTheDebugger(method: String, done: () -> Unit) {
+    private fun askDebugger(method: String, done: () -> Unit) {
         val named = watchPackage
         if (named.isEmpty()) {
             return
@@ -10238,7 +10238,7 @@ class BuilderActivity : Activity() {
         else -> palette.foreground
     }
 
-    private fun paintTheWatch() {
+    private fun paintWatch() {
         val shown = shownEvents()
         val painted = SpannableStringBuilder()
         var room = WATCH_PAINTED
@@ -10286,22 +10286,22 @@ class BuilderActivity : Activity() {
         )
     }
 
-    private fun chooseTheWatchedApp() {
+    private fun chooseWatchedApp() {
         val apps = DebuggerHost.carriers(this)
         if (apps.isEmpty()) {
             results.removeAllViews()
             results.addView(notice(getString(R.string.debugger_app_none), palette.warning))
             return
         }
-        pickAnApp(apps) { which ->
-            watchTheApp(apps[which].second, apps[which].first)
+        pickApp(apps) { which ->
+            watchApp(apps[which].second, apps[which].first)
             startWatching()
             render(false)
         }
     }
 
-    private fun watchTheApp(named: String, label: String) {
-        pauseTheWatch()
+    private fun watchApp(named: String, label: String) {
+        pauseWatch()
         watchPackage = named
         watchLabel = label
         watchAbout = emptyMap()
@@ -10314,7 +10314,7 @@ class BuilderActivity : Activity() {
         Preferences.setWatchedApp(this, named)
     }
 
-    private fun watchTheRememberedApp() {
+    private fun watchRememberedApp() {
         if (watchPackage.isNotEmpty()) {
             return
         }
@@ -10326,10 +10326,10 @@ class BuilderActivity : Activity() {
             packageManager.getApplicationLabel(packageManager.getApplicationInfo(named, 0))
                 .toString()
         }.getOrNull() ?: return
-        watchTheApp(named, label)
+        watchApp(named, label)
     }
 
-    private fun askToClearTheDebugger() {
+    private fun askToClearDebugger() {
         dialogShell(
             getString(R.string.log_wipe),
             body(getString(R.string.debugger_clear_ask)),
@@ -10337,9 +10337,9 @@ class BuilderActivity : Activity() {
                 getString(R.string.action_cancel) to { it: AlertDialog -> it.dismiss() },
                 getString(R.string.log_wipe) to { it: AlertDialog ->
                     it.dismiss()
-                    askTheDebugger("clear") {
+                    askDebugger("clear") {
                         synchronized(watchHeld) { watchHeld.clear() }
-                        paintTheWatch()
+                        paintWatch()
                         flash(getString(R.string.debugger_cleared), palette.ok, Mark.Shape.TICK)
                     }
                 },
@@ -10347,23 +10347,23 @@ class BuilderActivity : Activity() {
         )
     }
 
-    private fun fetchTheWatchAgain() {
+    private fun fetchWatchAgain() {
         synchronized(watchHeld) {
             watchHeld.clear()
             watchCursor = 0L
         }
-        paintTheWatch()
+        paintWatch()
         fetchOnce()
     }
 
-    private fun takeASnapshot() {
-        askTheDebugger("snapshot") {
+    private fun takeSnapshot() {
+        askDebugger("snapshot") {
             flash(getString(R.string.debugger_snapshot_done), palette.ok, Mark.Shape.TICK)
             fetchOnce()
         }
     }
 
-    private fun openTheWatchedApp() {
+    private fun openWatchedApp() {
         val opening = packageManager.getLaunchIntentForPackage(watchPackage)
         if (opening == null) {
             flash(getString(R.string.debugger_gone), palette.error)
@@ -10407,14 +10407,14 @@ class BuilderActivity : Activity() {
                 .maxByOrNull { it.packageName.length }
     }
 
-    private fun analyseWithTheAssistant() {
+    private fun analyseWithAssistant() {
         val log = analysisText()
         if (log.isBlank()) {
             flash(getString(R.string.debugger_analyse_empty), palette.warning)
             return
         }
         val project = projectBuilding(watchPackage)
-        pauseTheWatch()
+        pauseWatch()
         talkRoot = project?.root
         Preferences.setAssistantAgent(this, project != null)
         talkFailure = true
@@ -10461,7 +10461,7 @@ class BuilderActivity : Activity() {
         }
     }
 
-    private fun pickAnApp(apps: List<Pair<String, String>>, onPick: (Int) -> Unit) {
+    private fun pickApp(apps: List<Pair<String, String>>, onPick: (Int) -> Unit) {
         lateinit var shown: AlertDialog
         val rows = mutableListOf<Pair<View, String>>()
         val icons = mutableListOf<Pair<ImageView, String>>()
@@ -10579,7 +10579,7 @@ class BuilderActivity : Activity() {
     private fun shellNamed(at: Int): String =
         shells.getOrNull(at)?.named.orEmpty().ifEmpty { (at + 1).toString() }
 
-    private fun openAShell(): Shell? {
+    private fun openShell(): Shell? {
         if (shells.size >= MOST_SHELLS) {
             results.removeAllViews()
             results.addView(notice(getString(R.string.shell_full), palette.warning))
@@ -10587,15 +10587,15 @@ class BuilderActivity : Activity() {
         }
         val home = filesDir.absolutePath
         val folder = openProject ?: home
-        val view = TerminalView(this, palette) { bytes -> sendToTheShell(bytes) }
+        val view = TerminalView(this, palette) { bytes -> sendToShell(bytes) }
         val shell = Shell(view, folder, (shells.size + 1).toString())
         shells.add(shell)
         shellAt = shells.size - 1
-        startTheShell(shell, home)
+        startShell(shell, home)
         return shell
     }
 
-    private fun startTheShell(shell: Shell, home: String) {
+    private fun startShell(shell: Shell, home: String) {
         File(home, "tmp").mkdirs()
         val handle = runCatching {
             Builder.nativeShellOpen(
@@ -10656,12 +10656,12 @@ class BuilderActivity : Activity() {
             }
         }
         setOnLongClickListener {
-            renameTheShell(at)
+            renameShell(at)
             true
         }
     }
 
-    private fun renameTheShell(at: Int) {
+    private fun renameShell(at: Int) {
         val shell = shells.getOrNull(at) ?: return
         askForName(getString(R.string.shell_rename), shell.named) { chosen ->
             shell.named = chosen.take(SHELL_NAME_MOST)
@@ -10671,7 +10671,7 @@ class BuilderActivity : Activity() {
 
     private fun renderTerminal() {
         if (shells.isEmpty()) {
-            openAShell()
+            openShell()
         }
         if (shellAt !in shells.indices) {
             shellAt = (shells.size - 1).coerceAtLeast(0)
@@ -10739,7 +10739,7 @@ class BuilderActivity : Activity() {
                 }
                 addView(
                     shellControl(Mark.Shape.ADD, R.string.shell_new) {
-                        if (openAShell() != null) {
+                        if (openShell() != null) {
                             render(false)
                         }
                     }.apply { alpha = if (shells.size >= MOST_SHELLS) 0.35f else 1f },
@@ -10771,7 +10771,7 @@ class BuilderActivity : Activity() {
         view.accept(byteArrayOf(), 0)
     }
 
-    private fun writeToTheShell(bytes: ByteArray) {
+    private fun writeToShell(bytes: ByteArray) {
         val shell = shellNow() ?: return
         if (shell.handle < 0 || bytes.isEmpty()) {
             return
@@ -10779,7 +10779,7 @@ class BuilderActivity : Activity() {
         runCatching { Builder.nativeShellWrite(shell.handle, bytes) }
     }
 
-    private fun sendToTheShell(bytes: ByteArray) {
+    private fun sendToShell(bytes: ByteArray) {
         if (bytes.isEmpty()) {
             return
         }
@@ -10789,7 +10789,7 @@ class BuilderActivity : Activity() {
         } else {
             bytes
         }
-        writeToTheShell(said)
+        writeToShell(said)
     }
 
     private fun closeOneShell(shell: Shell) {
@@ -10810,7 +10810,7 @@ class BuilderActivity : Activity() {
         }
     }
 
-    private fun closeTheShell() {
+    private fun closeShell() {
         shells.toList().forEach { shell ->
             val handle = shell.handle
             shell.handle = -1
@@ -10845,22 +10845,22 @@ class BuilderActivity : Activity() {
 
     private fun shellKeys(view: TerminalView): View {
         val above = listOf<Pair<String, () -> Unit>>(
-            "ESC" to { sendToTheShell(byteArrayOf(0x1B)) },
-            "/" to { sendToTheShell("/".toByteArray()) },
-            "—" to { sendToTheShell("-".toByteArray()) },
-            "HOME" to { sendToTheShell("\u001B[H".toByteArray()) },
-            "↑" to { sendToTheShell("\u001B[A".toByteArray()) },
-            "END" to { sendToTheShell("\u001B[F".toByteArray()) },
-            "PGUP" to { sendToTheShell("\u001B[5~".toByteArray()) },
+            "ESC" to { sendToShell(byteArrayOf(0x1B)) },
+            "/" to { sendToShell("/".toByteArray()) },
+            "—" to { sendToShell("-".toByteArray()) },
+            "HOME" to { sendToShell("\u001B[H".toByteArray()) },
+            "↑" to { sendToShell("\u001B[A".toByteArray()) },
+            "END" to { sendToShell("\u001B[F".toByteArray()) },
+            "PGUP" to { sendToShell("\u001B[5~".toByteArray()) },
         )
         val below = listOf<Pair<String, () -> Unit>>(
-            "⇥" to { sendToTheShell(byteArrayOf(0x09)) },
-            "←" to { sendToTheShell("\u001B[D".toByteArray()) },
+            "⇥" to { sendToShell(byteArrayOf(0x09)) },
+            "←" to { sendToShell("\u001B[D".toByteArray()) },
             "CTRL" to { shellControl = !shellControl },
-            "ALT" to { sendToTheShell(byteArrayOf(0x1B)) },
-            "↓" to { sendToTheShell("\u001B[B".toByteArray()) },
-            "→" to { sendToTheShell("\u001B[C".toByteArray()) },
-            "PGDN" to { sendToTheShell("\u001B[6~".toByteArray()) },
+            "ALT" to { sendToShell(byteArrayOf(0x1B)) },
+            "↓" to { sendToShell("\u001B[B".toByteArray()) },
+            "→" to { sendToShell("\u001B[C".toByteArray()) },
+            "PGDN" to { sendToShell("\u001B[6~".toByteArray()) },
         )
         val holder = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -10955,7 +10955,7 @@ class BuilderActivity : Activity() {
         return out
     }
 
-    private fun writeTheBlock(named: String, body: String) {
+    private fun writeBlock(named: String, body: String) {
         val root = talkFolder()
         results.removeAllViews()
         if (root == null) {
@@ -11410,10 +11410,10 @@ class BuilderActivity : Activity() {
             under,
             listOf(
                 MenuChoice(Mark.Shape.ROBOT, getString(R.string.talk_switch)) {
-                    chooseTheModel()
+                    chooseModel()
                 },
                 MenuChoice(Mark.Shape.SHIELD, getString(R.string.talk_providers)) {
-                    chooseTheVendor()
+                    chooseVendor()
                 },
                 MenuChoice(Mark.Shape.FOLDER, getString(R.string.talk_folder)) {
                     chooseTalkFolder()
@@ -11431,7 +11431,7 @@ class BuilderActivity : Activity() {
                     getString(R.string.talk_delete),
                     tint = palette.error,
                     parted = true,
-                ) { askToDeleteTheTalk() },
+                ) { askToDeleteTalk() },
                 MenuChoice(Mark.Shape.HELP, getString(R.string.help_title)) {
                     go(Screen.Help)
                 },
@@ -11439,7 +11439,7 @@ class BuilderActivity : Activity() {
         )
     }
 
-    private fun askToDeleteTheTalk() {
+    private fun askToDeleteTalk() {
         dialogShell(
             getString(R.string.talk_delete),
             body(getString(R.string.talk_delete_confirm)),
@@ -11513,7 +11513,7 @@ class BuilderActivity : Activity() {
         )
     }
 
-    private fun takeTheAttachments(picked: List<Uri>, pictures: Boolean) {
+    private fun takeAttachments(picked: List<Uri>, pictures: Boolean) {
         val most = if (pictures) TALK_MOST_PICTURES else TALK_MOST_FILES
         val heaviest = if (pictures) TALK_PICTURE_BYTES else TALK_FILE_BYTES
         val told = mutableListOf<String>()
@@ -11859,7 +11859,7 @@ class BuilderActivity : Activity() {
                     content.addView(
                         subtle("${getString(R.string.action_save)}  $named",
                             palette.ok) {
-                            writeTheBlock(named, body)
+                            writeBlock(named, body)
                         }.apply {
                             layoutParams = LinearLayout.LayoutParams(
                                 MATCH_PARENT,
@@ -11910,7 +11910,7 @@ class BuilderActivity : Activity() {
             })
         }
         dock.visibility = View.VISIBLE
-        fitTheDock()
+        fitDock()
         if (talkAttached.isNotEmpty()) {
             dock.addView(
                 attachedRow(),
@@ -11956,7 +11956,7 @@ class BuilderActivity : Activity() {
                         )
                         readAs(Button::class.java.name)
                         setOnClickListener {
-                            if (talkAsking) stopTheAssistant() else sendTyped()
+                            if (talkAsking) stopAssistant() else sendTyped()
                         }
                     },
                     LinearLayout.LayoutParams(gap(13), gap(13)).apply { marginStart = gap(2) },
@@ -11967,7 +11967,7 @@ class BuilderActivity : Activity() {
         scroller.post { scroller.fullScroll(View.FOCUS_DOWN) }
     }
 
-    private fun fitTheDock() {
+    private fun fitDock() {
         dock.setPadding(
             gap(4),
             gap(2),
@@ -12023,8 +12023,8 @@ class BuilderActivity : Activity() {
                             readAs(Button::class.java.name)
                             maxLines = 1
                             ellipsize = android.text.TextUtils.TruncateAt.END
-                            pressable(onHeld = { chooseTheVendor() })
-                            setOnClickListener { if (auto) chooseTheVendor() else chooseTheModel() }
+                            pressable(onHeld = { chooseVendor() })
+                            setOnClickListener { if (auto) chooseVendor() else chooseModel() }
                         },
                         LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f),
                     )
@@ -12103,15 +12103,15 @@ class BuilderActivity : Activity() {
         }
     }
 
-    private fun chooseTheModel() {
+    private fun chooseModel() {
         val vendor = Brain.vendorOf(this, Preferences.assistantVendor(this))
         if (vendor == null) {
-            chooseTheVendor()
+            chooseVendor()
             return
         }
         if (Brain.listable(vendor) && !Brain.fresh(vendor.id)) {
             if (vendor.keyed(this)) {
-                fetchTheModels(vendor)
+                fetchModels(vendor)
             } else {
                 askToSignIn(vendor)
             }
@@ -12148,7 +12148,7 @@ class BuilderActivity : Activity() {
                     setOnClickListener {
                         Preferences.setAssistantModel(this@BuilderActivity, one.id)
                         shown?.dismiss()
-                        pickTheVendor(vendor)
+                        pickVendor(vendor)
                     }
                     addView(
                         LinearLayout(context).apply {
@@ -12193,7 +12193,7 @@ class BuilderActivity : Activity() {
             addView(
                 subtle(vendor.shown, palette.accent) {
                     shown?.dismiss()
-                    chooseTheVendor()
+                    chooseVendor()
                 }
             )
             addView(list, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
@@ -12201,7 +12201,7 @@ class BuilderActivity : Activity() {
                 addView(
                     subtle(getString(R.string.talk_models_fetch), palette.accent) {
                         shown?.dismiss()
-                        fetchTheModels(vendor)
+                        fetchModels(vendor)
                     }
                 )
             }
@@ -12213,7 +12213,7 @@ class BuilderActivity : Activity() {
         )
     }
 
-    private fun fetchTheModels(vendor: Brain.Vendor) {
+    private fun fetchModels(vendor: Brain.Vendor) {
         results.removeAllViews()
         val sealed = Preferences.vendorKey(this, vendor.id)
         if (sealed.isEmpty() && !vendor.keyless && !vendor.custom) {
@@ -12243,11 +12243,11 @@ class BuilderActivity : Activity() {
                     notice(getString(R.string.talk_models_got, found.size), palette.ok)
                 )
             }
-            chooseTheModel()
+            chooseModel()
         }
     }
 
-    private fun renewTheModels() {
+    private fun renewModels() {
         if (!Brain.renewOnce()) {
             return
         }
@@ -12318,7 +12318,7 @@ class BuilderActivity : Activity() {
         agentRound = 0
         agentWrote = mutableListOf()
         agentChanges = mutableListOf()
-        sendToTheAssistant()
+        sendToAssistant()
     }
 
     private fun attachedText(): String = buildString {
@@ -12343,7 +12343,7 @@ class BuilderActivity : Activity() {
 
     private fun ledgerPath(): String = File(filesDir, Brain.LEDGER).absolutePath
 
-    private fun sendToTheAssistant() {
+    private fun sendToAssistant() {
         val typed = talkDraft.trim()
         if ((typed.isEmpty() && talkAttached.isEmpty()) || talkAsking) {
             return
@@ -12389,7 +12389,7 @@ class BuilderActivity : Activity() {
                     .filter { it.keyed(this) && it.id != larger.vendor }
                     .flatMap { one -> one.models }
                     .maxByOrNull { it.window }
-                offerTheLargerWindow(need, larger, widest, false)
+                offerLargerWindow(need, larger, widest, false)
                 render(false)
                 return
             }
@@ -12399,7 +12399,7 @@ class BuilderActivity : Activity() {
             }
             if (attempts.isEmpty()) {
                 render(false)
-                chooseTheVendor()
+                chooseVendor()
                 return
             }
         } else {
@@ -12407,13 +12407,13 @@ class BuilderActivity : Activity() {
             if (vendor == null || !vendor.keyed(this) && !vendor.custom) {
                 talkHeld.add(false to getString(R.string.talk_no_key))
                 render(false)
-                chooseTheVendor()
+                chooseVendor()
                 return
             }
             val model = Brain.modelOf(vendor, Preferences.assistantModel(this))
             val larger = Brain.fit(vendor.id, model.id, model.window, need)
             if (larger != null && !talkAnyway) {
-                offerTheLargerWindow(need, larger, model, true)
+                offerLargerWindow(need, larger, model, true)
                 render(false)
                 return
             }
@@ -12624,7 +12624,7 @@ class BuilderActivity : Activity() {
         return !talkStopping.get()
     }
 
-    private fun offerTheLargerWindow(
+    private fun offerLargerWindow(
         need: Long,
         larger: Brain.Choice,
         from: Brain.Model?,
@@ -12647,7 +12647,7 @@ class BuilderActivity : Activity() {
                         it.dismiss()
                         talkAnyway = true
                         talkDraft = talkHeld.removeLastOrNull()?.second.orEmpty()
-                        sendToTheAssistant()
+                        sendToAssistant()
                     }
                 } else {
                     null
@@ -12658,7 +12658,7 @@ class BuilderActivity : Activity() {
                     Preferences.setAssistantVendor(this, google.id)
                     Preferences.setAssistantModel(this, larger.model)
                     if (google.keyed(this)) {
-                        pickTheVendor(google)
+                        pickVendor(google)
                     } else {
                         askToSignIn(google)
                     }
@@ -12693,13 +12693,13 @@ class BuilderActivity : Activity() {
                 .filter { it.isNotEmpty() }
                 .joinToString("\n")
             render(false)
-            sendToTheAssistant()
+            sendToAssistant()
             return
         }
         if (steps.isNotEmpty() && !ended && agentRound < AGENT_ROUNDS) {
             talkDraft = told.joinToString("\n") + "\n\n" + AGENT_CARRY
             render(false)
-            sendToTheAssistant()
+            sendToAssistant()
             return
         }
         if (agentWrote.isNotEmpty() && agentRound < AGENT_ROUNDS) {
@@ -12714,7 +12714,7 @@ class BuilderActivity : Activity() {
                     if (problem != null) {
                         talkDraft = (told + listOf("", AGENT_MEND, problem)).joinToString("\n")
                         render(false)
-                        sendToTheAssistant()
+                        sendToAssistant()
                     } else {
                         agentWrapUp(root, steps, told, ended)
                     }
@@ -12777,13 +12777,13 @@ class BuilderActivity : Activity() {
                 getString(R.string.action_cancel) to { it: AlertDialog -> it.dismiss() },
                 getString(R.string.action_build_both) to { it: AlertDialog ->
                     it.dismiss()
-                    agentAsksForTheKey(root)
+                    agentAsksForKey(root)
                 },
             ),
         )
     }
 
-    private fun agentAsksForTheKey(root: String) {
+    private fun agentAsksForKey(root: String) {
         val keys = keysHere()
         if (keys.isEmpty()) {
             go(Screen.NewKey)
@@ -12793,15 +12793,15 @@ class BuilderActivity : Activity() {
         pickOne(getString(R.string.agent_sign), named) { which ->
             if (which >= keys.size) {
                 go(Screen.Build(root))
-                buildWithTheDeviceKey(root)
+                buildWithDeviceKey(root)
             } else {
                 Preferences.setSigningKey(this, keys[which].path)
-                agentAsksForThePassword(root, keys[which])
+                agentAsksForPassword(root, keys[which])
             }
         }
     }
 
-    private fun agentAsksForThePassword(root: String, key: SigningKey) {
+    private fun agentAsksForPassword(root: String, key: SigningKey) {
         val shared = key.alias == DEFAULT_KEY_ALIAS
         val editor = styledField(
             if (shared) DEFAULT_KEY_PASSWORD else "",
@@ -12847,7 +12847,7 @@ class BuilderActivity : Activity() {
         editor.requestFocus()
     }
 
-    private fun fixWithTheAssistant(root: String, whole: String) {
+    private fun fixWithAssistant(root: String, whole: String) {
         talkRoot = root
         Preferences.setAssistantAgent(this, true)
         talkFailure = true
@@ -12856,7 +12856,7 @@ class BuilderActivity : Activity() {
         sendTyped()
     }
 
-    private fun stopTheAssistant() {
+    private fun stopAssistant() {
         if (!talkAsking) {
             return
         }
@@ -13068,7 +13068,7 @@ class BuilderActivity : Activity() {
             }.apply { isDaemon = true }.start()
         }
 
-        fun showTheBranch() {
+        fun showBranch() {
             val linked = runCatching {
                 Remote.address(whereField.text?.toString().orEmpty())
             }.isSuccess
@@ -13081,10 +13081,10 @@ class BuilderActivity : Activity() {
         whereField.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
-            override fun afterTextChanged(s: Editable?) = showTheBranch()
+            override fun afterTextChanged(s: Editable?) = showBranch()
         })
         sheet.addView(branchRow)
-        showTheBranch()
+        showBranch()
         tokenHolder.visibility = View.GONE
         sheet.addView(
             dropRow(
@@ -13620,7 +13620,7 @@ class BuilderActivity : Activity() {
             rule(),
             LinearLayout.LayoutParams(MATCH_PARENT, 1).apply { bottomMargin = gap(3) },
         )
-        watchTheRememberedApp()
+        watchRememberedApp()
         val chosen = watchPackage.isNotEmpty()
 
         val bound = card()
@@ -13717,7 +13717,7 @@ class BuilderActivity : Activity() {
                 )
                 addView(
                     logButton(Mark.Shape.DROID, R.string.log_apps, !chosen) {
-                        chooseTheWatchedApp()
+                        chooseWatchedApp()
                     },
                     LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
                         marginStart = gap(2)
@@ -13785,7 +13785,7 @@ class BuilderActivity : Activity() {
                         startWatching()
                         render(false)
                     } else {
-                        chooseTheWatchedApp()
+                        chooseWatchedApp()
                     }
                 }
             },
@@ -13793,7 +13793,7 @@ class BuilderActivity : Activity() {
         )
         doing.addView(
             logButton(Mark.Shape.UNDO, R.string.debugger_refetch, false) {
-                if (chosen) fetchTheWatchAgain() else chooseTheWatchedApp()
+                if (chosen) fetchWatchAgain() else chooseWatchedApp()
             },
             LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply {
                 marginStart = gap(1)
@@ -13802,7 +13802,7 @@ class BuilderActivity : Activity() {
         )
         doing.addView(
             logButton(Mark.Shape.TRASH, R.string.log_wipe, false) {
-                if (chosen) askToClearTheDebugger() else chooseTheWatchedApp()
+                if (chosen) askToClearDebugger() else chooseWatchedApp()
             },
             LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = gap(1) },
         )
@@ -13816,20 +13816,20 @@ class BuilderActivity : Activity() {
         }
         more.addView(
             logButton(Mark.Shape.CHART, R.string.debugger_snapshot, false) {
-                if (chosen) takeASnapshot() else chooseTheWatchedApp()
+                if (chosen) takeSnapshot() else chooseWatchedApp()
             },
             LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginEnd = gap(1) },
         )
         more.addView(
             logButton(Mark.Shape.PLAY, R.string.debugger_launch, false) {
-                if (chosen) openTheWatchedApp() else chooseTheWatchedApp()
+                if (chosen) openWatchedApp() else chooseWatchedApp()
             },
             LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = gap(1) },
         )
         content.addView(more)
         content.addView(
             logButton(Mark.Shape.BRAIN, R.string.debugger_analyse, true) {
-                if (chosen) analyseWithTheAssistant() else chooseTheWatchedApp()
+                if (chosen) analyseWithAssistant() else chooseWatchedApp()
             },
             LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
                 topMargin = gap(2)
@@ -13888,7 +13888,7 @@ class BuilderActivity : Activity() {
                             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
                             override fun afterTextChanged(s: Editable?) {
                                 watchSieve = s?.toString().orEmpty()
-                                paintTheWatch()
+                                paintWatch()
                             }
                         })
                     },
@@ -13909,7 +13909,7 @@ class BuilderActivity : Activity() {
         sieve.addView(
             chips(kinds.map { getString(it) }, { it == watchKind }) { picked ->
                 watchKind = picked
-                paintTheWatch()
+                paintWatch()
             }
         )
         content.addView(sieve)
@@ -14007,7 +14007,7 @@ class BuilderActivity : Activity() {
             }
         )
         content.addView(shown)
-        paintTheWatch()
+        paintWatch()
         if (chosen && watchWanted && !watchReading && watchRefused.isEmpty()) {
             startWatching()
         } else if (chosen && !watchReading && watchAbout.isEmpty() && watchRefused.isEmpty()) {
@@ -16167,7 +16167,7 @@ class BuilderActivity : Activity() {
         Preferences.setFeedbackDraft(this, held.toString())
     }
 
-    private fun takeBackTheFeedback() {
+    private fun takeBackFeedback() {
         val held = Preferences.feedbackDraft(this)
         if (held.isEmpty()) {
             return
@@ -16190,7 +16190,7 @@ class BuilderActivity : Activity() {
 
     private fun outbox(): File = File(filesDir, OUTBOX_FOLDER).apply { mkdirs() }
 
-    private fun holdTheShot(uri: Uri): File? {
+    private fun holdShot(uri: Uri): File? {
         val into = File(shotsFolder(), "Shot-" + System.nanoTime() + ".img")
         val written = runCatching {
             contentResolver.openInputStream(uri).use { from ->
@@ -16222,7 +16222,7 @@ class BuilderActivity : Activity() {
         return into
     }
 
-    private fun takeTheShots(uris: List<Uri>) {
+    private fun takeShots(uris: List<Uri>) {
         results.removeAllViews()
         var refused = false
         for (uri in uris) {
@@ -16232,7 +16232,7 @@ class BuilderActivity : Activity() {
                 )
                 break
             }
-            val held = holdTheShot(uri)
+            val held = holdShot(uri)
             if (held == null) {
                 refused = true
                 continue
@@ -16248,7 +16248,7 @@ class BuilderActivity : Activity() {
         render(false)
     }
 
-    private fun dropTheShot(path: String) {
+    private fun dropShot(path: String) {
         feedbackShots.remove(path)
         File(path).delete()
         keepFeedback()
@@ -16271,7 +16271,7 @@ class BuilderActivity : Activity() {
                             isClickable = true
                             isFocusable = true
                             readAs(Button::class.java.name)
-                            setOnClickListener { dropTheShot(path) }
+                            setOnClickListener { dropShot(path) }
                         },
                         FrameLayout.LayoutParams(gap(8), gap(8)).apply {
                             gravity = Gravity.END or Gravity.TOP
@@ -16400,7 +16400,7 @@ class BuilderActivity : Activity() {
     }
 
     private fun renderFeedback() {
-        takeBackTheFeedback()
+        takeBackFeedback()
         content.addView(
             screenHead(
                 Mark.Shape.SPEECH,
@@ -17858,10 +17858,10 @@ class BuilderActivity : Activity() {
         else -> null
     }
 
-    private fun speakTheDeviceLanguage() {
+    private fun applyDeviceLanguage() {
         if (Builder.load() !is Builder.LoadState.Loaded) return
         val tag = Preferences.language(this).ifEmpty { deviceLanguage() }
-        runCatching { Builder.nativeSpeak(tag) }
+        runCatching { Builder.nativeSetLanguage(tag) }
             .onFailure { AppLog.event(LogLevel.WARN, "native", "The language was not carried over.") }
     }
 
@@ -18147,7 +18147,7 @@ class BuilderActivity : Activity() {
         }
     }
 
-    private fun fetchTheLibraries(root: String, onDone: () -> Unit) {
+    private fun fetchLibraries(root: String, onDone: () -> Unit) {
         results.removeAllViews()
         results.addView(notice(getString(R.string.libraries_fetching), palette.accent))
         Thread {
@@ -18203,7 +18203,7 @@ class BuilderActivity : Activity() {
                     },
                     getString(R.string.libraries_fetch) to { it: AlertDialog ->
                         it.dismiss()
-                        fetchTheLibraries(root) { buildProject(root) }
+                        fetchLibraries(root) { buildProject(root) }
                     },
                 ),
             )
@@ -18224,7 +18224,7 @@ class BuilderActivity : Activity() {
                     listed?.optJSONObject(index)?.let { found.add(Mend(it)) }
                 }
                 if (found.isNotEmpty()) {
-                    offerTheMends(root, found, document?.optString("left").orEmpty())
+                    offerMends(root, found, document?.optString("left").orEmpty())
                 }
             }
         }.start()
@@ -18323,7 +18323,7 @@ class BuilderActivity : Activity() {
         }
     }
 
-    private fun offerTheMends(root: String, found: List<Mend>, left: String) {
+    private fun offerMends(root: String, found: List<Mend>, left: String) {
         var shown: AlertDialog? = null
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val again = {
@@ -18395,9 +18395,9 @@ class BuilderActivity : Activity() {
             )
         }
         building = true
-        showCeremony(stage) { stopTheBuild() }
+        showCeremony(stage) { stopBuild() }
         stage.begin()
-        watchTheBuild(stage)
+        watchBuild(stage)
 
         Thread {
             val answer = runCatching {
@@ -18429,7 +18429,7 @@ class BuilderActivity : Activity() {
         }.start()
     }
 
-    private fun buildWithTheDeviceKey(root: String) {
+    private fun buildWithDeviceKey(root: String) {
         results.removeAllViews()
         if (!DeviceKey.present() && !DeviceKey.make()) {
             results.addView(notice(getString(R.string.device_refused), palette.error))
@@ -18456,12 +18456,12 @@ class BuilderActivity : Activity() {
             note = getString(R.string.device_note)
         }
         building = true
-        showCeremony(stage) { stopTheBuild() }
+        showCeremony(stage) { stopBuild() }
         stage.begin()
-        watchTheBuild(stage)
+        watchBuild(stage)
 
         Thread {
-            val answer = runCatching { sealWithTheDevice(root, held, raw, apk) }
+            val answer = runCatching { sealWithDevice(root, held, raw, apk) }
             raw.delete()
             runOnUiThread {
                 building = false
@@ -18482,7 +18482,7 @@ class BuilderActivity : Activity() {
         }.start()
     }
 
-    private fun sealWithTheDevice(
+    private fun sealWithDevice(
         root: String,
         certificate: String,
         raw: File,
@@ -18532,7 +18532,7 @@ class BuilderActivity : Activity() {
         )
     }
 
-    private fun stopTheBuild() {
+    private fun stopBuild() {
         if (!building) {
             return
         }
@@ -18540,7 +18540,7 @@ class BuilderActivity : Activity() {
         Builder.nativeBuildStop()
     }
 
-    private fun watchTheBuild(view: BuildStageView) {
+    private fun watchBuild(view: BuildStageView) {
         var lastSaid = ""
         val look = object : Runnable {
             override fun run() {
@@ -18609,7 +18609,7 @@ class BuilderActivity : Activity() {
                     listOfNotNull(refusal.code, refusal.message, outcome.error) + outcome.findings
                     ).filter { it.isNotBlank() }.distinct().joinToString("\n")
                 results.addView(
-                    primary(getString(R.string.build_fix_ai)) { fixWithTheAssistant(root, whole) }
+                    primary(getString(R.string.build_fix_ai)) { fixWithAssistant(root, whole) }
                 )
                 runCatching {
                     val here = apk.parentFile
@@ -18811,7 +18811,7 @@ class BuilderActivity : Activity() {
         openGallery(IMAGE_REQUEST, 1)
     }
 
-    private fun askForAProjectArchive() {
+    private fun askForProjectArchive() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
@@ -18851,17 +18851,17 @@ class BuilderActivity : Activity() {
         }.getOrNull()
     }
 
-    private fun openTheArchive(uri: Uri) {
+    private fun openArchive(uri: Uri) {
         results.removeAllViews()
         val staged = stageArchive(uri)
         if (staged == null || !staged.isFile) {
             results.addView(notice(getString(R.string.import_none), palette.error))
             return
         }
-        openTheStagedArchive(staged, namedBy(uri), "")
+        openStagedArchive(staged, namedBy(uri), "")
     }
 
-    private fun openTheStagedArchive(staged: File, named: String, password: String) {
+    private fun openStagedArchive(staged: File, named: String, password: String) {
         val root = freeFolder(named)
         working({ Builder.nativeOpenArchive(staged.absolutePath, root.absolutePath, password) })
         finished@{ answer ->
@@ -18876,7 +18876,7 @@ class BuilderActivity : Activity() {
                 root.deleteRecursively()
                 val refusal = Refusal.parse(document)
                 if (refusal.code == "EZ023" || refusal.code == "EZ026") {
-                    askForTheArchivePassword(staged, named, refusal.code == "EZ026")
+                    askForArchivePassword(staged, named, refusal.code == "EZ026")
                     return@finished
                 }
                 staged.delete()
@@ -18947,7 +18947,7 @@ class BuilderActivity : Activity() {
         }
     }
 
-    private fun askForTheArchivePassword(staged: File, named: String, again: Boolean) {
+    private fun askForArchivePassword(staged: File, named: String, again: Boolean) {
         val editor = styledField("", getString(R.string.pack_password), true).apply {
             typeface = Type.data
         }
@@ -18983,7 +18983,7 @@ class BuilderActivity : Activity() {
                     if (said.isEmpty()) {
                         staged.delete()
                     } else {
-                        openTheStagedArchive(staged, named, said)
+                        openStagedArchive(staged, named, said)
                     }
                 },
             ),
@@ -19062,7 +19062,7 @@ class BuilderActivity : Activity() {
                 data?.data?.let { picked.add(it) }
             }
             if (picked.isNotEmpty()) {
-                takeTheAttachments(picked, requestCode == TALK_PICTURE_REQUEST)
+                takeAttachments(picked, requestCode == TALK_PICTURE_REQUEST)
             }
             return
         }
@@ -19077,12 +19077,12 @@ class BuilderActivity : Activity() {
                 data?.data?.let { picked.add(it) }
             }
             if (picked.isNotEmpty()) {
-                takeTheShots(picked)
+                takeShots(picked)
             }
             return
         }
         if (requestCode == ARCHIVE_REQUEST) {
-            data?.data?.let { openTheArchive(it) }
+            data?.data?.let { openArchive(it) }
             return
         }
         if (requestCode != IMAGE_REQUEST) {
@@ -22314,7 +22314,7 @@ internal object Brain {
     }
 
     fun vibe(asked: JSONObject): JSONObject =
-        runCatching { JSONObject(Builder.nativeVibe(asked.toString())) }.getOrDefault(JSONObject())
+        runCatching { JSONObject(Builder.nativeAssistantRequest(asked.toString())) }.getOrDefault(JSONObject())
 
     private val CATALOG: JSONObject by lazy { vibe(JSONObject().put("op", "catalog")) }
 

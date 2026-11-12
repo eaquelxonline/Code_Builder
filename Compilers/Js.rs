@@ -2641,7 +2641,7 @@ impl Parser {
         let node = self.import_declaration_rest(begin)?;
         match phase {
             Some(phase) => {
-                let specifiers = kids(&node, "specifiers");
+                let specifiers = child_nodes(&node, "specifiers");
                 let valid = if phase == "defer" {
                     specifiers.len() == 1 && specifiers[0].kind == "ImportNamespaceSpecifier"
                 } else {
@@ -4072,7 +4072,7 @@ struct Early {
 
 type Check = Result<(), Problem>;
 
-fn bad(node: &Node, message: &str) -> Problem {
+fn problem_at(node: &Node, message: &str) -> Problem {
     Problem {
         message: message.to_string(),
         line: node.line,
@@ -4080,7 +4080,7 @@ fn bad(node: &Node, message: &str) -> Problem {
     }
 }
 
-fn kids<'a>(node: &'a Node, key: &str) -> Vec<&'a Node> {
+fn child_nodes<'a>(node: &'a Node, key: &str) -> Vec<&'a Node> {
     node.list(key)
         .iter()
         .filter_map(|value| match value {
@@ -4098,7 +4098,7 @@ fn bound_names<'a>(node: &'a Node, out: &mut Vec<&'a Node>) {
     match node.kind {
         "Identifier" => out.push(node),
         "ObjectPattern" => {
-            for property in kids(node, "properties") {
+            for property in child_nodes(node, "properties") {
                 if property.kind == "RestElement" {
                     if let Some(argument) = property.node("argument") {
                         bound_names(argument, out);
@@ -4109,7 +4109,7 @@ fn bound_names<'a>(node: &'a Node, out: &mut Vec<&'a Node>) {
             }
         }
         "ArrayPattern" => {
-            for element in kids(node, "elements") {
+            for element in child_nodes(node, "elements") {
                 bound_names(element, out);
             }
         }
@@ -4198,7 +4198,7 @@ fn var_names<'a>(node: &'a Node, out: &mut Vec<&'a Node>) {
     match node.kind {
         "VariableDeclaration" => {
             if node.text("kind") == Some("var") {
-                for declarator in kids(node, "declarations") {
+                for declarator in child_nodes(node, "declarations") {
                     if let Some(id) = declarator.node("id") {
                         bound_names(id, out);
                     }
@@ -4206,7 +4206,7 @@ fn var_names<'a>(node: &'a Node, out: &mut Vec<&'a Node>) {
             }
         }
         "BlockStatement" | "StaticBlock" => {
-            for statement in kids(node, "body") {
+            for statement in child_nodes(node, "body") {
                 var_names(statement, out);
             }
         }
@@ -4251,8 +4251,8 @@ fn var_names<'a>(node: &'a Node, out: &mut Vec<&'a Node>) {
             }
         }
         "SwitchStatement" => {
-            for case in kids(node, "cases") {
-                for statement in kids(case, "consequent") {
+            for case in child_nodes(node, "cases") {
+                for statement in child_nodes(case, "consequent") {
                     var_names(statement, out);
                 }
             }
@@ -4292,7 +4292,7 @@ impl Early {
                 inner.kind == "VariableDeclaration"
                     && matches!(inner.text("kind"), Some("using" | "await using"))
             }) {
-                return Err(bad(
+                return Err(problem_at(
                     held,
                     "Using declarations are not allowed at the top level of a script",
                 ));
@@ -4328,7 +4328,7 @@ impl Early {
                         }
                     }
                     let has_source = statement.get("source").is_some_and(|v| *v != Value::Null);
-                    for specifier in kids(statement, "specifiers") {
+                    for specifier in child_nodes(statement, "specifiers") {
                         if let Some(exported_name) = specifier.node("exported") {
                             let shown = exported_name
                                 .text("name")
@@ -4340,26 +4340,29 @@ impl Early {
                         if !has_source {
                             if let Some(local) = specifier.node("local") {
                                 if local.kind == "Literal" {
-                                    return Err(bad(local, "A string literal cannot be used as an exported binding without `from`"));
+                                    return Err(problem_at(local, "A string literal cannot be used as an exported binding without `from`"));
                                 }
                                 if local.kind == "Identifier"
                                     && !declared.iter().any(|held| held == name_of(local))
                                 {
-                                    return Err(bad(local, "Export is not defined in module"));
+                                    return Err(problem_at(
+                                        local,
+                                        "Export is not defined in module",
+                                    ));
                                 }
                             }
                         }
                     }
                     for (name, node) in names {
                         if exported.contains(&name) {
-                            return Err(bad(node, "Duplicate export"));
+                            return Err(problem_at(node, "Duplicate export"));
                         }
                         exported.push(name);
                     }
                 }
                 "ExportDefaultDeclaration" => {
                     if exported.iter().any(|held| held == "default") {
-                        return Err(bad(statement, "Duplicate export"));
+                        return Err(problem_at(statement, "Duplicate export"));
                     }
                     exported.push("default".to_string());
                 }
@@ -4371,7 +4374,7 @@ impl Early {
                             .unwrap_or("")
                             .to_string();
                         if exported.contains(&shown) {
-                            return Err(bad(statement, "Duplicate export"));
+                            return Err(problem_at(statement, "Duplicate export"));
                         }
                         exported.push(shown);
                     }
@@ -4393,7 +4396,7 @@ impl Early {
     fn declared_nodes<'a>(&self, statement: &'a Node, out: &mut Vec<&'a Node>) {
         match statement.kind {
             "VariableDeclaration" => {
-                for declarator in kids(statement, "declarations") {
+                for declarator in child_nodes(statement, "declarations") {
                     if let Some(id) = declarator.node("id") {
                         bound_names(id, out);
                     }
@@ -4405,7 +4408,7 @@ impl Early {
                 }
             }
             "ImportDeclaration" => {
-                for specifier in kids(statement, "specifiers") {
+                for specifier in child_nodes(statement, "specifiers") {
                     if let Some(local) = specifier.node("local") {
                         out.push(local);
                     }
@@ -4484,11 +4487,11 @@ impl Early {
             let name = name_of(node);
             for (other, other_plain) in lexical.iter().skip(at + 1) {
                 if name_of(other) == name && !(*plain && *other_plain && !ctx.strict) {
-                    return Err(bad(other, "Identifier has already been declared"));
+                    return Err(problem_at(other, "Identifier has already been declared"));
                 }
             }
             if vars.iter().any(|held| name_of(held) == name) {
-                return Err(bad(node, "Identifier has already been declared"));
+                return Err(problem_at(node, "Identifier has already been declared"));
             }
         }
         Ok(())
@@ -4511,7 +4514,7 @@ impl Early {
                         if directive == "use strict" {
                             ctx.strict = true;
                             if let Some(node) = first_octal {
-                                return Err(bad(
+                                return Err(problem_at(
                                     node,
                                     "Octal escape sequences are not allowed in strict mode",
                                 ));
@@ -4543,7 +4546,7 @@ impl Early {
             }
             for node in lexical {
                 if params.iter().any(|held| name_of(held) == name_of(node)) {
-                    return Err(bad(node, "Identifier has already been declared"));
+                    return Err(problem_at(node, "Identifier has already been declared"));
                 }
             }
         }
@@ -4555,14 +4558,14 @@ impl Early {
 
     fn substatement(&mut self, node: &Node, ctx: Ctx, in_if: bool) -> Check {
         match node.kind {
-            "ClassDeclaration" => Err(bad(node, "Unexpected token 'class'")),
-            "VariableDeclaration" if node.text("kind") != Some("var") => Err(bad(
+            "ClassDeclaration" => Err(problem_at(node, "Unexpected token 'class'")),
+            "VariableDeclaration" if node.text("kind") != Some("var") => Err(problem_at(
                 node,
                 "Lexical declaration cannot appear in a single-statement context",
             )),
             "FunctionDeclaration" => {
                 if ctx.strict || !in_if || !is_plain_function(node) {
-                    Err(bad(node, "In strict mode code, functions can only be declared at top level or inside a block"))
+                    Err(problem_at(node, "In strict mode code, functions can only be declared at top level or inside a block"))
                 } else {
                     self.statement(node, ctx, false)
                 }
@@ -4576,7 +4579,7 @@ impl Early {
                     }
                 }
                 if inner.kind == "FunctionDeclaration" {
-                    return Err(bad(
+                    return Err(problem_at(
                         inner,
                         "Labelled function declarations are not allowed here",
                     ));
@@ -4597,7 +4600,7 @@ impl Early {
     fn statement(&mut self, node: &Node, ctx: Ctx, _listed: bool) -> Check {
         match node.kind {
             "BlockStatement" => {
-                let list = kids(node, "body");
+                let list = child_nodes(node, "body");
                 self.statements(&list, ctx, Top::Block, &[])
             }
             "IfStatement" => {
@@ -4623,7 +4626,7 @@ impl Early {
             }
             "WithStatement" => {
                 if ctx.strict {
-                    return Err(bad(
+                    return Err(problem_at(
                         node,
                         "Strict mode code may not include a with statement",
                     ));
@@ -4668,7 +4671,7 @@ impl Early {
                             && !left.flag("_paren")
                             && !left.flag("_escaped")
                         {
-                            return Err(bad(
+                            return Err(problem_at(
                                 left,
                                 "The left-hand side of a for-of loop may not be 'async'",
                             ));
@@ -4680,9 +4683,9 @@ impl Early {
                         if node.kind == "ForInStatement"
                             && matches!(left.text("kind"), Some("using" | "await using"))
                         {
-                            return Err(bad(left, "The left-hand side of a for-in loop may not be a using declaration"));
+                            return Err(problem_at(left, "The left-hand side of a for-in loop may not be a using declaration"));
                         }
-                        for declarator in kids(left, "declarations") {
+                        for declarator in child_nodes(left, "declarations") {
                             let has_init =
                                 declarator.get("init").is_some_and(|v| *v != Value::Null);
                             let allowed = has_init
@@ -4693,7 +4696,7 @@ impl Early {
                                     .node("id")
                                     .is_some_and(|id| id.kind == "Identifier");
                             if has_init && !allowed {
-                                return Err(bad(declarator, "for-in/of loop variable declaration may not have an initializer"));
+                                return Err(problem_at(declarator, "for-in/of loop variable declaration may not have an initializer"));
                             }
                         }
                         self.declaration(left, ctx)?;
@@ -4719,23 +4722,23 @@ impl Early {
                 }
                 let mut all: Vec<&Node> = Vec::new();
                 let mut defaults = 0;
-                for case in kids(node, "cases") {
+                for case in child_nodes(node, "cases") {
                     if case.get("test").is_none_or(|test| *test == Value::Null) {
                         defaults += 1;
                     }
-                    all.extend(kids(case, "consequent"));
+                    all.extend(child_nodes(case, "consequent"));
                 }
                 if let Some(held) = all.iter().find(|inner| {
                     inner.kind == "VariableDeclaration"
                         && matches!(inner.text("kind"), Some("using" | "await using"))
                 }) {
-                    return Err(bad(
+                    return Err(problem_at(
                         held,
                         "Using declarations are not allowed directly in a switch case",
                     ));
                 }
                 if defaults > 1 {
-                    return Err(bad(
+                    return Err(problem_at(
                         node,
                         "More than one default clause in switch statement",
                     ));
@@ -4743,14 +4746,14 @@ impl Early {
                 self.lexical_conflicts(&all, ctx, Top::Block, &[])?;
                 self.switches += 1;
                 let mut outcome = Ok(());
-                for case in kids(node, "cases") {
+                for case in child_nodes(node, "cases") {
                     if let Some(test) = case.node("test") {
                         if let Err(problem) = self.expression(test, ctx) {
                             outcome = Err(problem);
                             break;
                         }
                     }
-                    for statement in kids(case, "consequent") {
+                    for statement in child_nodes(case, "consequent") {
                         if let Err(problem) = self.statement(statement, ctx, true) {
                             outcome = Err(problem);
                             break;
@@ -4766,7 +4769,7 @@ impl Early {
             "LabeledStatement" => {
                 let label = node.node("label").map(name_of).unwrap_or("").to_string();
                 if self.labels.iter().any(|(held, _)| *held == label) {
-                    return Err(bad(node, "Label has already been declared"));
+                    return Err(problem_at(node, "Label has already been declared"));
                 }
                 if let Some(identifier) = node.node("label") {
                     self.reference_name(identifier, ctx, true)?;
@@ -4795,7 +4798,7 @@ impl Early {
                         if inner.kind == "FunctionDeclaration"
                             && (ctx.strict || !is_plain_function(inner))
                         {
-                            Err(bad(
+                            Err(problem_at(
                                 inner,
                                 "Labelled function declarations are not allowed here",
                             ))
@@ -4803,7 +4806,10 @@ impl Early {
                             || (inner.kind == "VariableDeclaration"
                                 && inner.text("kind") != Some("var"))
                         {
-                            Err(bad(inner, "Unexpected declaration in labelled statement"))
+                            Err(problem_at(
+                                inner,
+                                "Unexpected declaration in labelled statement",
+                            ))
                         } else {
                             self.statement(inner, ctx, false)
                         }
@@ -4819,10 +4825,10 @@ impl Early {
                     Some(label) => {
                         let wanted = name_of(label);
                         match self.labels.iter().rev().find(|(held, _)| held == wanted) {
-                            None => Err(bad(node, "Undefined label")),
+                            None => Err(problem_at(node, "Undefined label")),
                             Some((_, is_loop)) => {
                                 if is_continue && !is_loop {
-                                    Err(bad(node, "Illegal continue statement: does not denote an iteration statement"))
+                                    Err(problem_at(node, "Illegal continue statement: does not denote an iteration statement"))
                                 } else {
                                     Ok(())
                                 }
@@ -4831,12 +4837,12 @@ impl Early {
                     }
                     None => {
                         if is_continue && self.iteration == 0 {
-                            Err(bad(
+                            Err(problem_at(
                                 node,
                                 "Illegal continue statement: no surrounding iteration statement",
                             ))
                         } else if !is_continue && self.iteration == 0 && self.switches == 0 {
-                            Err(bad(node, "Illegal break statement"))
+                            Err(problem_at(node, "Illegal break statement"))
                         } else {
                             Ok(())
                         }
@@ -4845,7 +4851,7 @@ impl Early {
             }
             "ReturnStatement" => {
                 if ctx.static_block || !ctx.returnable {
-                    return Err(bad(node, "Illegal return statement"));
+                    return Err(problem_at(node, "Illegal return statement"));
                 }
                 match node.node("argument") {
                     Some(argument) => self.expression(argument, ctx),
@@ -4872,7 +4878,7 @@ impl Early {
                 None => Ok(()),
             },
             "ImportDeclaration" | "ExportAllDeclaration" => {
-                for specifier in kids(node, "specifiers") {
+                for specifier in child_nodes(node, "specifiers") {
                     if let Some(local) = specifier.node("local") {
                         self.binding_name(local, ctx)?;
                     }
@@ -4889,7 +4895,7 @@ impl Early {
                     }
                     if inner.kind == "VariableDeclaration" {
                         if matches!(inner.text("kind"), Some("using" | "await using")) {
-                            return Err(bad(inner, "Using declarations cannot be exported"));
+                            return Err(problem_at(inner, "Using declarations cannot be exported"));
                         }
                         return self.declaration(inner, ctx);
                     }
@@ -4903,19 +4909,25 @@ impl Early {
 
     fn module_names(&self, node: &Node) -> Check {
         for key in ["imported", "local", "exported"] {
-            for specifier in kids(node, "specifiers") {
+            for specifier in child_nodes(node, "specifiers") {
                 if let Some(name) = specifier.node(key) {
                     if name.kind == "Literal"
                         && name.text("raw").is_some_and(has_lone_surrogate_escape)
                     {
-                        return Err(bad(name, "Module export name is not well-formed Unicode"));
+                        return Err(problem_at(
+                            name,
+                            "Module export name is not well-formed Unicode",
+                        ));
                     }
                 }
             }
             if let Some(name) = node.node(key) {
                 if name.kind == "Literal" && name.text("raw").is_some_and(has_lone_surrogate_escape)
                 {
-                    return Err(bad(name, "Module export name is not well-formed Unicode"));
+                    return Err(problem_at(
+                        name,
+                        "Module export name is not well-formed Unicode",
+                    ));
                 }
             }
         }
@@ -4924,7 +4936,7 @@ impl Early {
 
     fn attributes(&self, node: &Node) -> Check {
         let mut seen: Vec<String> = Vec::new();
-        for attribute in kids(node, "attributes") {
+        for attribute in child_nodes(node, "attributes") {
             if let Some(key) = attribute.node("key") {
                 let shown = key
                     .text("name")
@@ -4932,7 +4944,7 @@ impl Early {
                     .unwrap_or("")
                     .to_string();
                 if seen.contains(&shown) {
-                    return Err(bad(key, "Duplicate import attribute key"));
+                    return Err(problem_at(key, "Duplicate import attribute key"));
                 }
                 seen.push(shown);
             }
@@ -4947,7 +4959,7 @@ impl Early {
                 .skip(at + 1)
                 .any(|other| name_of(other) == name_of(first))
             {
-                return Err(bad(first, "Identifier has already been declared"));
+                return Err(problem_at(first, "Identifier has already been declared"));
             }
         }
         if head.is_empty() {
@@ -4959,7 +4971,7 @@ impl Early {
         }
         for declared in head {
             if vars.iter().any(|held| name_of(held) == name_of(declared)) {
-                return Err(bad(declared, "Identifier has already been declared"));
+                return Err(problem_at(declared, "Identifier has already been declared"));
             }
         }
         Ok(())
@@ -4976,12 +4988,12 @@ impl Early {
                     .skip(at + 1)
                     .any(|other| name_of(other) == name_of(first))
                 {
-                    return Err(bad(first, "Identifier has already been declared"));
+                    return Err(problem_at(first, "Identifier has already been declared"));
                 }
             }
         }
         if let Some(body) = handler.node("body") {
-            let list = kids(body, "body");
+            let list = child_nodes(body, "body");
             let mut lexical = Vec::new();
             for statement in &list {
                 let lexical_kind = match statement.kind {
@@ -4995,7 +5007,7 @@ impl Early {
             }
             for declared in &lexical {
                 if names.iter().any(|held| name_of(held) == name_of(declared)) {
-                    return Err(bad(declared, "Identifier has already been declared"));
+                    return Err(problem_at(declared, "Identifier has already been declared"));
                 }
             }
             let simple = handler
@@ -5006,7 +5018,7 @@ impl Early {
                 var_names(body, &mut vars);
                 for declared in &vars {
                     if names.iter().any(|held| name_of(held) == name_of(declared)) {
-                        return Err(bad(declared, "Identifier has already been declared"));
+                        return Err(problem_at(declared, "Identifier has already been declared"));
                     }
                 }
             }
@@ -5017,7 +5029,7 @@ impl Early {
 
     fn declaration(&mut self, node: &Node, ctx: Ctx) -> Check {
         let lexical = node.text("kind") != Some("var");
-        for declarator in kids(node, "declarations") {
+        for declarator in child_nodes(node, "declarations") {
             if let Some(id) = declarator.node("id") {
                 self.binding_pattern(id, ctx)?;
                 if lexical {
@@ -5025,7 +5037,7 @@ impl Early {
                     bound_names(id, &mut names);
                     for identifier in names {
                         if name_of(identifier) == "let" {
-                            return Err(bad(
+                            return Err(problem_at(
                                 identifier,
                                 "let is disallowed as a lexically bound name",
                             ));
@@ -5043,7 +5055,10 @@ impl Early {
     fn binding_name(&self, node: &Node, ctx: Ctx) -> Check {
         let name = name_of(node);
         if ctx.strict && (name == "eval" || name == "arguments") {
-            return Err(bad(node, "Unexpected eval or arguments in strict mode"));
+            return Err(problem_at(
+                node,
+                "Unexpected eval or arguments in strict mode",
+            ));
         }
         self.reference_name(node, ctx, false)
     }
@@ -5052,19 +5067,25 @@ impl Early {
         let name = name_of(node);
         let escaped = node.flag("_escaped");
         if escaped && RESERVED.contains(&name) {
-            return Err(bad(node, "Keyword must not contain escaped characters"));
+            return Err(problem_at(
+                node,
+                "Keyword must not contain escaped characters",
+            ));
         }
         if ctx.strict && STRICT_RESERVED.contains(&name) {
-            return Err(bad(node, &format!("The keyword '{name}' is reserved")));
+            return Err(problem_at(
+                node,
+                &format!("The keyword '{name}' is reserved"),
+            ));
         }
         if name == "yield" && (ctx.generator || ctx.strict) {
-            return Err(bad(node, "Cannot use 'yield' as identifier here"));
+            return Err(problem_at(node, "Cannot use 'yield' as identifier here"));
         }
         if name == "await" && (ctx.is_async || ctx.module || ctx.static_block) {
-            return Err(bad(node, "Cannot use 'await' as identifier here"));
+            return Err(problem_at(node, "Cannot use 'await' as identifier here"));
         }
         if !label && ctx.field_init && name == "arguments" {
-            return Err(bad(node, "'arguments' is not allowed in class field initializer or static initialization block"));
+            return Err(problem_at(node, "'arguments' is not allowed in class field initializer or static initialization block"));
         }
         Ok(())
     }
@@ -5073,15 +5094,15 @@ impl Early {
         match node.kind {
             "Identifier" => self.binding_name(node, ctx),
             "ObjectPattern" => {
-                let properties = kids(node, "properties");
+                let properties = child_nodes(node, "properties");
                 for (at, property) in properties.iter().enumerate() {
                     if property.kind == "RestElement" {
                         if at + 1 != properties.len() {
-                            return Err(bad(property, "Rest element must be last element"));
+                            return Err(problem_at(property, "Rest element must be last element"));
                         }
                         if let Some(argument) = property.node("argument") {
                             if argument.kind != "Identifier" {
-                                return Err(bad(argument, "`...` must be followed by an identifier in declaration contexts"));
+                                return Err(problem_at(argument, "`...` must be followed by an identifier in declaration contexts"));
                             }
                             self.binding_name(argument, ctx)?;
                         }
@@ -5090,7 +5111,7 @@ impl Early {
                             .node("key")
                             .is_some_and(|key| key.kind == "PrivateIdentifier")
                         {
-                            return Err(bad(property, "Unexpected private name"));
+                            return Err(problem_at(property, "Unexpected private name"));
                         }
                         if property.flag("computed") {
                             if let Some(key) = property.node("key") {
@@ -5110,11 +5131,11 @@ impl Early {
                     if let Value::Node(inner) = element {
                         if inner.kind == "RestElement" {
                             if at + 1 != elements.len() {
-                                return Err(bad(inner, "Rest element must be last element"));
+                                return Err(problem_at(inner, "Rest element must be last element"));
                             }
                             if let Some(argument) = inner.node("argument") {
                                 if argument.kind == "AssignmentPattern" {
-                                    return Err(bad(
+                                    return Err(problem_at(
                                         argument,
                                         "Rest element may not have an initializer",
                                     ));
@@ -5141,48 +5162,51 @@ impl Early {
                 Some(argument) => self.binding_pattern(argument, ctx),
                 None => Ok(()),
             },
-            _ => Err(bad(node, "Invalid destructuring target")),
+            _ => Err(problem_at(node, "Invalid destructuring target")),
         }
     }
 
     fn target(&mut self, node: &Node, ctx: Ctx, simple_only: bool) -> Check {
         if node.flag("_paren") && matches!(node.kind, "ObjectPattern" | "ArrayPattern") {
-            return Err(bad(node, "Invalid parenthesized assignment pattern"));
+            return Err(problem_at(node, "Invalid parenthesized assignment pattern"));
         }
         match node.kind {
             "Identifier" => {
                 let name = name_of(node);
                 if ctx.strict && (name == "eval" || name == "arguments") {
-                    return Err(bad(node, "Unexpected eval or arguments in strict mode"));
+                    return Err(problem_at(
+                        node,
+                        "Unexpected eval or arguments in strict mode",
+                    ));
                 }
                 self.reference_name(node, ctx, false)
             }
             "MemberExpression" => {
                 if node.flag("optional") {
-                    return Err(bad(node, "Invalid left-hand side in assignment"));
+                    return Err(problem_at(node, "Invalid left-hand side in assignment"));
                 }
                 self.expression(node, ctx)
             }
             "ObjectPattern" | "ArrayPattern" if !simple_only => self.assignment_pattern(node, ctx),
             "ObjectExpression" | "ArrayExpression" if !simple_only => {
-                Err(bad(node, "Invalid destructuring assignment target"))
+                Err(problem_at(node, "Invalid destructuring assignment target"))
             }
-            _ => Err(bad(node, "Invalid left-hand side in assignment")),
+            _ => Err(problem_at(node, "Invalid left-hand side in assignment")),
         }
     }
 
     fn assignment_pattern(&mut self, node: &Node, ctx: Ctx) -> Check {
         match node.kind {
             "ObjectPattern" => {
-                let properties = kids(node, "properties");
+                let properties = child_nodes(node, "properties");
                 for (at, property) in properties.iter().enumerate() {
                     if property.kind == "RestElement" {
                         if at + 1 != properties.len() {
-                            return Err(bad(property, "Rest element must be last element"));
+                            return Err(problem_at(property, "Rest element must be last element"));
                         }
                         if let Some(argument) = property.node("argument") {
                             if !matches!(argument.kind, "Identifier" | "MemberExpression") {
-                                return Err(bad(argument, "Invalid rest element"));
+                                return Err(problem_at(argument, "Invalid rest element"));
                             }
                             self.target(argument, ctx, true)?;
                         }
@@ -5191,7 +5215,7 @@ impl Early {
                             .node("key")
                             .is_some_and(|key| key.kind == "PrivateIdentifier")
                         {
-                            return Err(bad(property, "Unexpected private name"));
+                            return Err(problem_at(property, "Unexpected private name"));
                         }
                         if property.flag("computed") {
                             if let Some(key) = property.node("key") {
@@ -5211,11 +5235,11 @@ impl Early {
                     if let Value::Node(inner) = element {
                         if inner.kind == "RestElement" {
                             if at + 1 != elements.len() {
-                                return Err(bad(inner, "Rest element must be last element"));
+                                return Err(problem_at(inner, "Rest element must be last element"));
                             }
                             if let Some(argument) = inner.node("argument") {
                                 if argument.kind == "AssignmentPattern" {
-                                    return Err(bad(
+                                    return Err(problem_at(
                                         argument,
                                         "Rest element may not have an initializer",
                                     ));
@@ -5270,17 +5294,20 @@ impl Early {
             "Literal" => {
                 if let Some(Value::Regex { pattern, flags }) = node.get("regex") {
                     if let Err(message) = validate_regex(pattern, flags) {
-                        return Err(bad(node, &message));
+                        return Err(problem_at(node, &message));
                     }
                 }
                 if ctx.strict {
                     if let Some(raw) = node.text("raw") {
                         let numeric = matches!(node.get("value"), Some(Value::Number(_)));
                         if numeric && legacy_octal(raw) {
-                            return Err(bad(node, "Octal literals are not allowed in strict mode"));
+                            return Err(problem_at(
+                                node,
+                                "Octal literals are not allowed in strict mode",
+                            ));
                         }
                         if matches!(node.get("value"), Some(Value::Text(_))) && octal_escape(raw) {
-                            return Err(bad(
+                            return Err(problem_at(
                                 node,
                                 "Octal escape sequences are not allowed in strict mode",
                             ));
@@ -5296,13 +5323,13 @@ impl Early {
                 if let Some(object) = node.node("object") {
                     if object.kind == "Super" {
                         if !ctx.super_prop {
-                            return Err(bad(object, "'super' keyword unexpected here"));
+                            return Err(problem_at(object, "'super' keyword unexpected here"));
                         }
                         if node
                             .node("property")
                             .is_some_and(|property| property.kind == "PrivateIdentifier")
                         {
-                            return Err(bad(node, "Unexpected private field"));
+                            return Err(problem_at(node, "Unexpected private field"));
                         }
                     } else {
                         self.expression(object, ctx)?;
@@ -5321,7 +5348,7 @@ impl Early {
                 if let Some(callee) = node.node("callee") {
                     if callee.kind == "Super" {
                         if node.kind == "NewExpression" || !ctx.super_call {
-                            return Err(bad(callee, "'super' keyword unexpected here"));
+                            return Err(problem_at(callee, "'super' keyword unexpected here"));
                         }
                     } else {
                         self.expression(callee, ctx)?;
@@ -5334,21 +5361,30 @@ impl Early {
                 }
                 Ok(())
             }
-            "Super" => Err(bad(node, "'super' keyword unexpected here")),
+            "Super" => Err(problem_at(node, "'super' keyword unexpected here")),
             "MetaProperty" => {
                 if node.node("meta").is_some_and(|part| part.flag("_escaped"))
                     || node
                         .node("property")
                         .is_some_and(|part| part.flag("_escaped"))
                 {
-                    return Err(bad(node, "Keyword must not contain escaped characters"));
+                    return Err(problem_at(
+                        node,
+                        "Keyword must not contain escaped characters",
+                    ));
                 }
                 let meta = node.node("meta").map(name_of).unwrap_or("");
                 if meta == "new" && !ctx.new_target {
-                    return Err(bad(node, "new.target expression is not allowed here"));
+                    return Err(problem_at(
+                        node,
+                        "new.target expression is not allowed here",
+                    ));
                 }
                 if meta == "import" && !ctx.module {
-                    return Err(bad(node, "Cannot use 'import.meta' outside a module"));
+                    return Err(problem_at(
+                        node,
+                        "Cannot use 'import.meta' outside a module",
+                    ));
                 }
                 Ok(())
             }
@@ -5383,10 +5419,10 @@ impl Early {
                                 .node("property")
                                 .is_some_and(|property| property.kind == "PrivateIdentifier")
                         {
-                            return Err(bad(node, "Private fields can not be deleted"));
+                            return Err(problem_at(node, "Private fields can not be deleted"));
                         }
                         if ctx.strict && argument.kind == "Identifier" {
-                            return Err(bad(
+                            return Err(problem_at(
                                 node,
                                 "Delete of an unqualified identifier in strict mode",
                             ));
@@ -5398,7 +5434,7 @@ impl Early {
             }
             "YieldExpression" => {
                 if ctx.in_params {
-                    return Err(bad(
+                    return Err(problem_at(
                         node,
                         "Yield expression not allowed in formal parameter",
                     ));
@@ -5407,13 +5443,13 @@ impl Early {
             }
             "AwaitExpression" => {
                 if ctx.in_params {
-                    return Err(bad(
+                    return Err(problem_at(
                         node,
                         "Illegal await-expression in formal parameters of async function",
                     ));
                 }
                 if ctx.static_block {
-                    return Err(bad(
+                    return Err(problem_at(
                         node,
                         "Illegal await-expression in class static initialization block",
                     ));
@@ -5434,13 +5470,13 @@ impl Early {
                 }
             }
             "TemplateLiteral" => {
-                for quasi in kids(node, "quasis") {
+                for quasi in child_nodes(node, "quasis") {
                     if matches!(quasi.get("value"), Some(Value::Node(value)) if value.get("cooked") == Some(&Value::Null))
                     {
-                        return Err(bad(quasi, "Invalid escape sequence in template"));
+                        return Err(problem_at(quasi, "Invalid escape sequence in template"));
                     }
                 }
-                for inner in kids(node, "expressions") {
+                for inner in child_nodes(node, "expressions") {
                     self.expression(inner, ctx)?;
                 }
                 Ok(())
@@ -5450,7 +5486,7 @@ impl Early {
                     self.expression(tag, ctx)?;
                 }
                 if let Some(quasi) = node.node("quasi") {
-                    for inner in kids(quasi, "expressions") {
+                    for inner in child_nodes(quasi, "expressions") {
                         self.expression(inner, ctx)?;
                     }
                 }
@@ -5458,7 +5494,7 @@ impl Early {
             }
             "ObjectExpression" => {
                 let mut proto = false;
-                for property in kids(node, "properties") {
+                for property in child_nodes(node, "properties") {
                     if property.kind == "SpreadElement" {
                         if let Some(argument) = property.node("argument") {
                             self.expression(argument, ctx)?;
@@ -5470,7 +5506,7 @@ impl Early {
                         .node("key")
                         .is_some_and(|key| key.kind == "PrivateIdentifier")
                     {
-                        return Err(bad(property, "Unexpected private name"));
+                        return Err(problem_at(property, "Unexpected private name"));
                     }
                     if !computed
                         && property.text("kind") == Some("init")
@@ -5485,7 +5521,7 @@ impl Early {
                             };
                             if shown == "__proto__" {
                                 if proto {
-                                    return Err(bad(key, "Duplicate __proto__ fields are not allowed in object literals"));
+                                    return Err(problem_at(key, "Duplicate __proto__ fields are not allowed in object literals"));
                                 }
                                 proto = true;
                             }
@@ -5499,7 +5535,10 @@ impl Early {
                     if let Some(value) = property.node("value") {
                         if property.flag("shorthand") {
                             if value.kind == "AssignmentPattern" {
-                                return Err(bad(value, "Invalid shorthand property initializer"));
+                                return Err(problem_at(
+                                    value,
+                                    "Invalid shorthand property initializer",
+                                ));
                             }
                             if let Some(key) = property.node("key") {
                                 self.reference_name(key, ctx, false)?;
@@ -5529,7 +5568,7 @@ impl Early {
             | "ArrayExpression"
             | "ExpressionStatement"
             | "ImportExpression" => self.generic(node, ctx),
-            "PrivateIdentifier" => Err(bad(node, "Unexpected private name")),
+            "PrivateIdentifier" => Err(problem_at(node, "Unexpected private name")),
             "Decorator" => self.generic(node, ctx),
             "ThisExpression" | "TemplateElement" => Ok(()),
             "ObjectPattern" | "ArrayPattern" | "AssignmentPattern" | "RestElement" => {
@@ -5546,7 +5585,7 @@ impl Early {
                 scope.used.push((name, node.line, node.column));
                 Ok(())
             }
-            None => Err(bad(
+            None => Err(problem_at(
                 node,
                 "Private field must be declared in an enclosing class",
             )),
@@ -5560,13 +5599,16 @@ impl Early {
         ctx: Ctx,
         derived_constructor: bool,
     ) -> Check {
-        let params = kids(function, "params");
+        let params = child_nodes(function, "params");
         match kind {
             "get" if !params.is_empty() => {
-                return Err(bad(function, "Getter must not have any formal parameters"));
+                return Err(problem_at(
+                    function,
+                    "Getter must not have any formal parameters",
+                ));
             }
             "set" if params.len() != 1 || params[0].kind == "RestElement" => {
-                return Err(bad(
+                return Err(problem_at(
                     function,
                     "Setter must have exactly one formal parameter",
                 ));
@@ -5605,10 +5647,10 @@ impl Early {
         } else if function.flag("async") {
             ctx.is_async = true;
         }
-        let params = kids(function, "params");
+        let params = child_nodes(function, "params");
         let body = function.node("body");
         let body_list: Vec<&Node> = match body {
-            Some(block) if block.kind == "BlockStatement" => kids(block, "body"),
+            Some(block) if block.kind == "BlockStatement" => child_nodes(block, "body"),
             _ => Vec::new(),
         };
         let mut strict = ctx.strict;
@@ -5629,7 +5671,7 @@ impl Early {
         }
         let simple = params.iter().all(|param| param.kind == "Identifier");
         if own_strict && !simple {
-            return Err(bad(
+            return Err(problem_at(
                 function,
                 "Illegal 'use strict' directive in function with non-simple parameter list",
             ));
@@ -5657,7 +5699,10 @@ impl Early {
         }
         for (at, param) in params.iter().enumerate() {
             if param.kind == "RestElement" && at + 1 != params.len() {
-                return Err(bad(param, "Rest parameter must be last formal parameter"));
+                return Err(problem_at(
+                    param,
+                    "Rest parameter must be last formal parameter",
+                ));
             }
             self.binding_pattern(param, param_ctx)?;
         }
@@ -5669,7 +5714,7 @@ impl Early {
                     .skip(at + 1)
                     .any(|other| name_of(other) == name_of(first))
                 {
-                    return Err(bad(
+                    return Err(problem_at(
                         first,
                         "Duplicate parameter name not allowed in this context",
                     ));
@@ -5706,7 +5751,7 @@ impl Early {
         if let Some(id) = node.node("id") {
             self.binding_name(id, ctx)?;
         }
-        for decorator in kids(node, "decorators") {
+        for decorator in child_nodes(node, "decorators") {
             self.expression(decorator, outer)?;
         }
         let derived = node
@@ -5717,7 +5762,7 @@ impl Early {
         }
         let elements = node
             .node("body")
-            .map(|body| kids(body, "body"))
+            .map(|body| child_nodes(body, "body"))
             .unwrap_or_default();
         let mut scope = PrivateScope {
             declared: Vec::new(),
@@ -5728,7 +5773,7 @@ impl Early {
             if element.kind == "StaticBlock" {
                 continue;
             }
-            for decorator in kids(element, "decorators") {
+            for decorator in child_nodes(element, "decorators") {
                 self.expression(decorator, ctx)?;
             }
             let key = element.node("key");
@@ -5743,7 +5788,7 @@ impl Early {
                 if key.kind == "PrivateIdentifier" {
                     let private = name_of(key);
                     if private == "constructor" {
-                        return Err(bad(
+                        return Err(problem_at(
                             key,
                             "Classes may not have a private field named '#constructor'",
                         ));
@@ -5762,7 +5807,7 @@ impl Early {
                             || (*held_kind == "set" && kind == "get"))
                             && *held_static == is_static;
                         if held == private && !accessor_pair {
-                            return Err(bad(key, "Identifier has already been declared"));
+                            return Err(problem_at(key, "Identifier has already been declared"));
                         }
                     }
                     scope.declared.push((private.to_string(), kind, is_static));
@@ -5779,31 +5824,31 @@ impl Early {
                         || kind == "get"
                         || kind == "set";
                     if special {
-                        return Err(bad(
+                        return Err(problem_at(
                             element,
                             "Class constructor may not be an accessor, generator or async",
                         ));
                     }
                     constructors += 1;
                     if constructors > 1 {
-                        return Err(bad(element, "A class may only have one constructor"));
+                        return Err(problem_at(element, "A class may only have one constructor"));
                     }
                 }
                 if is_static && shown == Some("prototype") {
-                    return Err(bad(
+                    return Err(problem_at(
                         element,
                         "Classes may not have a static property named 'prototype'",
                     ));
                 }
             } else if matches!(element.kind, "PropertyDefinition" | "AccessorProperty") {
                 if shown == Some("constructor") {
-                    return Err(bad(
+                    return Err(problem_at(
                         element,
                         "Classes may not have a field named 'constructor'",
                     ));
                 }
                 if is_static && shown == Some("prototype") {
-                    return Err(bad(
+                    return Err(problem_at(
                         element,
                         "Classes may not have a static property named 'prototype'",
                     ));
@@ -5855,7 +5900,7 @@ impl Early {
                 let saved_labels = std::mem::take(&mut self.labels);
                 let saved_iteration = std::mem::replace(&mut self.iteration, 0);
                 let saved_switches = std::mem::replace(&mut self.switches, 0);
-                let list = kids(element, "body");
+                let list = child_nodes(element, "body");
                 let result = self.statements(&list, inner, Top::Function, &[]);
                 self.labels = saved_labels;
                 self.iteration = saved_iteration;
@@ -6832,7 +6877,7 @@ impl Printer {
 
     fn decorator_text(&self, owner: &Node) -> String {
         let mut out = String::new();
-        for decorator in kids(owner, "decorators") {
+        for decorator in child_nodes(owner, "decorators") {
             if let Some(expression) = decorator.node("expression") {
                 let mut simple = false;
                 let mut cursor = Some(expression);
@@ -6875,7 +6920,7 @@ impl Printer {
         out.push_str(" {");
         let members = node
             .node("body")
-            .map(|body| kids(body, "body"))
+            .map(|body| child_nodes(body, "body"))
             .unwrap_or_default();
         for member in members {
             out.push('\n');
@@ -6884,7 +6929,7 @@ impl Printer {
             match member.kind {
                 "StaticBlock" => {
                     out.push_str("static {");
-                    for statement in kids(member, "body") {
+                    for statement in child_nodes(member, "body") {
                         out.push('\n');
                         out.push_str(&pad(depth + 2));
                         out.push_str(&self.statement(statement, depth + 2));
@@ -6923,7 +6968,7 @@ impl Printer {
 
     fn object_text(&self, node: &Node, depth: usize) -> String {
         let mut parts: Vec<String> = Vec::new();
-        for property in kids(node, "properties") {
+        for property in child_nodes(node, "properties") {
             match property.kind {
                 "SpreadElement" | "RestElement" => {
                     parts.push(format!("...{}", self.child(property, "argument", 1)));
@@ -6995,8 +7040,8 @@ impl Printer {
             "Super" => "super".to_string(),
             "Literal" => node.text("raw").unwrap_or("null").to_string(),
             "TemplateLiteral" => {
-                let quasis = kids(node, "quasis");
-                let expressions = kids(node, "expressions");
+                let quasis = child_nodes(node, "quasis");
+                let expressions = child_nodes(node, "expressions");
                 let mut out = String::from("`");
                 for (at, quasi) in quasis.iter().enumerate() {
                     if let Some(Value::Node(value)) = quasi.get("value") {
@@ -7209,7 +7254,7 @@ impl Printer {
 
     fn declaration(&self, node: &Node, depth: usize, in_head: bool) -> String {
         let mut declarators: Vec<String> = Vec::new();
-        for declarator in kids(node, "declarations") {
+        for declarator in child_nodes(node, "declarations") {
             let id = self.child(declarator, "id", 2);
             match declarator.node("init") {
                 Some(init) => {
@@ -7255,7 +7300,7 @@ impl Printer {
     fn statement(&self, node: &Node, depth: usize) -> String {
         match node.kind {
             "BlockStatement" => {
-                let body = kids(node, "body");
+                let body = child_nodes(node, "body");
                 if body.is_empty() {
                     return "{}".to_string();
                 }
@@ -7401,14 +7446,14 @@ impl Printer {
             ),
             "SwitchStatement" => {
                 let mut out = format!("switch ({}) {{", self.child(node, "discriminant", 0));
-                for case in kids(node, "cases") {
+                for case in child_nodes(node, "cases") {
                     out.push('\n');
                     out.push_str(&pad(depth + 1));
                     match case.node("test") {
                         Some(test) => out.push_str(&format!("case {}:", self.expression(test, 0))),
                         None => out.push_str("default:"),
                     }
-                    for statement in kids(case, "consequent") {
+                    for statement in child_nodes(case, "consequent") {
                         out.push('\n');
                         out.push_str(&pad(depth + 2));
                         out.push_str(&self.statement(statement, depth + 2));
@@ -7450,7 +7495,7 @@ impl Printer {
                     out.push_str(phase);
                     out.push(' ');
                 }
-                let specifiers = kids(node, "specifiers");
+                let specifiers = child_nodes(node, "specifiers");
                 if !specifiers.is_empty() {
                     let mut parts: Vec<String> = Vec::new();
                     let mut named: Vec<String> = Vec::new();
@@ -7511,7 +7556,7 @@ impl Printer {
                 Some(inner) => format!("export {}", self.statement(inner, depth)),
                 None => {
                     let mut parts: Vec<String> = Vec::new();
-                    for specifier in kids(node, "specifiers") {
+                    for specifier in child_nodes(node, "specifiers") {
                         let local = specifier
                             .node("local")
                             .map(|inner| self.expression(inner, 1))
@@ -7536,7 +7581,7 @@ impl Printer {
     }
 
     fn attributes(&self, node: &Node) -> String {
-        let list = kids(node, "attributes");
+        let list = child_nodes(node, "attributes");
         if list.is_empty() {
             return String::new();
         }
@@ -7662,7 +7707,7 @@ impl crate::compiler::Compiler for JsCompiler {
             let module = source.path.ends_with(".mjs");
             let program = parse(&text, module, &source.path)
                 .map_err(|problem| problem.with_context(format!("File: {}", source.path)))?;
-            session.offer(
+            session.add_input(
                 source.path.clone(),
                 crate::compiler::Kind::Resource,
                 generate(&program).into_bytes(),

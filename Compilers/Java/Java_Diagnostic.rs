@@ -309,7 +309,7 @@ pub fn english_of(code: &str) -> Option<&'static str> {
 }
 
 pub fn explain(code: &str) -> Option<String> {
-    english_of(code).map(crate::speech::sentence)
+    english_of(code).map(crate::speech::translate_sentence)
 }
 
 pub fn known(code: &str) -> bool {

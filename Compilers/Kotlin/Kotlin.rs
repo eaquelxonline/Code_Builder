@@ -1649,12 +1649,12 @@ pub mod parse {
             }
         }
 
-        fn here(&self) -> &Spelled {
+        fn current_token(&self) -> &Spelled {
             &self.tokens[self.at.min(self.tokens.len() - 1)]
         }
 
         fn token(&self) -> &Token {
-            &self.here().token
+            &self.current_token().token
         }
 
         fn peek(&self, ahead: usize) -> &Token {
@@ -1666,7 +1666,7 @@ pub mod parse {
         }
 
         fn spot(&self) -> Spot {
-            let here = self.here();
+            let here = self.current_token();
             Spot {
                 line: here.line,
                 column: here.column,
@@ -1732,11 +1732,11 @@ pub mod parse {
         }
 
         fn newline_before(&self) -> bool {
-            self.here().newline_before && *self.newlines.last().unwrap_or(&true)
+            self.current_token().newline_before && *self.newlines.last().unwrap_or(&true)
         }
 
-        fn wrong(&self, code: &str, message: &str) -> Diagnostic {
-            let here = self.here();
+        fn error_here(&self, code: &str, message: &str) -> Diagnostic {
+            let here = self.current_token();
             at(code, here.line, here.column, message.to_string())
                 .with_context(format!("Found: {}", here.token.describe()))
         }
@@ -1746,7 +1746,7 @@ pub mod parse {
                 return Ok(());
             }
             Err(self
-                .wrong("EK100", "A mark the language expects here is not there.")
+                .error_here("EK100", "A mark the language expects here is not there.")
                 .with_context(format!("Expected: {mark}")))
         }
 
@@ -1755,7 +1755,7 @@ pub mod parse {
                 return Ok(());
             }
             Err(self
-                .wrong("EK100", "A mark the language expects here is not there.")
+                .error_here("EK100", "A mark the language expects here is not there.")
                 .with_context(format!("Expected: {word}")))
         }
 
@@ -1765,7 +1765,7 @@ pub mod parse {
                     self.advance();
                     Ok(held)
                 }
-                _ => Err(self.wrong("EK101", "A name was expected here.")),
+                _ => Err(self.error_here("EK101", "A name was expected here.")),
             }
         }
 
@@ -1787,7 +1787,7 @@ pub mod parse {
         }
 
         fn split_front(&mut self, first: &'static str, rest: &'static str) {
-            let here = self.here().clone();
+            let here = self.current_token().clone();
             self.tokens[self.at].token = Token::Mark(first);
             self.tokens.insert(
                 self.at + 1,
@@ -1866,7 +1866,7 @@ pub mod parse {
                 match self.declaration(modifiers, false)? {
                     Some(held) => declarations.push(held),
                     None => {
-                        return Err(self.wrong(
+                        return Err(self.error_here(
                             "EK102",
                             "A declaration was expected here, at the top of a file.",
                         ))
@@ -2043,7 +2043,7 @@ pub mod parse {
         pub fn modifiers(&mut self) -> Parsed<Modifiers> {
             let mut out = Modifiers::default();
             loop {
-                if self.is_mark("@") && !self.here().space_after {
+                if self.is_mark("@") && !self.current_token().space_after {
                     let mut found = self.annotation_run()?;
                     out.annotations.append(&mut found);
                     continue;
@@ -2119,7 +2119,7 @@ pub mod parse {
                 }
             }
             let mut arguments = Vec::new();
-            if self.is_mark("(") && !self.here().space_before {
+            if self.is_mark("(") && !self.current_token().space_before {
                 arguments = self.value_arguments()?;
             }
             Ok(Annotation {
@@ -2384,7 +2384,9 @@ pub mod parse {
                         let modifiers = this.modifiers()?;
                         if !this.is_name() || this.starts_declaration_after_modifiers() {
                             if !modifiers.annotations.is_empty() || !modifiers.words.is_empty() {
-                                return Err(this.wrong("EK103", "An enum entry was expected here."));
+                                return Err(
+                                    this.error_here("EK103", "An enum entry was expected here.")
+                                );
                             }
                             break;
                         }
@@ -2421,14 +2423,14 @@ pub mod parse {
                     }
                     if this.at_end() {
                         return Err(
-                            this.wrong("EK104", "A class body was opened and never closed.")
+                            this.error_here("EK104", "A class body was opened and never closed.")
                         );
                     }
                     let modifiers = this.modifiers()?;
                     match this.declaration(modifiers, false)? {
                         Some(held) => members.push(held),
                         None => {
-                            return Err(this.wrong(
+                            return Err(this.error_here(
                                 "EK105",
                                 "A member declaration was expected here, inside a class body.",
                             ))
@@ -2631,7 +2633,7 @@ pub mod parse {
             }
             let (name, arguments) = parts.pop().unwrap_or_default();
             if !arguments.is_empty() {
-                return Err(self.wrong("EK101", "A name was expected here."));
+                return Err(self.error_here("EK101", "A name was expected here."));
             }
             let receiver = if parts.is_empty() {
                 None
@@ -2854,10 +2856,10 @@ pub mod parse {
         fn nullable_marks(&mut self) -> bool {
             let mut nullable = false;
             loop {
-                if self.is_mark("?.") && !self.here().space_before {
+                if self.is_mark("?.") && !self.current_token().space_before {
                     self.split_front("?", ".");
                 }
-                if self.is_mark("?:") && !self.here().space_before {
+                if self.is_mark("?:") && !self.current_token().space_before {
                     self.split_front("?", ":");
                 }
                 if self.is_mark("?") {
@@ -3030,15 +3032,15 @@ pub mod parse {
                     return Ok(out);
                 }
                 if self.at_end() {
-                    return Err(self.wrong("EK106", "A block was opened and never closed."));
+                    return Err(self.error_here("EK106", "A block was opened and never closed."));
                 }
                 out.push(self.statement()?);
                 if !self.is_mark("}")
                     && !self.is_mark(";")
-                    && !self.here().newline_before
+                    && !self.current_token().newline_before
                     && !self.at_end()
                 {
-                    return Err(self.wrong(
+                    return Err(self.error_here(
                         "EK107",
                         "Two statements on one line need a semicolon between them.",
                     ));
@@ -3052,7 +3054,7 @@ pub mod parse {
                 if let Some(held) = self.declaration(modifiers, true)? {
                     return Ok(Statement::Declaration(held));
                 }
-                return Err(self.wrong(
+                return Err(self.error_here(
                     "EK108",
                     "A statement is not shaped the way Kotlin writes one.",
                 ));
@@ -3159,7 +3161,7 @@ pub mod parse {
                     Token::Mark(mark) => {
                         let (right, inner) = self.binary(precedence - 1)?;
                         let operator = Operator::of_mark(mark).ok_or_else(|| {
-                            self.wrong(
+                            self.error_here(
                                 "EK109",
                                 "An expression is not shaped the way Kotlin writes one.",
                             )
@@ -3311,7 +3313,7 @@ pub mod parse {
                         spot,
                     }) = self.call_suffix(callee, open_spot)?
                     else {
-                        return Err(self.wrong(
+                        return Err(self.error_here(
                             "EK113",
                             "A call was expected after a function given in parentheses.",
                         ));
@@ -3345,9 +3347,9 @@ pub mod parse {
                             "class".to_string()
                         }
                         Token::Keyword(word) if word == "this" || word == "super" => {
-                            return Err(self.wrong("EK101", "A name was expected here."));
+                            return Err(self.error_here("EK101", "A name was expected here."));
                         }
-                        _ => return Err(self.wrong("EK101", "A name was expected here.")),
+                        _ => return Err(self.error_here("EK101", "A name was expected here.")),
                     };
                     let member = Expr::Member {
                         receiver: Box::new(value),
@@ -3367,7 +3369,7 @@ pub mod parse {
                 }
                 if self.is_mark("++")
                     || self.is_mark("--")
-                    || (self.is_mark("!!") && !self.here().newline_before)
+                    || (self.is_mark("!!") && !self.current_token().newline_before)
                 {
                     let operator = match self.advance() {
                         Token::Mark("++") => Postfix::Increment,
@@ -3394,7 +3396,7 @@ pub mod parse {
             self.expect_mark("::")?;
             if self.eat_keyword("class") {
                 let Some(receiver) = receiver else {
-                    return Err(self.wrong("EK101", "A name was expected here."));
+                    return Err(self.error_here("EK101", "A name was expected here."));
                 };
                 return Ok(Expr::ClassLiteral(Box::new(receiver), spot));
             }
@@ -3639,7 +3641,10 @@ pub mod parse {
         }
 
         fn jump_label(&mut self) -> Option<String> {
-            if self.is_mark("@") && !self.here().space_before && !self.here().space_after {
+            if self.is_mark("@")
+                && !self.current_token().space_before
+                && !self.current_token().space_after
+            {
                 if let Token::Name(name) | Token::Quoted(name) = self.peek(1).clone() {
                     self.advance();
                     self.advance();
@@ -3720,7 +3725,7 @@ pub mod parse {
                                 inner.newlines = vec![false];
                                 let value = inner.expression()?;
                                 if !inner.at_end() {
-                                    return Err(inner.wrong(
+                                    return Err(inner.error_here(
                                         "EK110",
                                         "A string template holds more than one expression.",
                                     ));
@@ -3750,7 +3755,7 @@ pub mod parse {
                 Token::Keyword("super") => {
                     self.advance();
                     let mut qualifier = None;
-                    if self.is_mark("<") && !self.here().space_before {
+                    if self.is_mark("<") && !self.current_token().space_before {
                         self.advance();
                         qualifier = Some(self.nested(false, |this| {
                             let held = this.type_ref()?;
@@ -3986,7 +3991,7 @@ pub mod parse {
                     self.advance();
                     Ok(Expr::Name(name, spot))
                 }
-                _ => Err(self.wrong("EK111", "An expression was expected here.")),
+                _ => Err(self.error_here("EK111", "An expression was expected here.")),
             }
         }
 
@@ -4025,7 +4030,7 @@ pub mod parse {
                         break;
                     }
                     if this.at_end() {
-                        return Err(this.wrong("EK112", "A when was opened and never closed."));
+                        return Err(this.error_here("EK112", "A when was opened and never closed."));
                     }
                     let branch_spot = this.spot();
                     if this.is_keyword("else") {
@@ -10048,13 +10053,14 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         }
     }
 
-    pub fn yields_lambda(expr: &Expr) -> bool {
+    pub fn produces_lambda(expr: &Expr) -> bool {
         match expr.unparenthesized() {
             Expr::Lambda(_) => true,
             Expr::If {
                 then, otherwise, ..
             } => {
-                let inner = yields_lambda(then) || otherwise.as_deref().is_some_and(yields_lambda);
+                let inner =
+                    produces_lambda(then) || otherwise.as_deref().is_some_and(produces_lambda);
                 inner && otherwise.is_some()
             }
             Expr::When {
@@ -10063,11 +10069,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 ..
             } => {
                 otherwise.is_some()
-                    && (branches.iter().any(|one| yields_lambda(&one.body))
-                        || otherwise.as_deref().is_some_and(yields_lambda))
+                    && (branches.iter().any(|one| produces_lambda(&one.body))
+                        || otherwise.as_deref().is_some_and(produces_lambda))
             }
             Expr::Block(block) => match block.statements.last() {
-                Some(tree::Statement::Expression(last)) => yields_lambda(last),
+                Some(tree::Statement::Expression(last)) => produces_lambda(last),
                 _ => false,
             },
             Expr::Call {
@@ -10082,7 +10088,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     && matches!(
                         arguments[0].value.unparenthesized(),
                         Expr::Lambda(lambda) if match lambda.body.statements.last() {
-                            Some(tree::Statement::Expression(last)) => yields_lambda(last),
+                            Some(tree::Statement::Expression(last)) => produces_lambda(last),
                             _ => false,
                         }
                     )
@@ -10121,11 +10127,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 Some(tree::Statement::Expression(last)) => branch_holds_lambda_call(last),
                 _ => false,
             },
-            other => holds_lambda_call(other) || branches_hold_lambda_call(other),
+            other => contains_lambda_call(other) || branches_hold_lambda_call(other),
         }
     }
 
-    pub fn holds_lambda_call(expr: &Expr) -> bool {
+    pub fn contains_lambda_call(expr: &Expr) -> bool {
         match expr.unparenthesized() {
             Expr::Call { arguments, .. } => arguments
                 .iter()
@@ -11182,7 +11188,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 .map(|(_, ty)| ty.clone())
         }
 
-        pub fn assume(&mut self, path: &str, ty: Ty) {
+        pub fn assume_type(&mut self, path: &str, ty: Ty) {
             if let Some(frame) = self.smart.last_mut() {
                 frame.push((path.to_string(), ty));
             }
@@ -11666,7 +11672,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     self.spine_casts(expr, &mut facts);
                     self.contract_casts(expr, &mut facts);
                     for (path, ty) in facts {
-                        self.assume(&path, ty);
+                        self.assume_type(&path, ty);
                     }
                     Ok(())
                 }
@@ -12475,12 +12481,12 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         vec![held.j.clone()],
                     )));
                     if let Some(path) = stable_path(operand) {
-                        self.assume(&path, held.ty.non_null());
+                        self.assume_type(&path, held.ty.non_null());
                     }
                     let mut chain = Vec::new();
                     self.safe_receiver_facts(operand, &mut chain);
                     for (path, ty) in chain {
-                        self.assume(&path, ty);
+                        self.assume_type(&path, ty);
                     }
                     let ty = held.ty.non_null();
                     Ok(Val { ty, ..held })
@@ -12546,7 +12552,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     let first_path = self.condition_facts(left, operator == O::And);
                     self.open();
                     for (path, ty) in first_path {
-                        self.assume(&path, ty);
+                        self.assume_type(&path, ty);
                     }
                     let second = self.boolean_of(right)?;
                     let (body, dead) = self.close();
@@ -12842,12 +12848,12 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     otherwise: None,
                 });
                 if let Some(path) = stable_path(left) {
-                    self.assume(&path, non_null.clone());
+                    self.assume_type(&path, non_null.clone());
                 }
                 let mut facts = Vec::new();
                 self.safe_receiver_facts(left, &mut facts);
                 for (path, ty) in facts {
-                    self.assume(&path, ty);
+                    self.assume_type(&path, ty);
                 }
                 return Ok(Val {
                     ty: non_null,
@@ -13244,7 +13250,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let used = used && otherwise.is_some();
             self.open();
             for (path, ty) in &true_facts {
-                self.assume(path, ty.clone());
+                self.assume_type(path, ty.clone());
             }
             self.last_closed.clear();
             let first = if used {
@@ -13263,7 +13269,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let (then_body, _) = self.close_keep_open();
             self.open();
             for (path, ty) in &false_facts {
-                self.assume(path, ty.clone());
+                self.assume_type(path, ty.clone());
             }
             let second = match otherwise {
                 Some(held) if used => Some(self.value(held, expected)?),
@@ -13302,11 +13308,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     self.mark_dead();
                 } else if then_dead {
                     for (path, ty) in false_facts {
-                        self.assume(&path, ty);
+                        self.assume_type(&path, ty);
                     }
                 } else if else_dead && otherwise.is_some() {
                     for (path, ty) in true_facts {
-                        self.assume(&path, ty);
+                        self.assume_type(&path, ty);
                     }
                 } else if otherwise.is_some() {
                     for (path, first_ty) in then_end_facts.iter().rev() {
@@ -13323,7 +13329,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         }
                         let joined = self.common_super(first_ty, second_ty);
                         if !joined.is(OBJECT) && !joined.is_error() {
-                            self.assume(path, joined);
+                            self.assume_type(path, joined);
                         }
                     }
                 } else if otherwise.is_none() {
@@ -13334,7 +13340,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             .find(|(held, _)| *held == path)
                             .is_some_and(|(_, found)| !found.may_be_null());
                         if assigned {
-                            self.assume(&path, ty);
+                            self.assume_type(&path, ty);
                         }
                     }
                 }
@@ -13611,7 +13617,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 if let Some(guard) = &branch.guard {
                     self.open();
                     for (path, ty) in &facts {
-                        self.assume(path, ty.clone());
+                        self.assume_type(path, ty.clone());
                     }
                     let guarded = self.boolean_of(guard)?;
                     let (setup, _) = self.close();
@@ -13648,10 +13654,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 }
                 self.open();
                 for (path, ty) in &prior_negatives {
-                    self.assume(path, ty.clone());
+                    self.assume_type(path, ty.clone());
                 }
                 for (path, ty) in &facts {
-                    self.assume(path, ty.clone());
+                    self.assume_type(path, ty.clone());
                 }
                 let value = if used {
                     Some(self.value(&branch.body, expected)?)
@@ -14057,7 +14063,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 });
             }
             for (path, ty) in facts {
-                self.assume(&path, ty);
+                self.assume_type(&path, ty);
             }
             self.discard(body)?;
             let (inner, _) = self.close();
@@ -14883,7 +14889,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             };
             self.open();
             if let Some(path) = self.safe_path.take() {
-                self.assume(&path, held.ty.non_null());
+                self.assume_type(&path, held.ty.non_null());
             }
             let inner = access(self, non_null)?;
             let ty = if inner.ty.is_unit() && inner.rep == Rep::Void {
@@ -17466,11 +17472,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 ) || (matches!(
                     argument.value.unparenthesized(),
                     Expr::If { .. } | Expr::When { .. }
-                ) && yields_lambda(&argument.value))
+                ) && produces_lambda(&argument.value))
                     || (matches!(argument.value.unparenthesized(), Expr::Call { .. })
-                        && yields_lambda(&argument.value))
+                        && produces_lambda(&argument.value))
                     || self.forwarded_inline(&argument.value).is_some()
-                    || defer_calls && holds_lambda_call(&argument.value)
+                    || defer_calls && contains_lambda_call(&argument.value)
                     || branches_hold_lambda_call(&argument.value);
                 if deferred {
                     out.push(Given {
@@ -22482,7 +22488,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 let local = self.declare_local("$safe", ty.clone(), false, Some(j));
                 let test = binary(java::Binary::NotEqual, J::Name(local.jvm.clone()), J::Null);
                 self.open();
-                self.assume(&local.name, ty);
+                self.assume_type(&local.name, ty);
                 let direct = Expr::Member {
                     receiver: Box::new(Expr::Name(local.name.clone(), *spot)),
                     name: name.clone(),
@@ -22535,7 +22541,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             && self.assignable(&smart, &local.ty, &[]).is_some()
                             && !matches!(smart, Ty::Nothing(_))
                         {
-                            self.assume(&local.name, smart);
+                            self.assume_type(&local.name, smart);
                         }
                     }
                     Ok(())
@@ -23303,7 +23309,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     let mut casts = Vec::new();
                     self.spine_casts(initializer, &mut casts);
                     for (path, ty) in casts {
-                        self.assume(&path, ty);
+                        self.assume_type(&path, ty);
                     }
                     if !property.mutable {
                         let mut roots = Vec::new();
@@ -23326,7 +23332,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         && self.assignable(&smart, &ty, &[]).is_some()
                         && !matches!(smart, Ty::Nothing(_))
                     {
-                        self.assume(&property.name, smart);
+                        self.assume_type(&property.name, smart);
                     }
                 }
                 None => {
@@ -40846,7 +40852,7 @@ pub fn lower_mixed(
             }
         }
     }
-    let seen = java::units_seen_together(for_java, classpath);
+    let seen = java::classpath_with_units(for_java, classpath);
     let world = world::World::new(
         &seen,
         jars,
@@ -62828,7 +62834,7 @@ annotation class SharedImmutable
     ) -> Result<Lowered, Diagnostic> {
         let mut classpath = crate::compilers::java::Classpath::new();
         for library in &libraries {
-            classpath.learn_jar(library)?;
+            classpath.register_jar(library)?;
         }
         let mut sources = prelude(options);
         sources.extend(kotlin.iter().cloned());

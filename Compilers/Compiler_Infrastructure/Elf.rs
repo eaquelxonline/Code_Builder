@@ -1908,7 +1908,7 @@ struct InflateBits<'a> {
 }
 
 impl InflateBits<'_> {
-    fn need(&mut self, bits: u32) -> Result<(), &'static str> {
+    fn require_bits(&mut self, bits: u32) -> Result<(), &'static str> {
         while self.count < bits {
             let byte = *self.data.get(self.at).ok_or("Z_DATA_ERROR")?;
             self.at += 1;
@@ -1922,7 +1922,7 @@ impl InflateBits<'_> {
         if bits == 0 {
             return Ok(0);
         }
-        self.need(bits)?;
+        self.require_bits(bits)?;
         let value = (self.buffer & ((1u64 << bits) - 1)) as u32;
         self.buffer >>= bits;
         self.count -= bits;

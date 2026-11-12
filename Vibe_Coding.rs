@@ -830,7 +830,7 @@ pub fn host_of(url: &str) -> Option<(String, String)> {
     Some((scheme, host))
 }
 
-pub fn barred(url: &str) -> Option<&'static Barred> {
+pub fn blocked_endpoint(url: &str) -> Option<&'static Barred> {
     let (_, host) = host_of(url)?;
     BARRED.iter().find(|one| {
         one.hosts
@@ -1388,7 +1388,13 @@ pub fn larger_than(need: u64, choices: &[Choice], wanted: Effort) -> Option<Choi
     Some(choice(held, model, wanted, 0))
 }
 
-pub fn fit(provider_id: &str, model_id: &str, window: u64, need: u64, wanted: Effort) -> Json {
+pub fn fit_to_context_window(
+    provider_id: &str,
+    model_id: &str,
+    window: u64,
+    need: u64,
+    wanted: Effort,
+) -> Json {
     let known = provider(provider_id).and_then(|held| {
         let model = held.model(model_id)?;
         Some(held.window(model))
@@ -1500,7 +1506,7 @@ impl Custom {
         if !secure || self.base.chars().any(char::is_whitespace) {
             found.push("base");
         }
-        if barred(&self.base).is_some() {
+        if blocked_endpoint(&self.base).is_some() {
             found.push("barred");
         }
         if self.format.is_none() {
@@ -1602,7 +1608,7 @@ pub fn fill(template: &str, filling: &Filling) -> String {
 
 pub const DVM_REPLY: &str = "result|response|content|text|output|choices.0.message.content";
 
-pub fn pluck(reply: &Json, path: &str) -> Option<String> {
+pub fn json_path_text(reply: &Json, path: &str) -> Option<String> {
     path.split('|').find_map(|one| {
         let mut at = reply;
         for step in one.trim().split('.').filter(|step| !step.is_empty()) {
@@ -1979,7 +1985,7 @@ pub fn custom_json(held: &Custom) -> String {
     w.field_u64("window", held.window);
     write_probe(&mut w, format.probe());
     write_efforts(&mut w, &held.efforts, held.wire());
-    if let Some(found) = barred(&held.base) {
+    if let Some(found) = blocked_endpoint(&held.base) {
         w.field_str("barred", found.name);
     }
     w.end_object();
@@ -2080,7 +2086,7 @@ pub fn answer(request: &str) -> String {
             listed_json(&usable_models(tier, &reply))
         }
         "fit" => {
-            let verdict = fit(
+            let verdict = fit_to_context_window(
                 text_of(&held, "provider"),
                 text_of(&held, "model"),
                 number_of(&held, "window"),
@@ -2115,7 +2121,8 @@ pub fn answer(request: &str) -> String {
                 "" => DVM_REPLY,
                 said => said,
             };
-            let found = json::read(text_of(&held, "reply")).and_then(|reply| pluck(&reply, path));
+            let found =
+                json::read(text_of(&held, "reply")).and_then(|reply| json_path_text(&reply, path));
             let mut w = Writer::new();
             w.begin_object(None);
             w.field_bool("found", found.is_some());

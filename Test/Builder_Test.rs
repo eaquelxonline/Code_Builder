@@ -1753,7 +1753,7 @@ mod core {
 
     #[test]
     fn a_layout_and_a_menu_become_what_aapt2_makes_of_them() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let directory = temp_directory("builder-layout");
         let res = directory.join("Res");
         for folder in ["layout", "menu", "values", "drawable", "mipmap-anydpi-v26"] {
@@ -2046,7 +2046,7 @@ mod core {
 
     #[test]
     fn a_librarys_macros_xliff_and_tools_come_out_the_way_aapt2_leaves_them() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let mut project = crate::builder::from_manifest(A_MANIFEST).expect("the manifest reads");
         project.values = vec![(
             "values".to_string(),
@@ -2173,7 +2173,7 @@ mod core {
 
     #[test]
     fn styled_words_and_old_units_become_what_aapt2_makes_of_them() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let directory = temp_directory("builder-styled");
         let res = directory.join("Res");
         std::fs::create_dir_all(res.join("values")).unwrap();
@@ -2401,7 +2401,7 @@ mod core {
 
     #[test]
     fn every_qualifier_a_folder_can_carry_means_the_same_to_aapt2() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         const QUALIFIERS: &[&str] = &[
             "",
             "ldltr",
@@ -2633,7 +2633,7 @@ mod core {
 
     #[test]
     fn styles_arrays_and_plurals_are_the_table_aapt2_writes() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let directory = temp_directory("builder-bags");
         let res = directory.join("Res");
         std::fs::create_dir_all(res.join("values")).unwrap();
@@ -2800,7 +2800,7 @@ mod core {
 
     #[test]
     fn attributes_and_styleables_are_what_aapt2_makes_of_them() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let directory = temp_directory("builder-attrs");
         let res = directory.join("Res");
         std::fs::create_dir_all(res.join("values")).unwrap();
@@ -3051,7 +3051,7 @@ mod core {
 
     #[test]
     fn a_refusal_is_written_in_the_language_the_reader_asked_for() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let refusal = Diagnostic::new(
             "EY013",
             Severity::Error,
@@ -3096,12 +3096,12 @@ mod core {
             turkish.contains("The validity period is outside what a certificate may carry."),
             "the English is kept beside it: {turkish}"
         );
-        assert_eq!(crate::speech::chosen(), "en");
+        assert_eq!(crate::speech::selected_language(), "en");
     }
 
     #[test]
     fn a_java_error_reaches_the_app_in_the_chosen_language() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let source =
             "package com.my.app;\nfinal class Broken {\n    String said = \"never closed;\n}\n";
         let refusal =
@@ -3132,7 +3132,7 @@ mod core {
 
     #[test]
     fn the_body_the_app_reads_is_written_in_the_chosen_language() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let refusal = Diagnostic::new(
             "EM001",
             Severity::Error,
@@ -3163,7 +3163,7 @@ mod core {
 
     #[test]
     fn every_language_the_interface_offers_answers_in_its_own_words() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let refusal = Diagnostic::new(
             "EM001",
             Severity::Error,
@@ -3175,7 +3175,7 @@ mod core {
 
         for spoken in crate::speech::LANGUAGES {
             assert_eq!(crate::speech::choose(spoken), *spoken);
-            let sentence = crate::speech::sentence("The manifest could not be read.");
+            let sentence = crate::speech::translate_sentence("The manifest could not be read.");
             let label = crate::speech::detail("Path: /a/b");
             let mut w = crate::json::Writer::new();
             refusal.write_json(&mut w);
@@ -3194,7 +3194,7 @@ mod core {
 
         assert_eq!(crate::speech::choose("zh-Hans"), "zh");
         assert_eq!(
-            crate::speech::sentence("The manifest could not be read."),
+            crate::speech::translate_sentence("The manifest could not be read."),
             "无法读取清单。"
         );
         assert_eq!(crate::speech::choose("en"), "en");
@@ -3202,17 +3202,17 @@ mod core {
 
     #[test]
     fn a_language_nobody_wrote_a_word_for_reads_as_it_was_written() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         assert_eq!(crate::speech::choose("sv"), "en");
         assert_eq!(crate::speech::choose("de-DE"), "de");
         assert_eq!(
-            crate::speech::sentence("The manifest could not be read."),
+            crate::speech::translate_sentence("The manifest could not be read."),
             "Das Manifest konnte nicht gelesen werden."
         );
         assert_eq!(crate::speech::detail("Path: /a/b"), "Pfad: /a/b");
         assert_eq!(crate::speech::choose("sv"), "en");
         assert_eq!(
-            crate::speech::sentence("The manifest could not be read."),
+            crate::speech::translate_sentence("The manifest could not be read."),
             "The manifest could not be read."
         );
         assert_eq!(crate::speech::detail("Path: /a/b"), "Path: /a/b");
@@ -3234,7 +3234,7 @@ mod core {
 
     #[test]
     fn a_build_stops_when_it_is_asked_to_and_leaves_nothing_behind() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let directory = temp_directory("builder-stopped");
         let root = directory.join("Stopped");
         let folder = root.to_str().unwrap().to_string();
@@ -3250,12 +3250,12 @@ mod core {
         .expect("the project must be made");
 
         crate::progress::begin();
-        assert!(crate::progress::keep_going().is_ok());
+        assert!(crate::progress::check_not_stopped().is_ok());
         let project = crate::builder::from_project(&folder).expect("it reads to begin with");
 
         crate::progress::stop();
         assert!(crate::progress::stopped());
-        let refused = crate::progress::keep_going().expect_err("it is stopped now");
+        let refused = crate::progress::check_not_stopped().expect_err("it is stopped now");
         assert_eq!(refused.code, crate::progress::STOPPED_CODE);
 
         let mut sink = Sink::new();
@@ -3311,7 +3311,7 @@ mod core {
 
     #[test]
     fn a_build_says_where_it_is_and_how_long_is_left() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         use crate::progress::{Channel, STAGES};
 
         let read = |held: &str, key: &str| -> String {
@@ -3329,7 +3329,7 @@ mod core {
         let mut channel = Channel::new();
         assert_eq!(read(&channel.report(), "state"), "waiting");
         assert_eq!(read(&channel.report(), "percent"), "0");
-        assert!(!channel.knows_this_device());
+        assert!(!channel.has_device_timings());
 
         channel.begin();
         assert_eq!(read(&channel.report(), "state"), "building");
@@ -3356,7 +3356,7 @@ mod core {
         assert_eq!(read(&done, "leftMillis"), "0");
         assert!(!done.contains("\"state\":\"waiting\""), "{done}");
 
-        assert!(channel.knows_this_device());
+        assert!(channel.has_device_timings());
         assert_eq!(channel.timings().split(',').count(), STAGES.len());
         assert_eq!(read(&channel.report(), "estimated"), "true");
 
@@ -3371,21 +3371,21 @@ mod core {
             "{said}"
         );
         assert!(
-            !refused.knows_this_device(),
+            !refused.has_device_timings(),
             "a refused build teaches nothing"
         );
 
         let mut learned = Channel::new();
-        learned.learn("1,2,3");
-        assert!(!learned.knows_this_device());
-        learned.learn("not a number");
-        assert!(!learned.knows_this_device());
-        learned.learn(&vec!["50"; STAGES.len()].join(","));
-        assert!(learned.knows_this_device());
+        learned.load_timings("1,2,3");
+        assert!(!learned.has_device_timings());
+        learned.load_timings("not a number");
+        assert!(!learned.has_device_timings());
+        learned.load_timings(&vec!["50"; STAGES.len()].join(","));
+        assert!(learned.has_device_timings());
         assert_eq!(read(&learned.report(), "estimated"), "true");
 
         let mut late = Channel::new();
-        late.learn(&vec!["1"; STAGES.len()].join(","));
+        late.load_timings(&vec!["1"; STAGES.len()].join(","));
         late.begin();
         std::thread::sleep(std::time::Duration::from_millis(60));
         let said = late.report();
@@ -3401,7 +3401,7 @@ mod core {
 
     #[test]
     fn every_stage_a_build_reports_is_one_it_really_went_through() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let directory = temp_directory("builder-progress");
         let root = directory.join("Watched");
         crate::scaffold::create(
@@ -4986,7 +4986,7 @@ public class Written {
             .join("Java/com/tr/yt/zipped/MainActivity.java")
             .is_file());
 
-        let written = crate::settings::held(root.to_str().unwrap())
+        let written = crate::settings::read_settings(root.to_str().unwrap())
             .expect("the settings read")
             .expect("the settings are there");
         assert_eq!(written.package, "com.tr.yt.zipped");
@@ -5028,7 +5028,7 @@ public class Written {
         )
         .unwrap();
 
-        let held = crate::builder::mendable(&folder);
+        let held = crate::builder::available_repairs(&folder);
         assert!(
             !held.repairs.is_empty(),
             "a missing import is something it can mend: {:?}",
@@ -5058,9 +5058,9 @@ public class Written {
             "the import it offered is the one it wrote: {after}"
         );
 
-        let again = crate::builder::mendable(&folder);
+        let again = crate::builder::available_repairs(&folder);
         assert!(
-            again.repairs.len() < held.repairs.len() || again.clean_enough(),
+            again.repairs.len() < held.repairs.len() || again.is_clean(),
             "mending leaves less to mend"
         );
 
@@ -5099,17 +5099,17 @@ public class Written {
         }
 
         assert!(
-            !crate::scaffold::plant_icon(&folder, "com.tr.yt.drawn")
+            !crate::scaffold::generate_launcher_icon(&folder, "com.tr.yt.drawn")
                 .expect("asking twice is not an error"),
             "a project that already has a picture keeps the one it has"
         );
 
         let mine = std::fs::read(crate::scaffold::icon_path(&folder)).unwrap();
-        let theirs = crate::image::drawn_for("com.tr.yt.other").expect("another is drawn");
+        let theirs = crate::image::generate_icon("com.tr.yt.other").expect("another is drawn");
         assert_ne!(mine, theirs, "two packages are not given the same picture");
         assert_eq!(
             mine,
-            crate::image::drawn_for("com.tr.yt.drawn").expect("it draws the same twice"),
+            crate::image::generate_icon("com.tr.yt.drawn").expect("it draws the same twice"),
             "the same package is always given the same picture"
         );
 
@@ -5295,7 +5295,7 @@ public class Written {
         )
         .expect("the project must be made");
 
-        let mut settings = crate::settings::held(&folder)
+        let mut settings = crate::settings::read_settings(&folder)
             .expect("they read")
             .expect("they are there");
         settings.version_name = "9.9.9".to_string();
@@ -5345,7 +5345,7 @@ public class Written {
         std::fs::create_dir_all(&root).unwrap();
         let folder = root.to_str().unwrap().to_string();
         std::fs::write(root.join(crate::settings::FILE_NAME), "{ this is not json").unwrap();
-        let error = crate::settings::held(&folder).expect_err("it is refused");
+        let error = crate::settings::read_settings(&folder).expect_err("it is refused");
         assert_eq!(error.code, "EB060");
         std::fs::remove_dir_all(&directory).ok();
     }
@@ -5800,7 +5800,7 @@ final class Model implements Runnable {
         )
         .unwrap();
 
-        let mut settings = crate::settings::held(&folder)
+        let mut settings = crate::settings::read_settings(&folder)
             .expect("they read")
             .expect("they are there");
         settings.seal_resources = true;
@@ -5822,7 +5822,7 @@ final class Model implements Runnable {
         let mut sink = Sink::new();
         let outcome =
             crate::builder::assemble(&project, &key, &certificate, &mut sink).expect("it packages");
-        assert!(outcome.verified.everything_checkable_passed());
+        assert!(outcome.verified.all_checks_passed());
 
         let path = directory.join("sealed.apk");
         std::fs::write(&path, &outcome.package).unwrap();
@@ -6063,7 +6063,7 @@ final class Doubling extends Counter {
         let outcome = crate::builder::assemble(&project, &key, &certificate, &mut sink)
             .expect("the project must package");
         assert!(outcome.carries_code);
-        assert!(outcome.verified.everything_checkable_passed());
+        assert!(outcome.verified.all_checks_passed());
 
         let path = directory.join("several.apk");
         std::fs::write(&path, &outcome.package).unwrap();
@@ -6137,7 +6137,7 @@ final class Doubling extends Counter {
         let outcome = crate::builder::assemble(&project, &key, &certificate, &mut sink)
             .expect("the project must package");
         assert!(outcome.carries_code);
-        assert!(outcome.verified.everything_checkable_passed());
+        assert!(outcome.verified.all_checks_passed());
 
         let path = directory.join("page.apk");
         std::fs::write(&path, &outcome.package).unwrap();
@@ -6347,7 +6347,7 @@ final class Doubling extends Counter {
         assert_eq!(hybrid.len(), 2, "one classical and one post-quantum signer");
 
         let mut checking = Sink::new();
-        let report = signing::examine(
+        let report = signing::verify_signing_block(
             &signed,
             read.central_directory_offset(),
             read.end_record_offset(),
@@ -6355,7 +6355,7 @@ final class Doubling extends Counter {
         );
         assert!(report.schemes.contains(&"v3.2"), "{:?}", report.schemes);
         assert!(
-            report.everything_checkable_passed(),
+            report.all_checks_passed(),
             "{:?} {:?}",
             report,
             checking.entries()
@@ -7831,7 +7831,7 @@ public final class MainActivity extends Activity {
 
     #[test]
     fn a_library_somebody_else_published_compiles_into_a_package() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let corpus = library_corpus();
         if corpus.is_empty() {
             assert!(
@@ -7868,7 +7868,8 @@ public final class MainActivity extends Activity {
             std::fs::create_dir_all(&libraries).unwrap();
             std::fs::copy(library, libraries.join(&named)).unwrap();
 
-            let held = crate::depends::held(&folder).expect("the library folder reads");
+            let held =
+                crate::depends::read_dependencies(&folder).expect("the library folder reads");
             let one = held
                 .each
                 .iter()
@@ -7932,7 +7933,7 @@ public final class MainActivity extends Activity {
                 .unwrap_or_else(|error| panic!("{named}: {} {}", error.code, error.message));
             assert!(!sink.has_blocking(), "{named}: {:?}", sink.entries());
             assert!(outcome.carries_code);
-            assert!(outcome.verified.everything_checkable_passed());
+            assert!(outcome.verified.all_checks_passed());
 
             let path = directory.join("uses.apk");
             std::fs::write(&path, &outcome.package).unwrap();
@@ -7958,7 +7959,7 @@ public final class MainActivity extends Activity {
 
     #[test]
     fn a_library_a_project_depends_on_is_in_the_package() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let directory = temp_directory("builder-library");
         let made = directory.join("made");
         std::fs::create_dir_all(&made).unwrap();
@@ -9381,7 +9382,7 @@ public final class MainActivity extends Activity {
             held.holds,
             "a certificate another tool signed must verify here"
         );
-        assert!(held.nothing_wrong());
+        assert!(held.has_no_problems());
 
         let mut altered = CONFORMANCE_CERTIFICATE.to_vec();
         let at = altered.len() / 3;
@@ -9520,7 +9521,7 @@ public final class MainActivity extends Activity {
         let archive = archive::read(&bytes, &mut Sink::new()).unwrap();
 
         let mut sink = Sink::new();
-        let report = signing::examine(
+        let report = signing::verify_signing_block(
             &bytes,
             archive.central_directory_offset(),
             archive.end_record_offset(),
@@ -9528,7 +9529,7 @@ public final class MainActivity extends Activity {
         );
 
         assert!(!report.has_block);
-        assert!(!report.everything_checkable_passed());
+        assert!(!report.all_checks_passed());
         assert!(sink.entries().iter().any(|d| d.code == "ES030"));
     }
 
@@ -9585,7 +9586,7 @@ public final class MainActivity extends Activity {
 
     #[test]
     fn a_package_sealed_by_the_device_reads_back_as_built() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let Some(openssl) = openssl() else {
             eprintln!("device sealing: openssl is not available here");
             return;
@@ -9873,7 +9874,7 @@ public final class MainActivity extends Activity {
 
         let mut sink = Sink::new();
         let archive = archive::read(&package, &mut sink).expect("it reads back");
-        let report = signing::examine(
+        let report = signing::verify_signing_block(
             &package,
             archive.central_directory_offset(),
             archive.end_record_offset(),
@@ -9889,7 +9890,7 @@ public final class MainActivity extends Activity {
         );
         assert!(report.key_matches_certificate);
         assert!(report.certificates_hold);
-        assert!(report.everything_checkable_passed());
+        assert!(report.all_checks_passed());
 
         let wrong = outside(b"not what was asked for", "wrong");
         let mut own = Sink::new();
@@ -9904,14 +9905,14 @@ public final class MainActivity extends Activity {
         )
         .expect("the block is still built");
         let held = archive::read(&bad, &mut own).unwrap();
-        let refused = signing::examine(
+        let refused = signing::verify_signing_block(
             &bad,
             held.central_directory_offset(),
             held.end_record_offset(),
             &mut own,
         );
         assert!(
-            !refused.everything_checkable_passed(),
+            !refused.all_checks_passed(),
             "a signature over the wrong bytes must not pass"
         );
         assert!(refused.signatures_failed > 0);
@@ -10046,7 +10047,7 @@ public final class MainActivity extends Activity {
         let archive = archive::read(&bytes, &mut sink).expect("the signed package must read");
         assert!(!sink.has_blocking(), "{:?}", sink.entries());
 
-        let report = signing::examine(
+        let report = signing::verify_signing_block(
             &bytes,
             archive.central_directory_offset(),
             archive.end_record_offset(),
@@ -10069,7 +10070,7 @@ public final class MainActivity extends Activity {
             "no digest was recomputed: {:?}",
             sink.entries()
         );
-        assert!(report.everything_checkable_passed());
+        assert!(report.all_checks_passed());
 
         let certificate = &report.signers[0].certificates[0];
         assert_eq!(
@@ -10143,7 +10144,7 @@ public final class MainActivity extends Activity {
             "a real package has more than a handful of entries"
         );
 
-        let report = signing::examine(
+        let report = signing::verify_signing_block(
             &bytes,
             archive.central_directory_offset(),
             archive.end_record_offset(),
@@ -10169,7 +10170,7 @@ public final class MainActivity extends Activity {
         assert_eq!(report.signatures_failed, 0, "{:?}", sink.entries());
         assert!(report.signatures_verified > 0, "{:?}", sink.entries());
         assert!(report.key_matches_certificate);
-        assert!(report.everything_checkable_passed());
+        assert!(report.all_checks_passed());
 
         eprintln!(
             "signing conformance: {} entries, schemes {:?}, {} digest(s) and \
@@ -10190,7 +10191,7 @@ public final class MainActivity extends Activity {
 
         let mut sink = Sink::new();
         let archive = archive::read(&bytes, &mut sink).expect("the signed package must read");
-        let report = signing::examine(
+        let report = signing::verify_signing_block(
             &bytes,
             archive.central_directory_offset(),
             archive.end_record_offset(),
@@ -10221,7 +10222,7 @@ public final class MainActivity extends Activity {
         assert!(report.signatures_checked);
         assert_eq!(report.signatures_failed, 0, "{:?}", sink.entries());
         assert!(report.signatures_verified > 0, "{:?}", sink.entries());
-        assert!(report.everything_checkable_passed());
+        assert!(report.all_checks_passed());
 
         eprintln!(
             "signing conformance: SHA-512, {} digest(s) and {} signature(s) agreed",
@@ -10271,7 +10272,7 @@ public final class MainActivity extends Activity {
 
         let mut sink = Sink::new();
         let archive = archive::read(&tampered, &mut sink).unwrap();
-        let report = signing::examine(
+        let report = signing::verify_signing_block(
             &tampered,
             archive.central_directory_offset(),
             archive.end_record_offset(),
@@ -10281,7 +10282,7 @@ public final class MainActivity extends Activity {
         assert!(report.has_block);
         assert_eq!(report.digests_verified, 0);
         assert!(report.digests_failed > 0, "a changed byte must be noticed");
-        assert!(!report.everything_checkable_passed());
+        assert!(!report.all_checks_passed());
 
         let error = sink.entries().iter().find(|d| d.code == "ES033").unwrap();
         assert_eq!(error.severity, Severity::Fatal);
@@ -10298,7 +10299,7 @@ public final class MainActivity extends Activity {
         };
 
         let archive = archive::read(&bytes, &mut Sink::new()).unwrap();
-        let report = signing::examine(
+        let report = signing::verify_signing_block(
             &bytes,
             archive.central_directory_offset(),
             archive.end_record_offset(),
@@ -10330,7 +10331,7 @@ public final class MainActivity extends Activity {
 
         let archive = archive::read(&bytes, &mut Sink::new()).unwrap();
         let mut sink = Sink::new();
-        let report = signing::examine(
+        let report = signing::verify_signing_block(
             &bytes,
             archive.central_directory_offset(),
             archive.end_record_offset(),
@@ -10369,7 +10370,7 @@ public final class MainActivity extends Activity {
         };
 
         let archive = archive::read(&bytes, &mut Sink::new()).unwrap();
-        let report = signing::examine(
+        let report = signing::verify_signing_block(
             &bytes,
             archive.central_directory_offset(),
             archive.end_record_offset(),
@@ -10403,7 +10404,7 @@ public final class MainActivity extends Activity {
         };
 
         let archive = archive::read(&bytes, &mut Sink::new()).unwrap();
-        let report = signing::examine(
+        let report = signing::verify_signing_block(
             &bytes,
             archive.central_directory_offset(),
             archive.end_record_offset(),
@@ -10438,7 +10439,7 @@ public final class MainActivity extends Activity {
 
             let mut sink = Sink::new();
             if let Some(archive) = archive::read(&damaged, &mut sink) {
-                let report = signing::examine(
+                let report = signing::verify_signing_block(
                     &damaged,
                     archive.central_directory_offset(),
                     archive.end_record_offset(),
@@ -11147,7 +11148,7 @@ public class Walk {
             "only {instructions} instructions were checked"
         );
         assert_eq!(read.instructions(), instructions);
-        assert_eq!(read.bodies_read(), checked);
+        assert_eq!(read.decoded_body_count(), checked);
     }
 
     #[test]
@@ -11307,7 +11308,7 @@ public class Walk {
         let (_, dex) = walked_dex();
         let mut sink = Sink::new();
         let whole = dex::read(&dex, &mut sink).expect("it reads");
-        let wanted = whole.bodies_read();
+        let wanted = whole.decoded_body_count();
         assert!(wanted > 0);
 
         let mut bent = None;
@@ -12192,7 +12193,7 @@ public class Walk {
 
         let mut own_sink = Sink::new();
         let archive = archive::read(&signed, &mut own_sink).expect("the package must read");
-        let own = signing::examine(
+        let own = signing::verify_signing_block(
             &signed,
             archive.central_directory_offset(),
             archive.end_record_offset(),
@@ -12240,7 +12241,7 @@ public class Walk {
         signed[40] ^= 0xff;
         let mut sink = Sink::new();
         if let Some(archive) = archive::read(&signed, &mut sink) {
-            let report = signing::examine(
+            let report = signing::verify_signing_block(
                 &signed,
                 archive.central_directory_offset(),
                 archive.end_record_offset(),
@@ -12383,7 +12384,7 @@ public class Walk {
 
     #[test]
     fn the_build_engine_produces_a_package_apksigner_accepts() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let Some(apksigner) = find_apksigner() else {
             assert!(
                 std::env::var("CODE_BUILDER_REQUIRE_SELF_BUILT_APK").is_err(),
@@ -12395,7 +12396,8 @@ public class Walk {
 
         let key = crate::rsa::generate(2048).expect("the engine must be able to make a key");
         let mut sink = Sink::new();
-        let mut project = crate::builder::starter("com.example.made", "Made By Code Builder");
+        let mut project =
+            crate::builder::starter_project("com.example.made", "Made By Code Builder");
         project.files = sample_project().files;
         let outcome = crate::builder::build(&project, &key, 1_787_000_000, &mut sink)
             .expect("a compliant project must build");
@@ -12477,7 +12479,7 @@ public class Walk {
         let mut block_sink = Sink::new();
         let (directory_offset, end_offset) =
             crate::signing::locate(&outcome.package).expect("the package must have a directory");
-        let block = crate::signing::examine(
+        let block = crate::signing::verify_signing_block(
             &outcome.package,
             directory_offset,
             end_offset,
@@ -12936,13 +12938,13 @@ public class Walk {
         let opened = crate::keystore::unlock(&made.path, password).unwrap();
 
         let mut sink = Sink::new();
-        let project = crate::builder::starter("com.tr.yt", "Code Builder");
+        let project = crate::builder::starter_project("com.tr.yt", "Code Builder");
         let outcome =
             crate::builder::assemble(&project, &opened.key, &opened.certificate, &mut sink)
                 .expect("the developer's key must sign the package");
         assert_eq!(outcome.certificate_fingerprint, made.fingerprint);
 
-        assert!(outcome.verified.everything_checkable_passed());
+        assert!(outcome.verified.all_checks_passed());
         assert!(outcome.verified.signatures_checked);
         assert_eq!(outcome.verified.signatures_failed, 0);
         assert!(outcome.verified.signatures_verified >= 2, "v2 and v3 both");
@@ -12989,7 +12991,7 @@ public class Walk {
 
     #[test]
     fn a_weak_manifest_is_built_without_a_word_from_the_policy() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let key = crate::rsa::generate(1024).unwrap();
         let cases: &[(&str, &str, &str)] = &[
             (
@@ -13645,7 +13647,7 @@ public final class MainActivity extends Activity {
 
     #[test]
     fn the_java_somebody_wrote_is_the_code_the_package_carries() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let directory = temp_directory("builder-java-end-to-end");
         let root = directory.join("Written");
         let spec =
@@ -13809,7 +13811,7 @@ public final class App extends Activity {
 
     #[test]
     fn what_this_builds_carries_a_seal_against_the_key_that_signed_it() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let directory = temp_directory("builder-sealed");
         let root = directory.join("Sealed");
         let spec =
@@ -13827,11 +13829,11 @@ public final class App extends Activity {
             1_787_000_000,
         )
         .expect("a certificate");
-        let made_by = crate::builder::made_by(&certificate).expect("a fingerprint");
+        let made_by = crate::builder::certificate_fingerprint(&certificate).expect("a fingerprint");
         assert_eq!(made_by.len(), 64, "{made_by}");
 
-        let project =
-            crate::builder::sealed_project(root.to_str().unwrap(), Some(&made_by)).expect("reads");
+        let project = crate::builder::project_with_seal(root.to_str().unwrap(), Some(&made_by))
+            .expect("reads");
         assert_eq!(project.sealed.as_deref(), Some("com.tr.yt.Seal"));
 
         let sealed = project
@@ -13926,7 +13928,7 @@ public final class App extends Activity {
             1_787_000_000,
         )
         .expect("a certificate");
-        let made_by = crate::builder::made_by(&certificate).expect("a fingerprint");
+        let made_by = crate::builder::certificate_fingerprint(&certificate).expect("a fingerprint");
         (directory, root, key, certificate, made_by)
     }
 
@@ -13953,7 +13955,7 @@ public final class App extends Activity {
             .collect()
     }
 
-    fn carries(dex: &[Vec<u8>], descriptor: &str) -> bool {
+    fn has_annotation(dex: &[Vec<u8>], descriptor: &str) -> bool {
         dex.iter().any(|one| {
             one.windows(descriptor.len())
                 .any(|window| window == descriptor.as_bytes())
@@ -13962,7 +13964,7 @@ public final class App extends Activity {
 
     #[test]
     fn what_this_builds_carries_the_debugger_code_builder_reads() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let (directory, root, key, certificate, made_by) = a_signed_project("builder-debugger");
         let host = the_builder_as_host(true, true);
         assert_eq!(host.certificate.len(), 64, "{}", host.certificate);
@@ -14034,7 +14036,7 @@ public final class App extends Activity {
             "Lcom/code/builder/debug/Watchdog;",
             "Lcom/code/builder/debug/Tombstone;",
         ] {
-            assert!(carries(&dex, kept), "the shrinker kept {kept}");
+            assert!(has_annotation(&dex, kept), "the shrinker kept {kept}");
         }
 
         let read = manifest_of(&outcome.package);
@@ -14096,7 +14098,7 @@ public final class App extends Activity {
 
     #[test]
     fn typescript_assets_become_javascript_and_stylesheets_are_checked() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let (directory, root, _key, _certificate, made_by) = a_signed_project("builder-web-assets");
         let assets = root.join(crate::scaffold::ASSETS_FOLDER);
         std::fs::create_dir_all(assets.join("web")).unwrap();
@@ -14155,7 +14157,7 @@ public final class App extends Activity {
 
     #[test]
     fn the_debugger_and_the_seal_stay_out_when_they_are_turned_off() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let (directory, root, _key, _certificate, made_by) =
             a_signed_project("builder-debugger-off");
         let root_text = root.to_str().unwrap();
@@ -14185,7 +14187,7 @@ public final class App extends Activity {
 
         let both = the_builder_as_host(true, true);
         let path = root.join(crate::settings::FILE_NAME);
-        let mut settings = crate::settings::held(root_text)
+        let mut settings = crate::settings::read_settings(root_text)
             .expect("settings read")
             .unwrap_or_default();
         settings.debugging.enabled = false;
@@ -14384,14 +14386,15 @@ public final class App extends Activity {
             "one factory, ours, which calls theirs"
         );
         assert!(
-            crate::xml::written(&root).contains("android:authorities=\"com.tr.yt.dev.debugger\""),
+            crate::xml::serialize_element(&root)
+                .contains("android:authorities=\"com.tr.yt.dev.debugger\""),
             "the authority follows the application id, not the namespace"
         );
     }
 
     #[test]
     fn a_whole_application_written_in_java_25_becomes_a_package_a_device_takes() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let directory = temp_directory("builder-whole-application");
         let root = directory.join("Whole");
         let spec =
@@ -16264,7 +16267,7 @@ public final class App extends Activity {
         assert!(adopted.settings_written);
         assert_eq!(adopted.package, "com.cloned.app");
         assert_eq!(adopted.label, "Cloned App");
-        let held = crate::settings::held(&text)
+        let held = crate::settings::read_settings(&text)
             .unwrap()
             .expect("a project file");
         assert_eq!(held.package, "com.cloned.app");
@@ -16406,7 +16409,7 @@ public final class App extends Activity {
         .unwrap();
 
         let text = directory.to_str().unwrap();
-        assert!(crate::gradle::looks_like_one(text));
+        assert!(crate::gradle::is_gradle_project(text));
         assert_eq!(
             crate::gradle::application_module(text).as_deref(),
             Some("app"),
@@ -16598,7 +16601,7 @@ public final class App extends Activity {
             "the build file it came with is left where it was"
         );
 
-        let held = crate::settings::held(root.to_str().unwrap())
+        let held = crate::settings::read_settings(root.to_str().unwrap())
             .unwrap()
             .expect("the settings are written");
         assert_eq!(held.namespace, "com.tr.yt");
@@ -17054,7 +17057,7 @@ dependencies {
 
         let written = found.settings.to_json();
         std::fs::write(root.join("Builder.json"), &written).unwrap();
-        let back = crate::settings::held(text)
+        let back = crate::settings::read_settings(text)
             .unwrap()
             .expect("the settings read back");
         assert_eq!(back.build_config, found.settings.build_config);
@@ -17070,7 +17073,7 @@ dependencies {
                 crate::compilers::java::compile(stub, &classpath).expect("a stub compiles");
             for (_, bytes) in compiled {
                 let class = crate::jvm::read(&bytes).expect("a stub reads back");
-                classpath.learn(&class).expect("a stub is learned");
+                classpath.register_class(&class).expect("a stub is learned");
             }
         }
         classpath
@@ -17249,7 +17252,7 @@ dependencies {
         let root = directory.join("Held");
         let text = root.to_str().unwrap().to_string();
         crate::scaffold::create(&text, &crate::scaffold::Spec::default()).unwrap();
-        let mut settings = crate::settings::held(&text).unwrap().unwrap();
+        let mut settings = crate::settings::read_settings(&text).unwrap().unwrap();
         settings.dependencies = vec![crate::settings::Dependency {
             name: "androidx.databinding:databinding-runtime".to_string(),
             version: "8.7.3".to_string(),
@@ -17287,7 +17290,7 @@ dependencies {
         let text = root.to_str().unwrap().to_string();
         crate::scaffold::create(&text, &crate::scaffold::Spec::default()).unwrap();
 
-        let mut settings = crate::settings::held(&text).unwrap().unwrap();
+        let mut settings = crate::settings::read_settings(&text).unwrap().unwrap();
         settings.dependencies = vec![crate::settings::Dependency {
             name: "com.squareup.okhttp3:okhttp".to_string(),
             version: "4.12.0".to_string(),
@@ -17457,7 +17460,7 @@ dependencies {
 
     #[test]
     fn a_project_keeps_the_image_the_developer_chose() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let mut files = Vec::new();
         for candidate in [
             std::env::var("ANDROID_HOME").ok(),
@@ -18059,7 +18062,7 @@ dependencies {
 
     #[test]
     fn the_name_a_project_carries_is_translated_in_every_language_it_chose() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let directory = temp_directory("builder-locales");
         let root = directory.join("Spoken");
         let text = root.to_str().unwrap().to_string();
@@ -18150,7 +18153,7 @@ dependencies {
 
     #[test]
     fn the_image_the_developer_chose_becomes_the_icon_aapt2_reports() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let mut files = Vec::new();
         for candidate in [
             std::env::var("ANDROID_HOME").ok(),
@@ -18323,7 +18326,7 @@ dependencies {
 
     #[test]
     fn a_package_this_build_writes_is_compressed_where_compressing_is_allowed() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let mut files = Vec::new();
         for candidate in [
             std::env::var("ANDROID_HOME").ok(),
@@ -18341,7 +18344,7 @@ dependencies {
             .into_iter()
             .find(|file| crate::image::read_png_file(file.to_str().unwrap_or_default()).is_ok());
 
-        let mut project = crate::builder::starter("com.tr.yt", "Packed");
+        let mut project = crate::builder::starter_project("com.tr.yt", "Packed");
         project.icon = picture.as_ref().map(|path| std::fs::read(path).unwrap());
         project.files = vec![
             (
@@ -18452,7 +18455,7 @@ dependencies {
 
     #[test]
     fn the_resource_table_sits_where_the_installer_needs_it() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let mut files = Vec::new();
         for candidate in [
             std::env::var("ANDROID_HOME").ok(),
@@ -18521,10 +18524,10 @@ dependencies {
 
     #[test]
     fn a_manifest_that_names_a_resource_this_build_has_no_table_for_is_refused() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let key = crate::rsa::generate(2048).unwrap();
         let mut sink = Sink::new();
-        let mut project = crate::builder::starter("com.tr.yt", "Named");
+        let mut project = crate::builder::starter_project("com.tr.yt", "Named");
         project.manifest = project.manifest.replace(
             "android:label=\"Named\"",
             "android:label=\"@string/app_name\"",
@@ -18680,7 +18683,7 @@ dependencies {
 
     #[test]
     fn the_version_the_developer_chose_reaches_the_package() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let spec = crate::scaffold::Spec {
             package: "com.tr.yt".to_string(),
             label: "Versioned".to_string(),
@@ -18861,7 +18864,7 @@ dependencies {
         std::fs::create_dir_all(root.join("Kotlin")).unwrap();
         std::fs::write(root.join("Kotlin/App.kt"), "package com.tr.yt\n").unwrap();
         assert!(
-            crate::builder::holds_kotlin(root.to_str().unwrap()),
+            crate::builder::has_kotlin_sources(root.to_str().unwrap()),
             "once it is written in, it counts"
         );
         assert!(
@@ -19032,7 +19035,7 @@ dependencies {
 
     #[test]
     fn a_project_created_here_builds_into_a_package() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let directory = temp_directory("builder-scaffold-build");
         let root = directory.join("Buildable");
         let spec = crate::scaffold::Spec::default();
@@ -19069,7 +19072,7 @@ dependencies {
 
     #[test]
     fn the_bridge_makes_a_developer_key_lists_it_and_signs_a_project_with_it() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let directory = temp_directory("builder-ffi-keys");
         let keys = directory.join("Keys");
         let root = directory.join("Signed");
@@ -19139,7 +19142,7 @@ dependencies {
         let bytes = std::fs::read(&output).unwrap();
         let mut sink = Sink::new();
         let archive = archive::read(&bytes, &mut sink).unwrap();
-        let report = signing::examine(
+        let report = signing::verify_signing_block(
             &bytes,
             archive.central_directory_offset(),
             archive.end_record_offset(),
@@ -19391,7 +19394,7 @@ dependencies {
 
     #[test]
     fn a_build_without_a_password_never_writes_over_a_sealed_key() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let _turn = SHARED_KEY_TURN
             .lock()
             .unwrap_or_else(|held| held.into_inner());
@@ -19450,7 +19453,7 @@ dependencies {
 
     #[test]
     fn the_shared_key_is_made_once_and_signs_the_package_and_the_bundle_together() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let _turn = SHARED_KEY_TURN
             .lock()
             .unwrap_or_else(|held| held.into_inner());
@@ -19529,7 +19532,7 @@ dependencies {
         let bytes = std::fs::read(&package).unwrap();
         let mut sink = Sink::new();
         let read = archive::read(&bytes, &mut sink).unwrap();
-        let report = signing::examine(
+        let report = signing::verify_signing_block(
             &bytes,
             read.central_directory_offset(),
             read.end_record_offset(),
@@ -19598,7 +19601,7 @@ dependencies {
 
     #[test]
     fn a_package_checks_itself_and_says_what_it_found() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         let directory = temp_directory("builder-integrity");
         let root = directory.join("Checked");
         crate::scaffold::create(root.to_str().unwrap(), &crate::scaffold::Spec::default()).unwrap();
@@ -19620,7 +19623,7 @@ dependencies {
         let bytes = std::fs::read(&output).unwrap();
         let mut sink = Sink::new();
         let archive = archive::read(&bytes, &mut sink).unwrap();
-        let signing_report = signing::examine(
+        let signing_report = signing::verify_signing_block(
             &bytes,
             archive.central_directory_offset(),
             archive.end_record_offset(),
@@ -19741,7 +19744,7 @@ dependencies {
                         stopper.stop();
                     }
                 }
-                session.offer(name.clone(), *kind, bytes.clone())?;
+                session.add_input(name.clone(), *kind, bytes.clone())?;
             }
             session.commit(plan)
         }
@@ -20949,12 +20952,12 @@ dependencies {
             "the second type in a file counts as much as the first"
         );
 
-        let (path, line) =
-            crate::symbols::where_written(&root, "com.tr.yt.Cabinet").expect("it is written here");
+        let (path, line) = crate::symbols::find_declaration(&root, "com.tr.yt.Cabinet")
+            .expect("it is written here");
         assert_eq!(path, "Java/com/tr/yt/Cabinet.java");
         assert_eq!(line, 2);
 
-        assert!(crate::symbols::where_written(&root, "android.widget.TextView").is_none());
+        assert!(crate::symbols::find_declaration(&root, "android.widget.TextView").is_none());
 
         let everything = crate::symbols::matching(&root, "").unwrap();
         assert_eq!(everything.len(), crate::symbols::MOST);
@@ -21050,7 +21053,7 @@ dependencies {
 
         let named = std::ffi::CString::new("com.tr.yt.Ledger").unwrap();
         let where_it_is = read(unsafe {
-            crate::ffi::code_builder_where_written(root_c.as_ptr(), named.as_ptr())
+            crate::ffi::code_builder_find_declaration(root_c.as_ptr(), named.as_ptr())
         });
         assert!(is_structurally_valid(&where_it_is), "{where_it_is}");
         assert!(where_it_is.contains("\"written\":true"), "{where_it_is}");
@@ -21058,7 +21061,7 @@ dependencies {
 
         let platform = std::ffi::CString::new("android.widget.TextView").unwrap();
         let nowhere = read(unsafe {
-            crate::ffi::code_builder_where_written(root_c.as_ptr(), platform.as_ptr())
+            crate::ffi::code_builder_find_declaration(root_c.as_ptr(), platform.as_ptr())
         });
         assert!(nowhere.contains("\"written\":false"), "{nowhere}");
 
@@ -21300,8 +21303,8 @@ dependencies {
         let refused = crate::builder::check(&root);
         let policy = refused.policy.expect("a verdict");
         assert_eq!(policy.verdict(), crate::guard::Verdict::Refused);
-        assert!(crate::guard::fired(&policy, "EG001"));
-        assert!(!crate::guard::fired(&policy, "EG002"));
+        assert!(crate::guard::rule_fired(&policy, "EG001"));
+        assert!(!crate::guard::rule_fired(&policy, "EG002"));
 
         std::fs::remove_dir_all(&directory).ok();
     }
@@ -21840,7 +21843,7 @@ dependencies {
         )
         .expect("the project must be made");
 
-        let empty = crate::depends::held(&root).expect("it must read");
+        let empty = crate::depends::read_dependencies(&root).expect("it must read");
         assert!(empty.each.is_empty());
         assert!(empty.clashes.is_empty());
 
@@ -21878,7 +21881,7 @@ dependencies {
         )
         .unwrap();
 
-        let found = crate::depends::held(&root).expect("it must read");
+        let found = crate::depends::read_dependencies(&root).expect("it must read");
         assert_eq!(found.each.len(), 2);
         assert_eq!(found.each[0].name, "one.jar");
         assert_eq!(found.each[0].kind, "jar");
@@ -21920,7 +21923,7 @@ dependencies {
             .unwrap();
         std::fs::write(folder.join("three.aar"), writing.finish().unwrap()).unwrap();
 
-        let found = crate::depends::held(&root).expect("it must read");
+        let found = crate::depends::read_dependencies(&root).expect("it must read");
         let library = found
             .each
             .iter()
@@ -21935,7 +21938,7 @@ dependencies {
         assert!(library.note.is_empty());
 
         std::fs::write(folder.join("broken.jar"), b"not a zip at all").unwrap();
-        let found = crate::depends::held(&root).expect("it must still read");
+        let found = crate::depends::read_dependencies(&root).expect("it must still read");
         let broken = found
             .each
             .iter()
@@ -21945,7 +21948,7 @@ dependencies {
         assert_eq!(broken.classes, 0);
 
         crate::depends::remove(&root, "two.jar").unwrap();
-        let after = crate::depends::held(&root).unwrap();
+        let after = crate::depends::read_dependencies(&root).unwrap();
         assert!(after.each.iter().all(|one| one.name != "two.jar"));
         assert!(after.each.iter().any(|one| one.name == "one.jar"));
         assert!(after.clashes.is_empty(), "the clash went with it");
@@ -21995,7 +21998,7 @@ dependencies {
         );
         crate::workspace::write_text(&root, crate::manifest::FILE, &marked).unwrap();
 
-        let before = crate::manifest::facts(&root).expect("it must read");
+        let before = crate::manifest::read_facts(&root).expect("it must read");
         assert_eq!(before.package, "com.tr.yt");
         assert_eq!(before.version_name, "1.0.0");
         assert_eq!(before.version_code, "1");
@@ -22031,7 +22034,7 @@ dependencies {
         let awkward = crate::manifest::set(&root, "label", "Tom \"the\" Builder & Co").unwrap();
         assert_eq!(awkward.label, "Tom \"the\" Builder & Co");
         assert!(
-            crate::manifest::facts(&root).is_ok(),
+            crate::manifest::read_facts(&root).is_ok(),
             "the file still reads"
         );
 
@@ -22061,7 +22064,7 @@ dependencies {
         .expect("the project must be made");
 
         let before = crate::workspace::read_text(&root, crate::manifest::FILE).unwrap();
-        assert!(crate::manifest::facts(&root)
+        assert!(crate::manifest::read_facts(&root)
             .unwrap()
             .permissions
             .is_empty());
@@ -22138,7 +22141,10 @@ dependencies {
         );
 
         crate::workspace::write_text(&root, crate::manifest::FILE, "<manifest").unwrap();
-        assert_eq!(crate::manifest::facts(&root).unwrap_err().code, "EM202");
+        assert_eq!(
+            crate::manifest::read_facts(&root).unwrap_err().code,
+            "EM202"
+        );
         assert!(crate::manifest::set(&root, "label", "Anything").is_err());
 
         std::fs::remove_dir_all(&directory).ok();
@@ -23098,7 +23104,7 @@ dependencies {
         artifact.validated().unwrap();
         artifact.signed().unwrap();
         artifact.verified(digest).unwrap();
-        artifact.published().unwrap();
+        artifact.publish().unwrap();
 
         assert_eq!(artifact.state(), ArtifactState::Published);
         assert_eq!(
@@ -23121,21 +23127,21 @@ dependencies {
         artifact.hashed(digest, 3).unwrap();
         artifact.validated().unwrap();
         artifact.verified(digest).unwrap();
-        artifact.published().unwrap();
+        artifact.publish().unwrap();
         assert_eq!(artifact.state(), ArtifactState::Published);
     }
 
     #[test]
     fn an_unverified_artifact_cannot_be_published() {
         let mut artifact = artifact_named("apk.release");
-        assert_eq!(artifact.published().unwrap_err().code, "E5012");
+        assert_eq!(artifact.publish().unwrap_err().code, "E5012");
 
         let digest = crate::hash::sha256(b"apk");
         artifact.hashed(digest, 3).unwrap();
-        assert_eq!(artifact.published().unwrap_err().code, "E5012");
+        assert_eq!(artifact.publish().unwrap_err().code, "E5012");
 
         artifact.validated().unwrap();
-        assert_eq!(artifact.published().unwrap_err().code, "E5012");
+        assert_eq!(artifact.publish().unwrap_err().code, "E5012");
         assert_eq!(artifact.state(), ArtifactState::Validated);
     }
 
@@ -26151,7 +26157,7 @@ Viewbinding   = false
 
         assert!(crate::scaffold::has_its_own_launcher_icon(&root));
         assert!(
-            !crate::scaffold::plant_icon(&root, "t.icon").unwrap(),
+            !crate::scaffold::generate_launcher_icon(&root, "t.icon").unwrap(),
             "no icon is drawn over the project's own"
         );
         assert!(!directory.join("Res/mipmap-hdpi/ic_launcher.png").exists());
@@ -26225,7 +26231,7 @@ Viewbinding   = false
             adopted.modules
         );
 
-        let settings = crate::settings::held(&root)
+        let settings = crate::settings::read_settings(&root)
             .unwrap()
             .expect("settings are written");
         assert!(
@@ -26240,7 +26246,7 @@ Viewbinding   = false
             "<resources><string name=\"app_name\">A</string></resources>",
             "the application's values stay its own"
         );
-        let brought = crate::builder::brought_by_libraries(&root).unwrap();
+        let brought = crate::builder::library_contents(&root).unwrap();
         assert!(
             brought.packages.contains(&"com.demo.core".to_string()),
             "{:?}",
@@ -26389,7 +26395,7 @@ Viewbinding   = false
              -keep,allowshrinking class com.a.Gone\n\
              -dontwarn com.a.**\n"
             .to_string()];
-        let kept = crate::shrink::kept_by_rules(&classes, &rules);
+        let kept = crate::shrink::classes_kept_by_rules(&classes, &rules);
         for wanted in [
             "Lcom/a/Plugin;",
             "Lcom/a/deep/Child;",
@@ -26413,7 +26419,7 @@ Viewbinding   = false
             );
         }
         assert!(
-            crate::shrink::kept_by_rules(
+            crate::shrink::classes_kept_by_rules(
                 &classes,
                 &["-keep class !com.a.Plugin,com.a.* { *; }".to_string()]
             )
@@ -26501,7 +26507,7 @@ Viewbinding   = false
         ];
         crate::settings::write(directory.to_str().unwrap(), &settings).unwrap();
         let root = directory.to_str().unwrap();
-        let first = crate::maven::wanted_roots(root).unwrap().unwrap();
+        let first = crate::maven::root_dependencies(root).unwrap().unwrap();
         assert!(
             first.1.is_empty(),
             "nothing is unresolved while the pom is wanted"
@@ -26521,7 +26527,7 @@ Viewbinding   = false
              </dependencies></dependencyManagement></project>",
         )
         .unwrap();
-        let (roots, unresolved) = crate::maven::wanted_roots(root).unwrap().unwrap();
+        let (roots, unresolved) = crate::maven::root_dependencies(root).unwrap().unwrap();
         assert!(unresolved.is_empty());
         assert!(roots
             .iter()
@@ -26557,13 +26563,13 @@ Viewbinding   = false
             "providers.gradleProperty(\"APP_ID\").get()",
         ] {
             assert_eq!(
-                crate::gradle::looked_up(written, &known),
+                crate::gradle::resolve_property_reference(written, &known),
                 "org.fossify.math",
                 "{written}"
             );
         }
         assert_eq!(
-            crate::gradle::looked_up(
+            crate::gradle::resolve_property_reference(
                 "project.property(\"VERSION_CODE\").toString().toInt()",
                 &known
             ),
@@ -26668,7 +26674,10 @@ Viewbinding   = false
         assert!(adopted.adopted);
         assert_eq!(adopted.label, "Named Well");
         assert_eq!(
-            crate::settings::held(&root).unwrap().unwrap().label,
+            crate::settings::read_settings(&root)
+                .unwrap()
+                .unwrap()
+                .label,
             "Named Well"
         );
         std::fs::remove_dir_all(&directory).ok();
@@ -26767,7 +26776,7 @@ Viewbinding   = false
             manifest.contains("android:host=\"example.com\""),
             "{manifest}"
         );
-        let settings = crate::settings::held(&root).unwrap().unwrap();
+        let settings = crate::settings::read_settings(&root).unwrap().unwrap();
         assert_eq!(settings.application_id, "com.demo.app.free");
         assert!(
             settings.view_binding,
@@ -26902,7 +26911,7 @@ Viewbinding   = false
             "the desktop launcher does not reach the Android sources"
         );
 
-        let settings = crate::settings::held(&root).unwrap().unwrap();
+        let settings = crate::settings::read_settings(&root).unwrap().unwrap();
         assert_eq!(settings.application_id, "com.demo.dungeon");
         assert_eq!(settings.namespace, "com.demo.dungeon");
         assert_eq!(settings.version_name, "3.2.5");
@@ -26951,7 +26960,7 @@ Viewbinding   = false
         crate::gradle::adopt(&root)
             .unwrap()
             .expect("a Gradle project");
-        let settings = crate::settings::held(&root).unwrap().unwrap();
+        let settings = crate::settings::read_settings(&root).unwrap().unwrap();
         let versions: Vec<String> = settings
             .dependencies
             .iter()
@@ -26986,7 +26995,7 @@ Viewbinding   = false
         std::fs::create_dir_all(&folder).unwrap();
         std::fs::write(folder.join(&stored), jar.finish().unwrap()).unwrap();
 
-        let brought = crate::builder::brought_by_libraries(&root).unwrap();
+        let brought = crate::builder::library_contents(&root).unwrap();
         assert!(
             brought
                 .carried
@@ -27094,7 +27103,7 @@ Viewbinding   = false
         let text = "<a x=\"1 &amp; 2\" y=\"&quot;q&quot;\">lead<b/>mid &lt;c&gt;<c z=\"&lt;\">in</c>tail</a>";
         let mut sink = Sink::new();
         let first = crate::xml::parse(text, "a", &mut sink).unwrap();
-        let again = crate::xml::written(&first);
+        let again = crate::xml::serialize_element(&first);
         let second = crate::xml::parse(&again, "a", &mut sink).unwrap();
         assert_eq!(first.name, second.name);
         assert_eq!(first.attributes.len(), second.attributes.len());
@@ -28934,7 +28943,9 @@ public class Shaped {
         }
 
         let mut classpath = empty();
-        classpath.learn(&class).expect("the enum must be learnable");
+        classpath
+            .register_class(&class)
+            .expect("the enum must be learnable");
         let over = r#"
             package com.my.app;
 
@@ -32013,7 +32024,7 @@ public class MainActivity extends Activity {
         };
         let bytes = std::fs::read(&platform).expect("the platform jar");
         let mut classpath = empty();
-        classpath.learn_jar(&bytes).expect("must be read");
+        classpath.register_jar(&bytes).expect("must be read");
 
         let produced = compile(THE_SCREEN_SOMEBODY_WRITES, &classpath).expect("must compile");
 
@@ -36558,7 +36569,7 @@ public class Boxed {
         let bytes = jar.finish().expect("a jar");
 
         let mut classpath = empty();
-        let learned = classpath.learn_jar(&bytes).expect("and be read back");
+        let learned = classpath.register_jar(&bytes).expect("and be read back");
         assert_eq!(learned, produced.len());
 
         let user = r#"
@@ -36594,7 +36605,7 @@ public class Boxed {
         }
 
         let refused = empty()
-            .learn_jar(b"not a jar at all")
+            .register_jar(b"not a jar at all")
             .expect_err("that is not an archive");
         assert_eq!(refused.code, "EJ255");
 
@@ -36609,7 +36620,7 @@ public class Boxed {
         };
         let bytes = std::fs::read(&platform).expect("the platform jar");
         let mut classpath = empty();
-        let learned = classpath.learn_jar(&bytes).expect("must be read");
+        let learned = classpath.register_jar(&bytes).expect("must be read");
         assert!(
             learned > 1000,
             "a platform jar holds thousands of classes, not {learned}"
@@ -37573,7 +37584,7 @@ public class Screen extends Activity implements View.OnClickListener {
                 "{named} has to be an interface"
             );
         }
-        eprintln!("java: the platform, {} classes", held.how_many());
+        eprintln!("java: the platform, {} classes", held.class_count());
     }
 
     #[test]
@@ -38137,7 +38148,7 @@ public class Screen extends Activity implements View.OnClickListener {
         let mut classpath = empty();
         for (_, bytes) in &produced {
             let class = crate::jvm::read(bytes).expect("read back");
-            classpath.learn(&class).expect("and learn");
+            classpath.register_class(&class).expect("and learn");
         }
 
         let user = r#"
@@ -38630,7 +38641,7 @@ public class Screen extends Activity implements View.OnClickListener {
         let class = crate::jvm::read(&bytes).unwrap();
         let mut classpath = Classpath::new();
         let before = classpath.len();
-        classpath.learn(&class).unwrap();
+        classpath.register_class(&class).unwrap();
         assert_eq!(classpath.len(), before + 1);
 
         let caller = r#"
@@ -39916,7 +39927,7 @@ public class Tagged {
 
         let mut classpath = empty();
         classpath
-            .learn_jar(&std::fs::read(&packed).unwrap())
+            .register_jar(&std::fs::read(&packed).unwrap())
             .expect("the jar is learned");
         assert!(classpath
             .get("bus/Subscribe")
@@ -42320,7 +42331,7 @@ mod java_diagnostic {
 
     #[test]
     fn an_explanation_is_given_in_the_chosen_language() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         crate::speech::choose("en");
         assert_eq!(
             explain("EJ257").as_deref(),
@@ -42617,10 +42628,10 @@ mod java_fixer {
 
     #[test]
     fn every_repair_title_is_one_the_languages_carry() {
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         crate::speech::choose("tr");
         for title in REPAIR_TITLES {
-            let spoken = crate::speech::sentence(title);
+            let spoken = crate::speech::translate_sentence(title);
             assert_ne!(spoken, *title, "{title} is not translated");
         }
         crate::speech::choose("en");
@@ -42769,7 +42780,7 @@ mod kotlin {
                 }
             }
         }
-        found.sort_by(|left, right| crate::maven::newer(&left.0, &right.0));
+        found.sort_by(|left, right| crate::maven::compare_versions(&left.0, &right.0));
         let (_, path) = found.pop()?;
         let bytes = std::fs::read(&path).ok()?;
         Some((path, bytes))
@@ -42852,7 +42863,7 @@ mod kotlin {
         library: &[u8],
     ) -> Result<Vec<(String, Vec<u8>)>, crate::diag::Diagnostic> {
         let mut classpath = Classpath::new();
-        classpath.learn_jar(library)?;
+        classpath.register_jar(library)?;
         compile_mixed(kotlin, java, &classpath, vec![library.to_vec()])
     }
 
@@ -55796,8 +55807,9 @@ mod terminal {
 mod vibe_coding {
     use crate::json::{self, Json};
     use crate::vibe_coding::{
-        answer, backoff, barred, chain, classify, fill, pluck, provider, route, setting, settle,
-        Ask, Custom, Effort, Filling, Ledger, Outcome, Task, Tier, Verdict, BARRED, PROVIDERS,
+        answer, backoff, blocked_endpoint, chain, classify, fill, json_path_text, provider, route,
+        setting, settle, Ask, Custom, Effort, Filling, Ledger, Outcome, Task, Tier, Verdict,
+        BARRED, PROVIDERS,
     };
 
     fn efforts_of(provider_id: &str, model_id: &str) -> Vec<Effort> {
@@ -55829,7 +55841,11 @@ mod vibe_coding {
     #[test]
     fn nothing_on_the_blacklist_is_in_the_catalogue() {
         for held in PROVIDERS {
-            assert!(barred(held.base).is_none(), "{} is barred", held.id);
+            assert!(
+                blocked_endpoint(held.base).is_none(),
+                "{} is barred",
+                held.id
+            );
             for one in BARRED {
                 assert_ne!(held.shown, one.name);
             }
@@ -55841,9 +55857,9 @@ mod vibe_coding {
             "https://api.together.xyz/v1",
             "https://api.fireworks.ai/inference/v1",
         ] {
-            assert!(barred(gone).is_some(), "{gone} slipped through");
+            assert!(blocked_endpoint(gone).is_some(), "{gone} slipped through");
         }
-        assert!(barred("https://box.ai/v1").is_none());
+        assert!(blocked_endpoint("https://box.ai/v1").is_none());
         let ids: Vec<&str> = PROVIDERS.iter().map(|one| one.id).collect();
         for kept in [
             "groq",
@@ -56158,7 +56174,13 @@ mod vibe_coding {
         let larger = held.larger.expect("gemini is offered");
         assert_eq!(larger.provider.id, "google");
         assert_eq!(larger.window, 1_048_576);
-        let fits = crate::vibe_coding::fit("cerebras", "gpt-oss-120b", 0, 9_000, Effort::High);
+        let fits = crate::vibe_coding::fit_to_context_window(
+            "cerebras",
+            "gpt-oss-120b",
+            0,
+            9_000,
+            Effort::High,
+        );
         assert_eq!(fits.get("fits").and_then(Json::boolean), Some(false));
         assert_eq!(fits.get("window").and_then(Json::integer), Some(8_192));
         assert!(fits.get("larger").is_some());
@@ -56214,10 +56236,10 @@ mod vibe_coding {
         assert_eq!(held.get("most").and_then(Json::integer), Some(99));
         let reply = json::read(r#"{"choices":[{"message":{"content":"done"}}]}"#).unwrap();
         assert_eq!(
-            pluck(&reply, "result|choices.0.message.content"),
+            json_path_text(&reply, "result|choices.0.message.content"),
             Some("done".to_string())
         );
-        assert_eq!(pluck(&reply, "nothing.here"), None);
+        assert_eq!(json_path_text(&reply, "nothing.here"), None);
     }
 
     #[test]
@@ -56956,7 +56978,7 @@ public final class R {
             .iter()
             .map(|(name, text)| (name.to_string(), text.to_string()))
             .collect();
-        crate::compilers::java::declared_beside(&sources, &Classpath::new()).1
+        crate::compilers::java::parse_sources_with_classpath(&sources, &Classpath::new()).1
     }
 
     fn layout(name: &str, text: &str) -> Layout {
@@ -58215,7 +58237,7 @@ mod reference {
     }
 
     impl Emitter {
-        fn here(&self) -> u32 {
+        fn current_token(&self) -> u32 {
             self.steps.len() as u32
         }
 
@@ -58224,7 +58246,7 @@ mod reference {
                 return Err(REGEX_TOO_LARGE);
             }
             self.steps.push(step);
-            Ok(self.here() - 1)
+            Ok(self.current_token() - 1)
         }
 
         fn patch(&mut self, at: u32, step: Step) {
@@ -58269,13 +58291,13 @@ mod reference {
                             let split = self.push(Step::Split(0, 0))?;
                             self.emit(branch)?;
                             exits.push(self.push(Step::Jump(0))?);
-                            let next = self.here();
+                            let next = self.current_token();
                             self.patch(split, Step::Split(split + 1, next));
                         } else {
                             self.emit(branch)?;
                         }
                     }
-                    let end = self.here();
+                    let end = self.current_token();
                     for exit in exits {
                         self.patch(exit, Step::Jump(end));
                     }
@@ -58289,7 +58311,7 @@ mod reference {
                             let split = self.push(Step::Split(0, 0))?;
                             self.emit(inner)?;
                             self.push(Step::Jump(split))?;
-                            let end = self.here();
+                            let end = self.current_token();
                             self.patch(split, Step::Split(split + 1, end));
                         }
                         Some(high) => {
@@ -58298,7 +58320,7 @@ mod reference {
                                 splits.push(self.push(Step::Split(0, 0))?);
                                 self.emit(inner)?;
                             }
-                            let end = self.here();
+                            let end = self.current_token();
                             for split in splits {
                                 self.patch(split, Step::Split(split + 1, end));
                             }
@@ -59394,7 +59416,7 @@ mod reference {
             }
         }
 
-        fn shown(&self, variables: &Variables, sources: &Sources) -> Option<String> {
+        fn display_text(&self, variables: &Variables, sources: &Sources) -> Option<String> {
             match &self.kind {
                 SubstitutionKind::Text(name) => {
                     let extent = variables.strings.get(name)?;
@@ -61397,7 +61419,7 @@ mod reference {
 
         fn print_substitutions(&mut self, pattern: &Pattern, range: Extent, to_notes: bool) {
             for substitution in &pattern.substitutions {
-                let Some(shown) = substitution.shown(&self.variables, &self.sources) else {
+                let Some(shown) = substitution.display_text(&self.variables, &self.sources) else {
                     continue;
                 };
                 let message = format!(
@@ -66878,7 +66900,7 @@ block5(%e: ref, %original: i32):
             if op.is_float() {
                 line(format!("%T: f64 = {name} %x, %y"));
                 line(format!("%T: <2 x f64> = {name} %w, %w"));
-            } else if op.yields_bool() {
+            } else if op.produces_boolean() {
                 line(format!("%T: bool = {name} %a, %b"));
             } else {
                 line(format!("%T: i32 = {name} %a, %b"));
@@ -67813,7 +67835,7 @@ block5(%e: ref, %original: i32):
     fn integer_module(ty: &str) -> Module {
         let mut body = String::new();
         for op in BinaryOp::ALL.iter().filter(|op| !op.is_float()) {
-            let result = if op.yields_bool() { "bool" } else { ty };
+            let result = if op.produces_boolean() { "bool" } else { ty };
             body.push_str(&format!(
                 "function @{name}({ty}, {ty}) -> {result} export {{\nblock0(%a: {ty}, %b: {ty}):\n    %c: {result} = {name} %a, %b\n    return %c\n}}\n",
                 name = op.name()
@@ -69466,7 +69488,7 @@ block0:
         );
         assert!(catalogue::known("EI004"));
         assert!(!catalogue::known("EI999"));
-        let _turn = crate::progress::one_at_a_time();
+        let _turn = crate::progress::acquire_build_lock();
         crate::speech::choose("tr");
         let turkish = catalogue::explain("EI003").expect("catalogued");
         let localized =
@@ -89780,15 +89802,15 @@ int main(void) {
     #[test]
     fn a_manifest_without_an_sdk_line_still_names_the_levels_a_device_checks() {
         let bare = "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"a.b\">\n    <application/>\n</manifest>\n";
-        let made = crate::settings::with_the_sdk_it_needs(bare);
+        let made = crate::settings::with_default_sdk_levels(bare);
         assert!(made.contains("android:minSdkVersion=\"30\""), "{made}");
         assert!(made.contains("android:targetSdkVersion=\"37\""), "{made}");
         let partial = "<manifest package=\"a.b\">\n    <uses-sdk android:minSdkVersion=\"28\"/>\n</manifest>\n";
-        let kept = crate::settings::with_the_sdk_it_needs(partial);
+        let kept = crate::settings::with_default_sdk_levels(partial);
         assert!(kept.contains("android:minSdkVersion=\"28\""), "{kept}");
         assert!(kept.contains("android:targetSdkVersion=\"37\""), "{kept}");
         let whole = "<manifest package=\"a.b\">\n    <uses-sdk android:minSdkVersion=\"29\" android:targetSdkVersion=\"33\"/>\n</manifest>\n";
-        assert_eq!(crate::settings::with_the_sdk_it_needs(whole), whole);
+        assert_eq!(crate::settings::with_default_sdk_levels(whole), whole);
     }
 
     #[test]
@@ -89878,7 +89900,7 @@ int main(void) {
         let first = crate::builder::project_for(&root, None, Some(&host)).expect("a first project");
         let certificate = crate::builder::signing_identity(&key, &first.identity, 1_700_000_000)
             .expect("a certificate");
-        let made_by = crate::builder::made_by(&certificate).expect("a fingerprint");
+        let made_by = crate::builder::certificate_fingerprint(&certificate).expect("a fingerprint");
         let project = crate::builder::project_for(&root, Some(&made_by), Some(&host))
             .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
         let plan = project.debugger.as_ref().expect("the debugger is planned");
@@ -89939,15 +89961,20 @@ int main(void) {
         let certificate = crate::builder::signing_identity(&key, &first.identity, 1_700_000_000)
             .expect("a certificate");
         let quantum = crate::signing::Quantum::from_seed(&[7u8; 32]).expect("a quantum key");
-        let both = crate::builder::made_by_all(&certificate, Some(&quantum)).expect("fingerprints");
+        let both = crate::builder::signer_fingerprints(&certificate, Some(&quantum))
+            .expect("fingerprints");
         let parts: Vec<&str> = both.split(',').collect();
         assert_eq!(parts.len(), 2, "{both}");
-        assert_eq!(parts[0], crate::builder::made_by(&certificate).unwrap());
+        assert_eq!(
+            parts[0],
+            crate::builder::certificate_fingerprint(&certificate).unwrap()
+        );
         assert_eq!(
             parts[1], "5733ADA71FFD79776489FF26B5084E90362BBF5050CE4E544510B001221FE4D0",
             "the post-quantum certificate is the one Android 17 reports as the signer"
         );
-        let alone = crate::builder::made_by_all(&certificate, None).expect("one fingerprint");
+        let alone =
+            crate::builder::signer_fingerprints(&certificate, None).expect("one fingerprint");
         assert_eq!(alone.split(',').count(), 1);
 
         let source = crate::seal::source("com.demo.snake", &both);

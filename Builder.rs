@@ -391,7 +391,7 @@ pub mod json {
             self.indent();
         }
 
-        fn owed_comma(&mut self) {
+        fn write_pending_comma(&mut self) {
             if self.needs_comma.is_empty() {
                 return;
             }
@@ -406,7 +406,7 @@ pub mod json {
             if !self.roomy || self.needs_comma.is_empty() {
                 return;
             }
-            self.owed_comma();
+            self.write_pending_comma();
             self.indent();
             self.buf.push_str("// ");
             self.buf.push_str(said);
@@ -416,7 +416,7 @@ pub mod json {
             if !self.roomy || self.needs_comma.is_empty() {
                 return;
             }
-            self.owed_comma();
+            self.write_pending_comma();
             self.buf.push('\n');
         }
 
@@ -886,7 +886,7 @@ pub mod diag {
             w.field_str("severity", self.severity.as_str());
             w.field_str("class", self.class.as_str());
             w.field_str("origin", &self.origin);
-            w.field_str("message", &crate::speech::sentence(&self.message));
+            w.field_str("message", &crate::speech::translate_sentence(&self.message));
             w.field_str("english", &self.message);
             if let Some(loc) = &self.location {
                 w.begin_object(Some("location"));
@@ -901,7 +901,7 @@ pub mod diag {
             }
             w.end_array();
             if let Some(suggestion) = &self.suggestion {
-                w.field_str("suggestion", &crate::speech::sentence(suggestion));
+                w.field_str("suggestion", &crate::speech::translate_sentence(suggestion));
             }
             w.begin_array(Some("related"));
             for code in &self.related {
@@ -912,11 +912,11 @@ pub mod diag {
         }
 
         pub fn localized_message(&self) -> String {
-            let said = crate::speech::sentence(&self.message);
+            let said = crate::speech::translate_sentence(&self.message);
             if said != self.message {
                 return said;
             }
-            if self.code.starts_with("EI") && crate::speech::chosen() != "en" {
+            if self.code.starts_with("EI") && crate::speech::selected_language() != "en" {
                 if let Some(translated) =
                     crate::compilers::compiler_infrastructure_diagnostic::explain(&self.code)
                 {
@@ -925,14 +925,14 @@ pub mod diag {
                     }
                 }
             }
-            if self.code.starts_with("EJ") && crate::speech::chosen() != "en" {
+            if self.code.starts_with("EJ") && crate::speech::selected_language() != "en" {
                 if let Some(translated) = crate::compilers::java_diagnostic::explain(&self.code) {
                     if translated != self.message {
                         return translated;
                     }
                 }
             }
-            if self.code.starts_with("EK") && crate::speech::chosen() != "en" {
+            if self.code.starts_with("EK") && crate::speech::selected_language() != "en" {
                 if let Some(translated) = crate::compilers::kotlin_diagnostic::explain(&self.code) {
                     if translated != self.message {
                         return translated;
@@ -948,7 +948,7 @@ pub mod diag {
             w.field_str("error", &self.localized_message());
             w.field_str("english", &self.message);
             if let Some(suggestion) = &self.suggestion {
-                w.field_str("suggestion", &crate::speech::sentence(suggestion));
+                w.field_str("suggestion", &crate::speech::translate_sentence(suggestion));
             }
             w.begin_array(Some("context"));
             for line in &self.context {
@@ -964,12 +964,12 @@ pub mod diag {
                 f,
                 "{} [{}]",
                 self.code,
-                crate::speech::sentence(self.severity.as_str())
+                crate::speech::translate_sentence(self.severity.as_str())
             )?;
             if let Some(loc) = &self.location {
                 write!(f, " {}", loc)?;
             }
-            write!(f, "\n{}", crate::speech::sentence(&self.message))?;
+            write!(f, "\n{}", crate::speech::translate_sentence(&self.message))?;
             for line in &self.context {
                 write!(f, "\n  {}", crate::speech::detail(line))?;
             }
@@ -977,8 +977,8 @@ pub mod diag {
                 write!(
                     f,
                     "\n{}: {}",
-                    crate::speech::sentence("Suggestion"),
-                    crate::speech::sentence(s)
+                    crate::speech::translate_sentence("Suggestion"),
+                    crate::speech::translate_sentence(s)
                 )?;
             }
             Ok(())
@@ -1928,7 +1928,7 @@ pub mod compiler {
             Ok(())
         }
 
-        pub fn offer(
+        pub fn add_input(
             &mut self,
             name: impl Into<String>,
             kind: Kind,
@@ -1958,7 +1958,7 @@ pub mod compiler {
             Ok(())
         }
 
-        pub fn offered(&self) -> usize {
+        pub fn input_count(&self) -> usize {
             self.offered.len()
         }
 
@@ -3725,7 +3725,7 @@ pub mod vfs {
                             "Another build holds the lock on this tree.",
                         )
                         .with_context(format!("Path: {}", at.display()))
-                        .with_context(format!("Held by: {}", Self::holder(&at)))
+                        .with_context(format!("Held by: {}", Self::parent_path(&at)))
                         .with_suggestion(
                             "Wait for it to finish. A lock left behind by a build that \
                              died is taken over once it is old enough.",
@@ -3751,7 +3751,7 @@ pub mod vfs {
             .with_context(format!("Path: {}", at.display())))
         }
 
-        fn holder(at: &Path) -> String {
+        fn parent_path(at: &Path) -> String {
             fs::read_to_string(at)
                 .ok()
                 .and_then(|said| said.lines().next().map(|first| first.trim().to_string()))
@@ -5040,7 +5040,7 @@ pub mod project {
             () => {
                 match &entry.value {
                     Value::Text(text) => text.clone(),
-                    other => return wrong_type(entry, "text", other, sink),
+                    other => return report_wrong_type(entry, "text", other, sink),
                 }
             };
         }
@@ -5048,7 +5048,7 @@ pub mod project {
             () => {
                 match &entry.value {
                     Value::Integer(number) => *number,
-                    other => return wrong_type(entry, "integer", other, sink),
+                    other => return report_wrong_type(entry, "integer", other, sink),
                 }
             };
         }
@@ -5056,7 +5056,7 @@ pub mod project {
             () => {
                 match &entry.value {
                     Value::Boolean(flag) => *flag,
-                    other => return wrong_type(entry, "boolean", other, sink),
+                    other => return report_wrong_type(entry, "boolean", other, sink),
                 }
             };
         }
@@ -5222,7 +5222,7 @@ pub mod project {
          least two parts, each starting with a letter and containing only \
          letters, digits and underscores.";
 
-    fn wrong_type(entry: &Entry, expected: &str, found: &Value, sink: &mut Sink) -> bool {
+    fn report_wrong_type(entry: &Entry, expected: &str, found: &Value, sink: &mut Sink) -> bool {
         sink.emit(
             diagnostic(
                 "E3040",
@@ -5506,7 +5506,7 @@ pub mod artifact {
             self.advance(State::Verified)
         }
 
-        pub fn published(&mut self) -> Result<(), Diagnostic> {
+        pub fn publish(&mut self) -> Result<(), Diagnostic> {
             self.advance(State::Published)
         }
 
@@ -6039,7 +6039,7 @@ pub mod cache {
                 .map(|entry| entry.content)
         }
 
-        pub fn wanted(&self) -> std::collections::BTreeSet<Digest> {
+        pub fn needed_digests(&self) -> std::collections::BTreeSet<Digest> {
             self.entries
                 .iter()
                 .filter(|entry| entry.valid)
@@ -7542,7 +7542,7 @@ pub mod scheduler {
             self.done
         }
 
-        pub fn made(&self) -> Option<Digest> {
+        pub fn output_digest(&self) -> Option<Digest> {
             self.made
         }
 
@@ -7719,7 +7719,7 @@ pub mod scheduler {
     }
 
     impl Report {
-        pub fn nothing(outcome: Outcome) -> Report {
+        pub fn empty_report(outcome: Outcome) -> Report {
             Report {
                 outcome,
                 succeeded: 0,
@@ -7791,7 +7791,7 @@ pub mod scheduler {
         Blocked(Vec<String>),
     }
 
-    fn work(hand: &mut dyn NodeExecutor, job: Job, grants: &Policy) -> Done {
+    fn execute_job(hand: &mut dyn NodeExecutor, job: Job, grants: &Policy) -> Done {
         let Job {
             at,
             node,
@@ -7855,7 +7855,7 @@ pub mod scheduler {
                 })
                 .collect();
             let count = held.len();
-            let mut report = Report::nothing(Outcome::Completed);
+            let mut report = Report::empty_report(Outcome::Completed);
             report.order = order.clone();
             Board {
                 order,
@@ -7958,7 +7958,7 @@ pub mod scheduler {
                 if resume.is_done() {
                     self.take(index);
                     self.state[index] = Status::CacheHit;
-                    self.made[index] = resume.made();
+                    self.made[index] = resume.output_digest();
                     self.report.resumed += 1;
                     continue;
                 }
@@ -8037,7 +8037,7 @@ pub mod scheduler {
         Many(&'a dyn Crew),
     }
 
-    fn conduct(
+    fn run_schedule(
         graph: &mut Graph,
         hands: Hands<'_>,
         policy: &mut Policy,
@@ -8049,7 +8049,7 @@ pub mod scheduler {
             Ok(order) => order,
             Err(error) => {
                 sink.emit(error);
-                return Report::nothing(Outcome::Rejected);
+                return Report::empty_report(Outcome::Rejected);
             }
         };
 
@@ -8068,14 +8068,14 @@ pub mod scheduler {
 
         match hands {
             Hands::One(executor) => {
-                in_one_lane(&mut board, executor, cancellation, settings, &grants)
+                execute_sequentially(&mut board, executor, cancellation, settings, &grants)
             }
             Hands::Many(crew) if wanted <= 1 => {
                 let mut hand = crew.hand();
-                in_one_lane(&mut board, hand.as_mut(), cancellation, settings, &grants)
+                execute_sequentially(&mut board, hand.as_mut(), cancellation, settings, &grants)
             }
             Hands::Many(crew) => {
-                in_many_lanes(&mut board, crew, cancellation, settings, &grants, wanted)
+                execute_in_parallel(&mut board, crew, cancellation, settings, &grants, wanted)
             }
         }
 
@@ -8083,7 +8083,7 @@ pub mod scheduler {
         board.close(graph, policy, sink)
     }
 
-    fn in_one_lane(
+    fn execute_sequentially(
         board: &mut Board,
         executor: &mut dyn NodeExecutor,
         cancellation: &Cancellation,
@@ -8095,12 +8095,12 @@ pub mod scheduler {
             let Some(job) = board.draw(settings) else {
                 break;
             };
-            let done = work(executor, job, grants);
+            let done = execute_job(executor, job, grants);
             board.finish(done);
         }
     }
 
-    fn in_many_lanes(
+    fn execute_in_parallel(
         board: &mut Board,
         crew: &dyn Crew,
         cancellation: &Cancellation,
@@ -8128,7 +8128,7 @@ pub mod scheduler {
                         let Ok(job) = job else {
                             break;
                         };
-                        if tell.send(work(hand.as_mut(), job, grants)).is_err() {
+                        if tell.send(execute_job(hand.as_mut(), job, grants)).is_err() {
                             break;
                         }
                     }
@@ -8184,7 +8184,7 @@ pub mod scheduler {
         sink: &mut Sink,
         cancellation: &Cancellation,
     ) -> Report {
-        conduct(
+        run_schedule(
             graph,
             Hands::One(executor),
             policy,
@@ -8202,7 +8202,7 @@ pub mod scheduler {
         cancellation: &Cancellation,
         settings: &Settings,
     ) -> Report {
-        conduct(
+        run_schedule(
             graph,
             Hands::One(executor),
             policy,
@@ -8220,7 +8220,7 @@ pub mod scheduler {
         cancellation: &Cancellation,
         settings: &Settings,
     ) -> Report {
-        conduct(
+        run_schedule(
             graph,
             Hands::Many(crew),
             policy,
@@ -9081,7 +9081,7 @@ pub mod xml {
         Parser::new(text, origin).run(sink)
     }
 
-    pub fn written(element: &Element) -> String {
+    pub fn serialize_element(element: &Element) -> String {
         let mut out = String::from("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
         write_element(element, &mut out);
         out.push('\n');
@@ -10224,7 +10224,7 @@ pub mod resources {
             colour_mode: 0,
         };
 
-        pub fn says_nothing(&self) -> bool {
+        pub fn is_default_configuration(&self) -> bool {
             *self == Config::DEFAULT
         }
 
@@ -10997,7 +10997,7 @@ pub mod resources {
             }
         }
 
-        pub fn know_macros(&mut self, macros: &[(String, String)]) {
+        pub fn set_macros(&mut self, macros: &[(String, String)]) {
             for (name, held) in macros {
                 if !self.macros.iter().any(|(named, _)| named == name) {
                     self.macros.push((name.clone(), held.clone()));
@@ -12192,7 +12192,7 @@ pub mod resources {
             out.push(crate::scaffold::Supplied {
                 folder: held.folder.clone(),
                 name: held.name.clone(),
-                bytes: xml::written(&root).into_bytes(),
+                bytes: xml::serialize_element(&root).into_bytes(),
             });
             for (at, mut one) in pulled.into_iter().enumerate() {
                 for space in spaces.iter().rev() {
@@ -12203,7 +12203,7 @@ pub mod resources {
                 out.push(crate::scaffold::Supplied {
                     folder: held.folder.clone(),
                     name: format!("${stem}__{at}.xml"),
-                    bytes: xml::written(&one).into_bytes(),
+                    bytes: xml::serialize_element(&one).into_bytes(),
                 });
             }
         }
@@ -13033,11 +13033,11 @@ pub mod resources {
             "integer-array" => {
                 parse_value(Kind::Integer, &child.text, origin, child.position, sink)
             }
-            _ => anything_at_all(&child.text, origin, child.position, sink),
+            _ => parse_untyped_value(&child.text, origin, child.position, sink),
         }
     }
 
-    fn anything_at_all(
+    fn parse_untyped_value(
         text: &str,
         origin: &str,
         position: Position,
@@ -14277,7 +14277,7 @@ pub mod archive {
 
     pub const TABLE_ENTRY: &str = "resources.arsc";
 
-    pub fn must_be_stored(name: &str) -> bool {
+    pub fn requires_stored_entry(name: &str) -> bool {
         name == TABLE_ENTRY || is_native_library(name)
     }
 
@@ -14380,8 +14380,8 @@ pub mod archive {
                 .with_context(format!("Limit: {MAX_ENTRIES}")));
             }
 
-            let must_store =
-                must_be_stored(&name) || (self.android_alignment && kept_uncompressed(&name));
+            let must_store = requires_stored_entry(&name)
+                || (self.android_alignment && kept_uncompressed(&name));
             self.entries.push(Pending {
                 name,
                 bytes,
@@ -15007,7 +15007,7 @@ pub mod x509 {
     }
 
     impl SelfSignature {
-        pub fn nothing_wrong(&self) -> bool {
+        pub fn has_no_problems(&self) -> bool {
             !self.self_issued || !self.checkable || self.holds
         }
     }
@@ -15903,7 +15903,7 @@ pub mod signing {
     }
 
     impl Report {
-        pub fn everything_checkable_passed(&self) -> bool {
+        pub fn all_checks_passed(&self) -> bool {
             self.has_block
                 && self.digests_failed == 0
                 && self.digests_verified > 0
@@ -16551,7 +16551,7 @@ pub mod signing {
         out
     }
 
-    pub fn examine(
+    pub fn verify_signing_block(
         data: &[u8],
         central_directory_offset: u64,
         end_record_offset: u64,
@@ -16762,7 +16762,7 @@ pub mod signing {
             if checked.certificate.self_issued {
                 report.certificates_self_signed += 1;
             }
-            if !checked.certificate.nothing_wrong() {
+            if !checked.certificate.has_no_problems() {
                 report.certificates_hold = false;
             }
             for (_, outcome) in checked.signatures {
@@ -16957,7 +16957,7 @@ pub mod dex {
             self.class(class).and_then(|held| held.method(method))
         }
 
-        pub fn bodies_read(&self) -> usize {
+        pub fn decoded_body_count(&self) -> usize {
             self.classes
                 .iter()
                 .flat_map(|class| class.methods())
@@ -16983,7 +16983,7 @@ pub mod dex {
             w.field_u64("classes", self.classes.len() as u64);
             w.field_u64("methods", self.methods.len() as u64);
             w.field_u64("fields", self.fields.len() as u64);
-            w.field_u64("bodiesRead", self.bodies_read() as u64);
+            w.field_u64("bodiesRead", self.decoded_body_count() as u64);
             w.field_u64("instructions", self.instructions() as u64);
             w.begin_array(Some("map"));
             for entry in &self.map {
@@ -17457,7 +17457,7 @@ pub mod dex {
         methods: &'a [Method],
     }
 
-    fn shown(text: &str) -> String {
+    fn display_text(text: &str) -> String {
         let mut out: String = text.chars().take(MOST_SHOWN).collect();
         if out.chars().count() < text.chars().count() {
             out.push('~');
@@ -17466,11 +17466,11 @@ pub mod dex {
     }
 
     impl Pools<'_> {
-        fn about(&self, opcode: u8, index: u32) -> Option<String> {
+        fn operand_description(&self, opcode: u8, index: u32) -> Option<String> {
             let at = index as usize;
             match points_at(opcode) {
                 Points::Nowhere => None,
-                Points::Strings => self.strings.get(at).map(|held| shown(held)),
+                Points::Strings => self.strings.get(at).map(|held| display_text(held)),
                 Points::Types => self.types.get(at).cloned(),
                 Points::Fields => self
                     .fields
@@ -17562,7 +17562,8 @@ pub mod dex {
             let about = if opcode == 0 && unit != 0 {
                 None
             } else {
-                index_of(shape.format, &held).and_then(|index| pools.about(opcode, index))
+                index_of(shape.format, &held)
+                    .and_then(|index| pools.operand_description(opcode, index))
             };
             out.push(Instruction {
                 address: at as u32,
@@ -20925,7 +20926,7 @@ pub mod rsa {
 
     const EXPONENT_BLINDING_BITS: usize = 64;
 
-    fn blind(
+    fn blind_message(
         message: &Natural,
         modulus: &Natural,
         public_exponent: &Natural,
@@ -20984,7 +20985,7 @@ pub mod rsa {
             ));
         }
 
-        let (blinded, undo) = blind(message, &key.modulus, &key.public_exponent)?;
+        let (blinded, undo) = blind_message(message, &key.modulus, &key.public_exponent)?;
         let raw = exponentiate_blinded(key, &blinded)?;
         raw.mod_mul(&undo, &key.modulus)
     }
@@ -21763,7 +21764,7 @@ pub mod mldsa {
         )
     }
 
-    pub fn seed_beside(key_path: &str) -> Result<Vec<u8>, Diagnostic> {
+    pub fn load_adjacent_seed(key_path: &str) -> Result<Vec<u8>, Diagnostic> {
         let path = format!("{key_path}.mldsa");
         if let Ok(held) = std::fs::read(&path) {
             if held.len() == SEED_BYTES {
@@ -22236,7 +22237,7 @@ pub mod guard {
         ),
     ];
 
-    pub fn fired(report: &Report, code: &str) -> bool {
+    pub fn rule_fired(report: &Report, code: &str) -> bool {
         report.findings.iter().any(|held| held.code == code)
     }
 
@@ -22463,7 +22464,7 @@ pub mod guard {
         report
     }
 
-    pub fn said(code: &str) -> &'static str {
+    pub fn rule_description(code: &str) -> &'static str {
         RULES
             .iter()
             .find(|(held, _, _)| *held == code)
@@ -22479,7 +22480,7 @@ pub mod guard {
                     Severity::Warning,
                     FailureClass::SecurityFailure,
                     "core.guard",
-                    said(finding.code),
+                    rule_description(finding.code),
                 )
                 .with_context(format!("Found: {}", finding.what))
                 .with_context(finding.why.clone())
@@ -22602,7 +22603,7 @@ pub mod axml {
         }
     }
 
-    fn what_it_accepts(local: &str) -> Option<(&'static str, &'static [(&'static str, u32)])> {
+    fn attribute_formats(local: &str) -> Option<(&'static str, &'static [(&'static str, u32)])> {
         framework_attribute(local).map(|(_, formats, symbols)| (formats, symbols))
     }
 
@@ -22628,7 +22629,7 @@ pub mod axml {
     }
 
     pub fn typed_for(local: &str, raw: &str) -> Option<(u8, u32)> {
-        let (formats, symbols) = what_it_accepts(local)?;
+        let (formats, symbols) = attribute_formats(local)?;
         typed_by(formats, symbols, raw)
     }
 
@@ -22925,7 +22926,7 @@ pub mod axml {
             if prefix == Some("xmlns") {
                 continue;
             }
-            match which_namespace(prefix, bound) {
+            match resolve_namespace(prefix, bound) {
                 Namespace::Platform => {
                     if let Some(id) = attribute_id(local) {
                         pool.add_keyed(local, id);
@@ -22951,7 +22952,7 @@ pub mod axml {
         None,
     }
 
-    fn which_namespace(prefix: Option<&str>, bound: &[(String, String)]) -> Namespace {
+    fn resolve_namespace(prefix: Option<&str>, bound: &[(String, String)]) -> Namespace {
         let Some(prefix) = prefix else {
             return Namespace::None;
         };
@@ -22979,7 +22980,7 @@ pub mod axml {
             if prefix == Some("xmlns") {
                 continue;
             }
-            let keyed = match which_namespace(prefix, bound) {
+            let keyed = match resolve_namespace(prefix, bound) {
                 Namespace::Platform => attribute_id(local).is_some(),
                 Namespace::Own => own.iter().any(|held| held.name == local),
                 Namespace::None => false,
@@ -23088,7 +23089,7 @@ pub mod axml {
             if prefix == Some("xmlns") {
                 continue;
             }
-            let (uri, id, declared) = match which_namespace(prefix, bound) {
+            let (uri, id, declared) = match resolve_namespace(prefix, bound) {
                 Namespace::Platform => (bound[0].1.as_str(), attribute_id(local), None),
                 Namespace::Own => match own.iter().find(|held| held.name == local) {
                     Some(held) => (
@@ -23321,9 +23322,9 @@ pub mod axml {
         }
 
         fn take(&mut self, count: usize) -> Result<&'a [u8], Diagnostic> {
-            let end = self.at.checked_add(count).ok_or_else(too_short)?;
+            let end = self.at.checked_add(count).ok_or_else(truncated_error)?;
             if end > self.data.len() {
-                return Err(too_short());
+                return Err(truncated_error());
             }
             let held = &self.data[self.at..end];
             self.at = end;
@@ -23331,7 +23332,7 @@ pub mod axml {
         }
     }
 
-    fn too_short() -> Diagnostic {
+    fn truncated_error() -> Diagnostic {
         fail(
             "EA020",
             "A binary XML document ends in the middle of a chunk.",
@@ -23356,7 +23357,7 @@ pub mod axml {
             );
         }
         if header_size > chunk.len() || strings_start > chunk.len() {
-            return Err(too_short());
+            return Err(truncated_error());
         }
 
         const UTF8_FLAG: u32 = 1 << 8;
@@ -23366,9 +23367,11 @@ pub mod axml {
         let mut held = Vec::with_capacity(count.min(4096));
         for _ in 0..count {
             let offset = offsets.u32()? as usize;
-            let from = strings_start.checked_add(offset).ok_or_else(too_short)?;
+            let from = strings_start
+                .checked_add(offset)
+                .ok_or_else(truncated_error)?;
             if from >= chunk.len() {
-                return Err(too_short());
+                return Err(truncated_error());
             }
             held.push(if utf8 {
                 read_utf8_string(&chunk[from..])?
@@ -23380,19 +23383,19 @@ pub mod axml {
     }
 
     fn read_length_8(bytes: &[u8], at: &mut usize) -> Result<usize, Diagnostic> {
-        let first = *bytes.get(*at).ok_or_else(too_short)?;
+        let first = *bytes.get(*at).ok_or_else(truncated_error)?;
         *at += 1;
         if first & 0x80 == 0 {
             return Ok(usize::from(first));
         }
-        let second = *bytes.get(*at).ok_or_else(too_short)?;
+        let second = *bytes.get(*at).ok_or_else(truncated_error)?;
         *at += 1;
         Ok((usize::from(first & 0x7f) << 8) | usize::from(second))
     }
 
     fn read_length_16(bytes: &[u8], at: &mut usize) -> Result<usize, Diagnostic> {
         if *at + 2 > bytes.len() {
-            return Err(too_short());
+            return Err(truncated_error());
         }
         let first = u16::from_le_bytes([bytes[*at], bytes[*at + 1]]);
         *at += 2;
@@ -23400,7 +23403,7 @@ pub mod axml {
             return Ok(usize::from(first));
         }
         if *at + 2 > bytes.len() {
-            return Err(too_short());
+            return Err(truncated_error());
         }
         let second = u16::from_le_bytes([bytes[*at], bytes[*at + 1]]);
         *at += 2;
@@ -23412,9 +23415,9 @@ pub mod axml {
 
         let _characters = read_length_8(bytes, &mut at)?;
         let length = read_length_8(bytes, &mut at)?;
-        let end = at.checked_add(length).ok_or_else(too_short)?;
+        let end = at.checked_add(length).ok_or_else(truncated_error)?;
         if end > bytes.len() {
-            return Err(too_short());
+            return Err(truncated_error());
         }
         Ok(String::from_utf8_lossy(&bytes[at..end]).into_owned())
     }
@@ -23423,10 +23426,10 @@ pub mod axml {
         let mut at = 0usize;
         let length = read_length_16(bytes, &mut at)?;
         let end = at
-            .checked_add(length.checked_mul(2).ok_or_else(too_short)?)
-            .ok_or_else(too_short)?;
+            .checked_add(length.checked_mul(2).ok_or_else(truncated_error)?)
+            .ok_or_else(truncated_error)?;
         if end > bytes.len() {
-            return Err(too_short());
+            return Err(truncated_error());
         }
         let units: Vec<u16> = bytes[at..end]
             .chunks_exact(2)
@@ -23530,12 +23533,12 @@ pub mod axml {
             let header_size = chunk.u16()? as usize;
             let size = chunk.u32()? as usize;
             if size < 8 || at + size > end {
-                return Err(too_short());
+                return Err(truncated_error());
             }
             let whole = &data[at..at + size];
 
             if header_size < 8 || header_size > size {
-                return Err(too_short());
+                return Err(truncated_error());
             }
 
             match kind {
@@ -23611,7 +23614,7 @@ pub mod axml {
             .checked_add(attribute_start)
             .filter(|held| *held <= whole.len())
         else {
-            return Err(too_short());
+            return Err(truncated_error());
         };
         for index in 0..count {
             let Some(from) = index
@@ -23619,7 +23622,7 @@ pub mod axml {
                 .and_then(|held| held.checked_add(base))
                 .filter(|held| held.saturating_add(20) <= whole.len())
             else {
-                return Err(too_short());
+                return Err(truncated_error());
             };
             let mut one = Bytes::new(&whole[from..from + 20]);
             let namespace = one.u32()?;
@@ -24355,7 +24358,7 @@ pub mod dexwrite {
         }
     }
 
-    fn reach(insn: &Insn) -> Option<i64> {
+    fn branch_offset(insn: &Insn) -> Option<i64> {
         let units = &insn.units;
         match opcode_of(insn) {
             0x28 if !is_payload(insn) => Some((units[0] >> 8) as u8 as i8 as i64),
@@ -24441,7 +24444,7 @@ pub mod dexwrite {
         let targets: Vec<Option<usize>> = kept
             .iter()
             .map(|(at, insn)| {
-                reach(insn).and_then(|distance| {
+                branch_offset(insn).and_then(|distance| {
                     let target = i64::from(*at) + distance;
                     u32::try_from(target)
                         .ok()
@@ -24450,7 +24453,7 @@ pub mod dexwrite {
             })
             .collect();
         for ((at, insn), target) in kept.iter().zip(&targets) {
-            if reach(insn).is_some() && target.is_none() {
+            if branch_offset(insn).is_some() && target.is_none() {
                 return Err(fail("EW012", "A branch points at no instruction.")
                     .with_context(format!("Offset {at}")));
             }
@@ -25139,7 +25142,7 @@ pub mod dexwrite {
 
         let mut wanted: Vec<Wanted> = Vec::with_capacity(classes.len());
         let mut every: Vec<crate::jvm::Annotation> = Vec::new();
-        fn hold(
+        fn intern_annotations(
             every: &mut Vec<crate::jvm::Annotation>,
             held: &[crate::jvm::Annotation],
         ) -> Vec<usize> {
@@ -25152,7 +25155,7 @@ pub mod dexwrite {
         }
         for class in classes {
             let mut held = Wanted {
-                class: hold(&mut every, &class.annotations),
+                class: intern_annotations(&mut every, &class.annotations),
                 fields: Vec::new(),
                 methods: Vec::new(),
                 parameters: Vec::new(),
@@ -25163,14 +25166,14 @@ pub mod dexwrite {
                 }
                 held.fields.push((
                     pools.index_of_field(&field.reference)?,
-                    hold(&mut every, &field.annotations),
+                    intern_annotations(&mut every, &field.annotations),
                 ));
             }
             for method in class.methods() {
                 if !method.annotations.is_empty() {
                     held.methods.push((
                         pools.index_of_method(&method.reference)?,
-                        hold(&mut every, &method.annotations),
+                        intern_annotations(&mut every, &method.annotations),
                     ));
                 }
                 if method
@@ -25183,7 +25186,7 @@ pub mod dexwrite {
                 let each = method
                     .parameter_annotations
                     .iter()
-                    .map(|one| hold(&mut every, one))
+                    .map(|one| intern_annotations(&mut every, one))
                     .collect();
                 held.parameters
                     .push((pools.index_of_method(&method.reference)?, each));
@@ -25769,7 +25772,7 @@ pub mod dalvik {
         out
     }
 
-    fn appends(descriptor: &str) -> &'static str {
+    fn string_builder_append_descriptor(descriptor: &str) -> &'static str {
         match descriptor {
             "Z" => "Z",
             "C" => "C",
@@ -25921,7 +25924,7 @@ pub mod dalvik {
             Slot { kept, array: None }
         }
 
-        fn holding(descriptor: &str) -> Slot {
+        fn slot_for_descriptor(descriptor: &str) -> Slot {
             Slot {
                 kept: Kept::of(descriptor),
                 array: Held::of(descriptor),
@@ -26072,7 +26075,7 @@ pub mod dalvik {
             self.puts_wide(by);
         }
 
-        pub fn where_they_landed(&self, lines: &[(u16, u16)]) -> Vec<(u32, u32)> {
+        pub fn map_line_numbers(&self, lines: &[(u16, u16)]) -> Vec<(u32, u32)> {
             let mut out = Vec::with_capacity(lines.len());
             for (at, line) in lines {
                 let Some(unit) = self.landed.get(&usize::from(*at)) else {
@@ -26140,9 +26143,10 @@ pub mod dalvik {
                 let opcode = bytes[at];
                 let start = at;
                 at += 1;
-                self.one(opcode, bytes, start, &mut at).map_err(|error| {
-                    error.with_context(format!("At offset {start}, opcode {opcode:#04x}"))
-                })?;
+                self.translate_one(opcode, bytes, start, &mut at)
+                    .map_err(|error| {
+                        error.with_context(format!("At offset {start}, opcode {opcode:#04x}"))
+                    })?;
                 if matches!(
                     opcode,
                     0xa7 | 0xa8 | 0xa9 | 0xaa | 0xab | 0xac..=0xb1 | 0xbf | 0xc8
@@ -26204,7 +26208,7 @@ pub mod dalvik {
                 *slot = offset as u16;
             }
 
-            let tries = self.tries(&positions)?;
+            let tries = self.try_blocks(&positions)?;
             Ok((self.code, tries))
         }
 
@@ -26256,7 +26260,7 @@ pub mod dalvik {
             Ok(())
         }
 
-        fn tries(&self, positions: &[usize]) -> Result<Vec<Try>, Diagnostic> {
+        fn try_blocks(&self, positions: &[usize]) -> Result<Vec<Try>, Diagnostic> {
             let _ = positions;
             let mut out: Vec<Try> = Vec::new();
             let mut rows: Vec<(u32, u32, Option<String>, u32)> = Vec::new();
@@ -26529,7 +26533,7 @@ pub mod dalvik {
                         1,
                         Operand::Field(reference),
                     ));
-                    self.puts_slot(Slot::holding(&descriptor));
+                    self.puts_slot(Slot::slot_for_descriptor(&descriptor));
                 }
                 0xb3 => {
                     let from = self.slot(width);
@@ -26544,7 +26548,7 @@ pub mod dalvik {
                     let object = self.slot(1);
                     self.shrink(1)?;
                     let to = self.stack_base + self.depth;
-                    let object = self.brought_down(object, Kept::Reference, 0);
+                    let object = self.move_to_low_register(object, Kept::Reference, 0);
                     let into = if to > 15 { 2 } else { to };
                     self.push(Insn::pointing(
                         vec![(0x0052 + kind) | (into << 8) | (object << 12), 0],
@@ -26552,14 +26556,14 @@ pub mod dalvik {
                         Operand::Field(reference),
                     ));
                     self.put_back(to, holds, into);
-                    self.puts_slot(Slot::holding(&descriptor));
+                    self.puts_slot(Slot::slot_for_descriptor(&descriptor));
                 }
                 _ => {
                     let value = self.slot(width);
                     let object = self.slot(width + 1);
                     self.shrink(width + 1)?;
-                    let value = self.brought_down(value, holds, 0);
-                    let object = self.brought_down(object, Kept::Reference, 2);
+                    let value = self.move_to_low_register(value, holds, 0);
+                    let object = self.move_to_low_register(object, Kept::Reference, 2);
                     self.push(Insn::pointing(
                         vec![(0x0059 + kind) | (value << 8) | (object << 12), 0],
                         1,
@@ -26735,7 +26739,7 @@ pub mod dalvik {
                 return Err(refused("what it comes to is not an interface"));
             }
             let named = self.made.named();
-            let written = a_lambda(&Recipe {
+            let written = build_lambda_class(&Recipe {
                 named: &named,
                 interface: returns,
                 markers: &markers,
@@ -26867,7 +26871,7 @@ pub mod dalvik {
                         };
                         let kept = Kept::of(descriptor);
                         self.push(move_register(kept.moved_by(), argument, *register));
-                        (kept, appends(descriptor))
+                        (kept, string_builder_append_descriptor(descriptor))
                     }
                     Piece::Constant => {
                         let Some(jvm::Constant::String(text)) = constants.next() else {
@@ -26933,21 +26937,21 @@ pub mod dalvik {
                 0xb8 => 0x0071,
                 0xb9 => 0x0072,
                 _ if name == "<init>" || name == "<clinit>" => 0x0070,
-                _ if self.declares_it_privately(class, name, descriptor) => 0x0070,
-                0xb7 if self.reaches_up_to(class) => 0x006f,
+                _ if self.declares_private_method(class, name, descriptor) => 0x0070,
+                0xb7 if self.extends_or_implements(class) => 0x006f,
                 0xb7 => 0x0070,
                 _ => 0x006e,
             }
         }
 
-        fn reaches_up_to(&self, class: &str) -> bool {
+        fn extends_or_implements(&self, class: &str) -> bool {
             let named = class.replace('.', "/");
             let same = |held: &str| held.replace('.', "/") == named;
             self.class.superclass.as_deref().is_some_and(same)
                 || self.class.interfaces.iter().any(|one| same(one))
         }
 
-        fn declares_it_privately(&self, class: &str, name: &str, descriptor: &str) -> bool {
+        fn declares_private_method(&self, class: &str, name: &str, descriptor: &str) -> bool {
             const PRIVATE: u16 = 0x0002;
             if class.replace('.', "/") != self.class.name.replace('.', "/") {
                 return false;
@@ -26991,12 +26995,12 @@ pub mod dalvik {
                     _ => 0x000a,
                 };
                 self.push(Insn::raw(vec![fetch | (to << 8)]));
-                self.puts_slot(Slot::holding(&returns));
+                self.puts_slot(Slot::slot_for_descriptor(&returns));
             }
             Ok(())
         }
 
-        fn one(
+        fn translate_one(
             &mut self,
             opcode: u8,
             bytes: &[u8],
@@ -27236,8 +27240,8 @@ pub mod dalvik {
                         0xa6 => (0x0033, Kept::Reference),
                         _ => (0x0032 + u16::from(opcode) - 0x9f, Kept::Number),
                     };
-                    let left = self.brought_down(left, kept, 0);
-                    let right = self.brought_down(right, kept, 2);
+                    let left = self.move_to_low_register(left, kept, 0);
+                    let right = self.move_to_low_register(right, kept, 2);
                     self.branch(dalvik, vec![left, right], target);
                 }
                 0xc6 | 0xc7 => {
@@ -27376,7 +27380,7 @@ pub mod dalvik {
                     let from = self.slot(1);
                     self.shrink(1)?;
                     let to = self.stack_base + self.depth;
-                    let from = self.brought_down(from, Kept::Reference, 0);
+                    let from = self.move_to_low_register(from, Kept::Reference, 0);
                     let into = if to > 15 { 2 } else { to };
                     self.push(Insn::raw(vec![0x0021 | (into << 8) | (from << 12)]));
                     self.put_back(to, Kept::Number, into);
@@ -27405,7 +27409,7 @@ pub mod dalvik {
                     } else {
                         self.shrink(1)?;
                         let to = self.stack_base + self.depth;
-                        let register = self.brought_down(register, Kept::Reference, 0);
+                        let register = self.move_to_low_register(register, Kept::Reference, 0);
                         let into = if to > 15 { 2 } else { to };
                         self.push(Insn::pointing(
                             vec![0x0020 | (into << 8) | (register << 12), 0],
@@ -27540,7 +27544,7 @@ pub mod dalvik {
             Ok(())
         }
 
-        fn brought_down(&mut self, register: u16, kept: Kept, into: u16) -> u16 {
+        fn move_to_low_register(&mut self, register: u16, kept: Kept, into: u16) -> u16 {
             if register <= 15 {
                 return register;
             }
@@ -27728,7 +27732,7 @@ pub mod dalvik {
             } else {
                 Kept::Number
             };
-            let from = self.brought_down(from, from_kept, 0);
+            let from = self.move_to_low_register(from, from_kept, 0);
             let into = if to > 15 { 2 } else { to };
             self.push(Insn::raw(vec![dalvik | (into << 8) | (from << 12)]));
             self.put_back(to, to_kept, into);
@@ -27910,7 +27914,7 @@ pub mod dalvik {
             let length = self.slot(1);
             self.shrink(1)?;
             let to = self.stack_base + self.depth;
-            let length = self.brought_down(length, Kept::Number, 0);
+            let length = self.move_to_low_register(length, Kept::Number, 0);
             let into = if to > 15 { 2 } else { to };
             self.push(Insn::pointing(
                 vec![0x0023 | (into << 8) | (length << 12), 0],
@@ -27918,7 +27922,7 @@ pub mod dalvik {
                 Operand::Type(descriptor.to_string()),
             ));
             self.put_back(to, Kept::Reference, into);
-            self.puts_slot(Slot::holding(descriptor));
+            self.puts_slot(Slot::slot_for_descriptor(descriptor));
             Ok(())
         }
 
@@ -28270,7 +28274,7 @@ pub mod dalvik {
         })
     }
 
-    fn a_primitive(descriptor: &str) -> bool {
+    fn is_primitive_descriptor(descriptor: &str) -> bool {
         !descriptor.starts_with('L') && !descriptor.starts_with('[') && descriptor != "V"
     }
 
@@ -28357,7 +28361,7 @@ pub mod dalvik {
                 .with_context(format!("From {from} to {to}: {why}"))
             };
 
-            match (a_primitive(from), a_primitive(to)) {
+            match (is_primitive_descriptor(from), is_primitive_descriptor(to)) {
                 (false, false) => {
                     self.moved(Kept::Reference, target, source);
                     if from != to && to != "Ljava/lang/Object;" {
@@ -28443,7 +28447,7 @@ pub mod dalvik {
         captured: &'a [String],
     }
 
-    fn a_lambda(recipe: &Recipe<'_>) -> Result<crate::dexwrite::Class, Diagnostic> {
+    fn build_lambda_class(recipe: &Recipe<'_>) -> Result<crate::dexwrite::Class, Diagnostic> {
         let mut out =
             crate::dexwrite::Class::named(recipe.named, "Ljava/lang/Object;", 0x0011 | 0x1000);
         out.interfaces.push(recipe.interface.to_string());
@@ -28479,20 +28483,20 @@ pub mod dalvik {
         }
 
         out.direct_methods
-            .push(a_lambda_constructor(recipe, &held)?);
+            .push(build_lambda_constructor(recipe, &held)?);
         out.virtual_methods
-            .push(a_lambda_method(recipe, &held, recipe.sam)?);
+            .push(build_lambda_method(recipe, &held, recipe.sam)?);
         for bridge in recipe.bridges {
             if bridge == recipe.sam {
                 continue;
             }
             out.virtual_methods
-                .push(a_lambda_method(recipe, &held, bridge)?);
+                .push(build_lambda_method(recipe, &held, bridge)?);
         }
         Ok(out)
     }
 
-    fn a_lambda_constructor(
+    fn build_lambda_constructor(
         recipe: &Recipe<'_>,
         held: &[(FieldRef, String)],
     ) -> Result<Method, Diagnostic> {
@@ -28562,7 +28566,7 @@ pub mod dalvik {
         }
     }
 
-    fn a_lambda_method(
+    fn build_lambda_method(
         recipe: &Recipe<'_>,
         held: &[(FieldRef, String)],
         sam: &str,
@@ -28715,7 +28719,7 @@ pub mod dalvik {
         })
     }
 
-    fn what_the_platform_is_told(
+    fn system_annotations(
         class: &jvm::Class,
         signature: Option<&str>,
         throws: &[String],
@@ -28874,7 +28878,7 @@ pub mod dalvik {
             visibility: jvm::Visibility::Build,
             values: defaults,
         });
-        out.annotations.extend(what_the_platform_is_told(
+        out.annotations.extend(system_annotations(
             class,
             class.signature.as_deref(),
             &[],
@@ -28893,7 +28897,7 @@ pub mod dalvik {
                 value: field.constant.clone(),
                 annotations: {
                     let mut held = field.annotations.clone();
-                    held.extend(what_the_platform_is_told(
+                    held.extend(system_annotations(
                         class,
                         field.signature.as_deref(),
                         &[],
@@ -28929,9 +28933,9 @@ pub mod dalvik {
         Ok(every)
     }
 
-    fn told_about(class: &jvm::Class, method: &jvm::Member) -> Vec<jvm::Annotation> {
+    fn method_annotations(class: &jvm::Class, method: &jvm::Member) -> Vec<jvm::Annotation> {
         let mut held = method.annotations.clone();
-        held.extend(what_the_platform_is_told(
+        held.extend(system_annotations(
             class,
             method.signature.as_deref(),
             &method.throws,
@@ -29119,7 +29123,7 @@ pub mod dalvik {
                 self.labels[label] = self.items.len();
             }
 
-            fn covers(
+            fn covering_ranges(
                 &self,
                 index: usize,
                 local: &HashMap<usize, usize>,
@@ -29202,7 +29206,7 @@ pub mod dalvik {
                         .copied()
                         .unwrap_or(self.main_labels[index]);
                     self.place(label);
-                    let covers = self.covers(index, local, inherited);
+                    let covers = self.covering_ranges(index, local, inherited);
                     let origin = index;
                     let put = |this: &mut Self, piece: Piece| {
                         this.items.push(Item {
@@ -29501,7 +29505,7 @@ pub mod dalvik {
                 outputs: 0,
                 instructions: Vec::new(),
                 lines: Vec::new(),
-                annotations: told_about(class, method),
+                annotations: method_annotations(class, method),
                 parameter_annotations: method.parameter_annotations.clone(),
                 tries: Vec::new(),
             });
@@ -29571,7 +29575,7 @@ pub mod dalvik {
                 outputs: 0,
                 instructions: Vec::new(),
                 lines: Vec::new(),
-                annotations: told_about(class, method),
+                annotations: method_annotations(class, method),
                 parameter_annotations: method.parameter_annotations.clone(),
                 tries: Vec::new(),
             });
@@ -29657,7 +29661,7 @@ pub mod dalvik {
             translator.walk(&code.bytes).map_err(named)?;
         }
         let outputs = translator.max_outputs;
-        let lines = translator.where_they_landed(&code.lines);
+        let lines = translator.map_line_numbers(&code.lines);
         let (instructions, tries) = translator.finish().map_err(named)?;
 
         let mut flags = u32::from(method.access_flags);
@@ -29676,7 +29680,7 @@ pub mod dalvik {
             outputs,
             instructions,
             lines,
-            annotations: told_about(class, method),
+            annotations: method_annotations(class, method),
             parameter_annotations: method.parameter_annotations.clone(),
             tries,
         })
@@ -29793,7 +29797,7 @@ pub mod integrity {
             .collect()
     }
 
-    pub fn examine_self(path: &str, expected: Option<&str>) -> SelfCheck {
+    pub fn verify_own_package(path: &str, expected: Option<&str>) -> SelfCheck {
         let expected_clean = expected.map(normalise).filter(|text| text.len() == 64);
 
         let bytes = match std::fs::read(path) {
@@ -29828,7 +29832,7 @@ pub mod integrity {
             };
         };
 
-        let report = crate::signing::examine(
+        let report = crate::signing::verify_signing_block(
             &bytes,
             archive.central_directory_offset(),
             archive.end_record_offset(),
@@ -33163,7 +33167,7 @@ pub mod aidl {
             false
         }
 
-        fn want(&mut self, said: &str) -> Result<(), Diagnostic> {
+        fn expect_text(&mut self, said: &str) -> Result<(), Diagnostic> {
             if self.eat(said) {
                 return Ok(());
             }
@@ -33215,11 +33219,11 @@ pub mod aidl {
                         break;
                     }
                 }
-                self.want(">")?;
+                self.expect_text(">")?;
             }
             let mut array = false;
             if self.eat("[") {
-                self.want("]")?;
+                self.expect_text("]")?;
                 array = true;
             }
             Ok(Kind {
@@ -33244,12 +33248,12 @@ pub mod aidl {
                 "package" => {
                     reader.take();
                     package = reader.take();
-                    reader.want(";")?;
+                    reader.expect_text(";")?;
                 }
                 "import" => {
                     reader.take();
                     imports.push(reader.take());
-                    reader.want(";")?;
+                    reader.expect_text(";")?;
                 }
                 "parcelable" | "enum" | "union" => {
                     let mut depth = 0usize;
@@ -33269,9 +33273,9 @@ pub mod aidl {
                 }
                 _ => {
                     let oneway = reader.eat("oneway");
-                    reader.want("interface")?;
+                    reader.expect_text("interface")?;
                     let name = reader.take();
-                    reader.want("{")?;
+                    reader.expect_text("{")?;
                     let mut interface = Interface {
                         package: package.clone(),
                         imports: imports.clone(),
@@ -33290,19 +33294,19 @@ pub mod aidl {
                         if reader.eat("const") {
                             let kind = reader.kind()?;
                             let name = reader.take();
-                            reader.want("=")?;
+                            reader.expect_text("=")?;
                             let mut value = String::new();
                             while reader.peek() != ";" && !reader.peek().is_empty() {
                                 value.push_str(&reader.take());
                             }
-                            reader.want(";")?;
+                            reader.expect_text(";")?;
                             interface.constants.push((kind, name, value));
                             continue;
                         }
                         let oneway = reader.eat("oneway") || interface.oneway;
                         let returns = reader.kind()?;
                         let name = reader.take();
-                        reader.want("(")?;
+                        reader.expect_text("(")?;
                         let mut parameters = Vec::new();
                         while !reader.eat(")") {
                             reader.annotations();
@@ -33323,7 +33327,7 @@ pub mod aidl {
                         if reader.eat("=") {
                             code = reader.take().parse::<u32>().ok();
                         }
-                        reader.want(";")?;
+                        reader.expect_text(";")?;
                         interface.methods.push(Method {
                             oneway,
                             returns,
@@ -34538,16 +34542,16 @@ pub mod databinding {
     ];
 
     impl Reader {
-        fn here(&self) -> &Token {
+        fn current_token(&self) -> &Token {
             &self.tokens[self.at.min(self.tokens.len() - 1)]
         }
 
-        fn ahead(&self, by: usize) -> &Token {
+        fn peek_ahead(&self, by: usize) -> &Token {
             &self.tokens[(self.at + by).min(self.tokens.len() - 1)]
         }
 
         fn is(&self, mark: &str) -> bool {
-            matches!(self.here(), Token::Mark(held) if *held == mark)
+            matches!(self.current_token(), Token::Mark(held) if *held == mark)
         }
 
         fn eat(&mut self, mark: &str) -> bool {
@@ -34558,7 +34562,7 @@ pub mod databinding {
             false
         }
 
-        fn want(&mut self, mark: &str) -> Result<(), String> {
+        fn expect_text(&mut self, mark: &str) -> Result<(), String> {
             if self.eat(mark) {
                 return Ok(());
             }
@@ -34566,7 +34570,7 @@ pub mod databinding {
         }
 
         fn name(&mut self) -> Result<String, String> {
-            match self.here().clone() {
+            match self.current_token().clone() {
                 Token::Name(held) => {
                     self.at += 1;
                     Ok(held)
@@ -34575,18 +34579,18 @@ pub mod databinding {
             }
         }
 
-        fn whole(&mut self) -> Result<Expr, String> {
+        fn parse_whole_expression(&mut self) -> Result<Expr, String> {
             if let Some(lambda) = self.lambda()? {
                 return Ok(lambda);
             }
             let held = self.coalesce()?;
             if self.eat(",") {
-                if !matches!(self.here(), Token::Name(word) if word == "default") {
+                if !matches!(self.current_token(), Token::Name(word) if word == "default") {
                     return Err("only `default` may follow a comma".to_string());
                 }
                 self.at = self.tokens.len() - 1;
             }
-            if *self.here() != Token::End {
+            if *self.current_token() != Token::End {
                 return Err("the expression goes on after it should end".to_string());
             }
             Ok(held)
@@ -34596,7 +34600,7 @@ pub mod databinding {
             let start = self.at;
             let mut parameters = Vec::new();
             if let (Token::Name(word), Token::Mark("->")) =
-                (self.here().clone(), self.ahead(1).clone())
+                (self.current_token().clone(), self.peek_ahead(1).clone())
             {
                 self.at += 2;
                 parameters.push(word);
@@ -34605,7 +34609,7 @@ pub mod databinding {
                 let mut shaped = true;
                 if !self.is(")") {
                     loop {
-                        match self.here().clone() {
+                        match self.current_token().clone() {
                             Token::Name(word) => {
                                 self.at += 1;
                                 parameters.push(word);
@@ -34628,7 +34632,7 @@ pub mod databinding {
                 return Ok(None);
             }
             let body = self.coalesce()?;
-            if *self.here() != Token::End {
+            if *self.current_token() != Token::End {
                 return Err("the lambda goes on after it should end".to_string());
             }
             Ok(Some(Expr::Lambda(parameters, Box::new(body))))
@@ -34647,7 +34651,7 @@ pub mod databinding {
             let condition = self.binary(0)?;
             if self.eat("?") {
                 let then = self.ternary()?;
-                self.want(":")?;
+                self.expect_text(":")?;
                 let otherwise = self.ternary()?;
                 return Ok(Expr::Ternary(
                     Box::new(condition),
@@ -34665,7 +34669,7 @@ pub mod databinding {
             let mut held = self.binary(level + 1)?;
             loop {
                 if LEVELS[level] == ["instanceof"] {
-                    if matches!(self.here(), Token::Name(word) if word == "instanceof") {
+                    if matches!(self.current_token(), Token::Name(word) if word == "instanceof") {
                         self.at += 1;
                         let what = self.type_name()?;
                         held = Expr::InstanceOf(Box::new(held), what);
@@ -34686,7 +34690,7 @@ pub mod databinding {
 
         fn type_name(&mut self) -> Result<String, String> {
             let mut out = self.name()?;
-            while self.is(".") && matches!(self.ahead(1), Token::Name(_)) {
+            while self.is(".") && matches!(self.peek_ahead(1), Token::Name(_)) {
                 self.at += 1;
                 out.push('.');
                 out.push_str(&self.name()?);
@@ -34694,7 +34698,7 @@ pub mod databinding {
             if self.is("<") {
                 let mut depth = 0usize;
                 loop {
-                    match self.here().clone() {
+                    match self.current_token().clone() {
                         Token::Mark("<") => {
                             depth += 1;
                             out.push('<');
@@ -34727,7 +34731,7 @@ pub mod databinding {
                     }
                 }
             }
-            while self.is("[") && matches!(self.ahead(1), Token::Mark("]")) {
+            while self.is("[") && matches!(self.peek_ahead(1), Token::Mark("]")) {
                 self.at += 2;
                 out.push_str("[]");
             }
@@ -34738,22 +34742,26 @@ pub mod databinding {
             if !self.is("(") {
                 return false;
             }
-            let Token::Name(first) = self.ahead(1) else {
+            let Token::Name(first) = self.peek_ahead(1) else {
                 return false;
             };
             let mut at = 2;
             loop {
-                match self.ahead(at) {
-                    Token::Mark(".") if matches!(self.ahead(at + 1), Token::Name(_)) => at += 2,
-                    Token::Mark("[") if matches!(self.ahead(at + 1), Token::Mark("]")) => at += 2,
+                match self.peek_ahead(at) {
+                    Token::Mark(".") if matches!(self.peek_ahead(at + 1), Token::Name(_)) => {
+                        at += 2
+                    }
+                    Token::Mark("[") if matches!(self.peek_ahead(at + 1), Token::Mark("]")) => {
+                        at += 2
+                    }
                     _ => break,
                 }
             }
-            if !matches!(self.ahead(at), Token::Mark(")")) {
+            if !matches!(self.peek_ahead(at), Token::Mark(")")) {
                 return false;
             }
             let leads = matches!(
-                self.ahead(at + 1),
+                self.peek_ahead(at + 1),
                 Token::Name(_)
                     | Token::Literal(..)
                     | Token::Resource(_)
@@ -34781,7 +34789,7 @@ pub mod databinding {
             if self.looks_like_a_cast() {
                 self.at += 1;
                 let what = self.type_name()?;
-                self.want(")")?;
+                self.expect_text(")")?;
                 let of = self.unary()?;
                 return Ok(Expr::Cast(what, Box::new(of)));
             }
@@ -34789,7 +34797,7 @@ pub mod databinding {
         }
 
         fn arguments(&mut self) -> Result<Vec<Expr>, String> {
-            self.want("(")?;
+            self.expect_text("(")?;
             let mut out = Vec::new();
             if !self.is(")") {
                 loop {
@@ -34799,7 +34807,7 @@ pub mod databinding {
                     }
                 }
             }
-            self.want(")")?;
+            self.expect_text(")")?;
             Ok(out)
         }
 
@@ -34823,7 +34831,7 @@ pub mod databinding {
                 }
                 if self.eat("[") {
                     let at = self.coalesce()?;
-                    self.want("]")?;
+                    self.expect_text("]")?;
                     held = Expr::Index(Box::new(held), Box::new(at));
                     continue;
                 }
@@ -34833,7 +34841,7 @@ pub mod databinding {
         }
 
         fn primary(&mut self) -> Result<Expr, String> {
-            match self.here().clone() {
+            match self.current_token().clone() {
                 Token::Literal(what, spelled) => {
                     self.at += 1;
                     Ok(Expr::Literal(what, spelled))
@@ -34854,7 +34862,7 @@ pub mod databinding {
                 Token::Mark("(") => {
                     self.at += 1;
                     let held = self.coalesce()?;
-                    self.want(")")?;
+                    self.expect_text(")")?;
                     Ok(held)
                 }
                 Token::End => Err("the expression ends too soon".to_string()),
@@ -34868,7 +34876,7 @@ pub mod databinding {
             tokens: tokens(text)?,
             at: 0,
         };
-        reader.whole()
+        reader.parse_whole_expression()
     }
 
     fn binding_of(value: &str) -> Option<(String, bool)> {
@@ -35291,7 +35299,9 @@ pub mod databinding {
 
         fn seen(&self, receiver: &Type, owner: &str) -> Vec<Type> {
             match receiver {
-                Type::Object(name, arguments) => self.classpath.seen_from(name, arguments, owner),
+                Type::Object(name, arguments) => self
+                    .classpath
+                    .type_arguments_seen_from(name, arguments, owner),
                 _ => Vec::new(),
             }
         }
@@ -36130,7 +36140,7 @@ pub mod databinding {
             roots_of,
             &mut views,
         )?;
-        let text = crate::xml::written(&rewritten);
+        let text = crate::xml::serialize_element(&rewritten);
         Ok(Variant {
             folder: layout.folder.clone(),
             name: layout.name.clone(),
@@ -37764,7 +37774,7 @@ pub mod databinding {
         bits.div_ceil(64).max(1)
     }
 
-    fn everything(bits: usize) -> String {
+    fn all_ones_literals(bits: usize) -> String {
         let mut out = Vec::new();
         for word in 0..words(bits) {
             let held = bits.saturating_sub(word * 64).min(64);
@@ -38487,7 +38497,7 @@ pub mod databinding {
         );
         out.push_str(&format!(
             "            mDirtyFlags = new long[] {{{}}};\n        }}\n",
-            everything(plan.bits)
+            all_ones_literals(plan.bits)
         ));
         for field in &includes {
             out.push_str(&format!("        this.{field}.invalidateAll();\n"));
@@ -38713,7 +38723,8 @@ pub mod databinding {
                 "Add androidx.databinding:databinding-runtime and androidx.databinding:databinding-adapters to the dependencies.",
             ));
         }
-        let (units, together) = crate::compilers::java::declared_beside(sources, classpath);
+        let (units, together) =
+            crate::compilers::java::parse_sources_with_classpath(sources, classpath);
         let base = Model {
             classpath: &together,
             imports: Vec::new(),
@@ -41475,7 +41486,7 @@ pub mod shrink {
             })
     }
 
-    pub fn beyond_the_package(classes: &[Class], package: &str) -> Vec<String> {
+    pub fn classes_outside_package(classes: &[Class], package: &str) -> Vec<String> {
         if package.is_empty() {
             return Vec::new();
         }
@@ -41487,7 +41498,7 @@ pub mod shrink {
             .collect()
     }
 
-    pub fn found_by_name(classes: &[Class]) -> Vec<String> {
+    pub fn classes_loaded_by_name(classes: &[Class]) -> Vec<String> {
         classes
             .iter()
             .filter(|one| {
@@ -41539,7 +41550,7 @@ pub mod shrink {
             .and_then(|rest| rest.strip_suffix(';'))
     }
 
-    fn touches(class: &Class, out: &mut BTreeSet<String>) {
+    fn collect_referenced_classes(class: &Class, out: &mut BTreeSet<String>) {
         let mut note = |descriptor: &str| {
             if let Some(held) = named_in(descriptor) {
                 out.insert(held.to_string());
@@ -41632,7 +41643,7 @@ pub mod shrink {
                 continue;
             };
             let mut found = BTreeSet::new();
-            touches(class, &mut found);
+            collect_referenced_classes(class, &mut found);
             for one in found {
                 if !seen.contains(&one) {
                     waiting.push(one);
@@ -41828,13 +41839,13 @@ pub mod shrink {
             .replace('/', ".")
     }
 
-    fn carries(annotations: &[crate::jvm::Annotation], wanted: &str) -> bool {
+    fn has_annotation(annotations: &[crate::jvm::Annotation], wanted: &str) -> bool {
         annotations
             .iter()
             .any(|one| dotted(&one.descriptor) == wanted)
     }
 
-    fn above_of(
+    fn supertype_chain_of(
         classes: &std::collections::BTreeMap<String, &Class>,
         descriptor: &str,
     ) -> Vec<String> {
@@ -41882,20 +41893,20 @@ pub mod shrink {
         }
         if let Some(wanted) = annotation {
             if said.contains("<fields>") {
-                return fields().any(|one| carries(&one.annotations, &wanted));
+                return fields().any(|one| has_annotation(&one.annotations, &wanted));
             }
             if said.contains("<init>") {
                 return methods().any(|one| {
-                    one.reference.name == "<init>" && carries(&one.annotations, &wanted)
+                    one.reference.name == "<init>" && has_annotation(&one.annotations, &wanted)
                 });
             }
-            return methods().any(|one| carries(&one.annotations, &wanted))
-                || fields().any(|one| carries(&one.annotations, &wanted));
+            return methods().any(|one| has_annotation(&one.annotations, &wanted))
+                || fields().any(|one| has_annotation(&one.annotations, &wanted));
         }
         true
     }
 
-    pub fn kept_by_rules(classes: &[Class], texts: &[String]) -> Vec<String> {
+    pub fn classes_kept_by_rules(classes: &[Class], texts: &[String]) -> Vec<String> {
         let rules: Vec<Rule> = texts
             .iter()
             .flat_map(|text| options(text))
@@ -41923,12 +41934,12 @@ pub mod shrink {
                     _ => {}
                 }
                 if let Some(wanted) = &rule.annotated {
-                    if !carries(&class.annotations, wanted) {
+                    if !has_annotation(&class.annotations, wanted) {
                         return false;
                     }
                 }
                 if let Some(listed) = &rule.above {
-                    let above = above_of(&by_name, &class.descriptor);
+                    let above = supertype_chain_of(&by_name, &class.descriptor);
                     if !above.iter().any(|one| named_by(listed, &dotted(one))) {
                         return false;
                     }
@@ -42089,7 +42100,7 @@ pub mod shrink {
             self.by_name.get(descriptor).map(|at| &self.classes[*at])
         }
 
-        fn above(&self, descriptor: &str) -> Vec<String> {
+        fn supertype_chain(&self, descriptor: &str) -> Vec<String> {
             let mut out: Vec<String> = Vec::new();
             let mut waiting = vec![descriptor.to_string()];
             while let Some(here) = waiting.pop() {
@@ -42114,7 +42125,7 @@ pub mod shrink {
             }
         }
 
-        fn declares(class: &Class, name: &str, proto: &str) -> bool {
+        fn declares_method(class: &Class, name: &str, proto: &str) -> bool {
             class
                 .direct_methods
                 .iter()
@@ -42126,7 +42137,7 @@ pub mod shrink {
             let mut at = owner.to_string();
             let mut steps = 0;
             while let Some(class) = self.class(&at) {
-                if Self::declares(class, name, proto) {
+                if Self::declares_method(class, name, proto) {
                     return Some(at);
                 }
                 steps += 1;
@@ -42135,9 +42146,10 @@ pub mod shrink {
                 }
                 at = class.superclass.clone();
             }
-            for one in self.above(owner) {
+            for one in self.supertype_chain(owner) {
                 if let Some(class) = self.class(&one) {
-                    if class.access_flags & ACC_INTERFACE != 0 && Self::declares(class, name, proto)
+                    if class.access_flags & ACC_INTERFACE != 0
+                        && Self::declares_method(class, name, proto)
                     {
                         return Some(one);
                     }
@@ -42147,7 +42159,7 @@ pub mod shrink {
         }
 
         fn resolve_field(&self, owner: &str, name: &str, descriptor: &str) -> Option<String> {
-            for one in self.above(owner) {
+            for one in self.supertype_chain(owner) {
                 if let Some(class) = self.class(&one) {
                     if class
                         .static_fields
@@ -42179,8 +42191,8 @@ pub mod shrink {
                 .any(|one| !one.static_ && one.descriptor() == proto)
         }
 
-        fn overrides_what_stays(&self, descriptor: &str, name: &str, proto: &str) -> bool {
-            for one in self.above(descriptor).into_iter().skip(1) {
+        fn overrides_kept_method(&self, descriptor: &str, name: &str, proto: &str) -> bool {
+            for one in self.supertype_chain(descriptor).into_iter().skip(1) {
                 match self.class(&one) {
                     None => {
                         if one == "Ljava/lang/Object;"
@@ -42196,7 +42208,7 @@ pub mod shrink {
                         }
                     }
                     Some(class) => {
-                        if self.whole.contains(&one) && Self::declares(class, name, proto) {
+                        if self.whole.contains(&one) && Self::declares_method(class, name, proto) {
                             return true;
                         }
                     }
@@ -42206,7 +42218,7 @@ pub mod shrink {
         }
 
         fn serializable(&self, descriptor: &str) -> bool {
-            self.above(descriptor)
+            self.supertype_chain(descriptor)
                 .iter()
                 .any(|one| one == "Ljava/io/Serializable;" || one == "Ljava/io/Externalizable;")
         }
@@ -42232,7 +42244,7 @@ pub mod shrink {
                 let held = one.descriptor.clone();
                 self.note(&held);
             }
-            let above = self.above(&descriptor);
+            let above = self.supertype_chain(&descriptor);
             for method in class
                 .direct_methods
                 .iter()
@@ -42250,7 +42262,7 @@ pub mod shrink {
                     || (serial && SERIAL.contains(&name.as_str()))
                     || (self.handlers.contains(&name) && proto == "(Landroid/view/View;)V")
                     || (dispatched
-                        && (self.overrides_what_stays(&descriptor, &name, &proto)
+                        && (self.overrides_kept_method(&descriptor, &name, &proto)
                             || self.called.get(&(name.clone(), proto.clone())).is_some_and(
                                 |owners| above.iter().any(|one| owners.contains(one)),
                             )));
@@ -42404,7 +42416,7 @@ pub mod shrink {
                     .cloned()
                     .unwrap_or_default();
                 for one in declaring {
-                    if self.live.contains(&one) && self.above(&one).contains(&owner) {
+                    if self.live.contains(&one) && self.supertype_chain(&one).contains(&owner) {
                         self.waiting
                             .push(Work::Method(one, name.clone(), proto.clone()));
                     }
@@ -43468,8 +43480,8 @@ pub mod settings {
                         })
                         .collect();
                 }
-                out.catalogue.libraries = depended(versions, "libraries");
-                out.catalogue.plugins = depended(versions, "plugins");
+                out.catalogue.libraries = parse_dependencies(versions, "libraries");
+                out.catalogue.plugins = parse_dependencies(versions, "plugins");
             }
             if let Some(signing) = held.get("signing") {
                 if let Some(found) = word(signing, "alias") {
@@ -43505,7 +43517,7 @@ pub mod settings {
         at.get(key).map(|one| one.strings()).unwrap_or_default()
     }
 
-    fn depended(at: &Json, key: &str) -> Vec<Dependency> {
+    fn parse_dependencies(at: &Json, key: &str) -> Vec<Dependency> {
         let Some(listed) = at.get(key).and_then(|one| one.list()) else {
             return Vec::new();
         };
@@ -43537,7 +43549,7 @@ pub mod settings {
         std::path::Path::new(root).join(FILE_NAME)
     }
 
-    pub fn held(root: &str) -> Result<Option<Settings>, Diagnostic> {
+    pub fn read_settings(root: &str) -> Result<Option<Settings>, Diagnostic> {
         let path = path_in(root);
         let Ok(text) = std::fs::read_to_string(&path) else {
             return Ok(None);
@@ -43596,7 +43608,7 @@ pub mod settings {
         out
     }
 
-    pub fn with_the_sdk_it_needs(manifest: &str) -> String {
+    pub fn with_default_sdk_levels(manifest: &str) -> String {
         let mut out = manifest.to_string();
         if !out.contains("<uses-sdk") {
             if let Some(opened) = out.find("<manifest") {
@@ -43933,7 +43945,7 @@ pub mod gradle {
         let from = inside.find("release(")? + 8;
         let rest = &inside[from..];
         let argument = rest[..rest.find(')')?].trim();
-        let held = looked_up(argument, known);
+        let held = resolve_property_reference(argument, known);
         held.trim().parse::<u32>().ok()
     }
 
@@ -44173,7 +44185,10 @@ pub mod gradle {
         out
     }
 
-    pub fn looked_up(said: &str, known: &std::collections::BTreeMap<String, String>) -> String {
+    pub fn resolve_property_reference(
+        said: &str,
+        known: &std::collections::BTreeMap<String, String>,
+    ) -> String {
         if let Some(key) = property_asked_for(said) {
             if let Some(held) = known.get(&key) {
                 return held.clone();
@@ -44195,7 +44210,7 @@ pub mod gradle {
                 return held.clone();
             }
         }
-        filled(said, known)
+        interpolate(said, known)
     }
 
     fn value_known(
@@ -44203,7 +44218,7 @@ pub mod gradle {
         key: &str,
         known: &std::collections::BTreeMap<String, String>,
     ) -> Option<String> {
-        value(text, key).map(|held| looked_up(&held, known))
+        value(text, key).map(|held| resolve_property_reference(&held, known))
     }
 
     fn number_known(
@@ -44216,7 +44231,7 @@ pub mod gradle {
         }
         keys.iter()
             .filter_map(|key| value(text, key))
-            .map(|held| looked_up(&held, known))
+            .map(|held| resolve_property_reference(&held, known))
             .find_map(|held| held.trim().parse::<u32>().ok())
     }
 
@@ -44483,7 +44498,7 @@ pub mod gradle {
         let mut out = String::new();
         for piece in pieces {
             if let Some(text) = unquoted(&piece) {
-                out.push_str(&filled(&text, scope));
+                out.push_str(&interpolate(&text, scope));
             } else if let Some(text) = scope.get(piece.trim_start_matches("project.")) {
                 out.push_str(text.trim_matches(['"', '\'']));
             } else if piece.parse::<i64>().is_ok() {
@@ -44796,7 +44811,7 @@ pub mod gradle {
         }
     }
 
-    pub fn filled(said: &str, known: &std::collections::BTreeMap<String, String>) -> String {
+    pub fn interpolate(said: &str, known: &std::collections::BTreeMap<String, String>) -> String {
         if !said.contains('$') {
             return said.to_string();
         }
@@ -44878,7 +44893,7 @@ pub mod gradle {
                     if !name.is_empty() {
                         locals.insert(name.to_string(), value.trim().to_string());
                         if let Some(plain) = unquoted(value.trim()) {
-                            scope.insert(name.to_string(), filled(&plain, &scope));
+                            scope.insert(name.to_string(), interpolate(&plain, &scope));
                         }
                     }
                 }
@@ -44987,7 +45002,7 @@ pub mod gradle {
                 unquoted(&argument)
             };
             let found = match mapped {
-                Some(held) => coordinate(&filled(&held, &scope)),
+                Some(held) => coordinate(&interpolate(&held, &scope)),
                 None => {
                     let alias = argument.trim().trim_start_matches("libs.");
                     let alias = alias
@@ -45021,7 +45036,7 @@ pub mod gradle {
                 continue;
             };
             let classifier = unquoted(&argument)
-                .map(|held| filled(&held, known))
+                .map(|held| interpolate(&held, known))
                 .and_then(|held| native_classifier(&held));
             let version = match classifier {
                 Some(classifier) => format!("{version}:{classifier}"),
@@ -45186,7 +45201,7 @@ pub mod gradle {
         out
     }
 
-    pub fn chosen_flavors(android: &str) -> (Vec<(String, String)>, Vec<String>) {
+    pub fn selected_flavors(android: &str) -> (Vec<(String, String)>, Vec<String>) {
         let Some(listed) = block(android, "productFlavors") else {
             return (Vec::new(), Vec::new());
         };
@@ -45329,7 +45344,7 @@ pub mod gradle {
             .find(|path| path.is_file())
     }
 
-    pub fn looks_like_one(root: &str) -> bool {
+    pub fn is_gradle_project(root: &str) -> bool {
         let here = std::path::Path::new(root);
         build_file(here).is_some() || settings_file(here).is_some()
     }
@@ -45562,7 +45577,7 @@ pub mod gradle {
         }
 
         let release = merged(&merged(&android, "buildTypes"), "release");
-        let (chosen, left) = chosen_flavors(&android);
+        let (chosen, left) = selected_flavors(&android);
         let mut suffix = String::new();
         for (name, body) in &chosen {
             found.flavors.push(name.clone());
@@ -45591,12 +45606,14 @@ pub mod gradle {
         found.flavors_left = left;
         found.placeholders = placeholders(&default)
             .into_iter()
-            .map(|(key, held)| (key, looked_up(&held, &known)))
+            .map(|(key, held)| (key, resolve_property_reference(&held, &known)))
             .collect();
         for (_, body) in &chosen {
             for (key, held) in placeholders(body) {
                 found.placeholders.retain(|(one, _)| *one != key);
-                found.placeholders.push((key, looked_up(&held, &known)));
+                found
+                    .placeholders
+                    .push((key, resolve_property_reference(&held, &known)));
             }
         }
         for (key, held) in placeholders(&release) {
@@ -45684,9 +45701,9 @@ pub mod gradle {
                     }
                 };
                 let one = crate::settings::Declared {
-                    kind: filled(&kind, &known),
-                    name: filled(&name, &known),
-                    value: filled(&value, &known),
+                    kind: interpolate(&kind, &known),
+                    name: interpolate(&name, &known),
+                    value: interpolate(&value, &known),
                 };
                 if !here.iter().any(|(was, held)| {
                     *was == into && held.name == one.name && held.kind == one.kind
@@ -45808,7 +45825,7 @@ pub mod gradle {
         ("libs", crate::scaffold::LIBRARY_FOLDER),
     ];
 
-    pub fn looks_classic(root: &str) -> bool {
+    pub fn is_classic_gradle_layout(root: &str) -> bool {
         let here = std::path::Path::new(root);
         here.join("AndroidManifest.xml").is_file()
             && (here.join("src").is_dir() || here.join("res").is_dir())
@@ -45817,7 +45834,7 @@ pub mod gradle {
     }
 
     pub fn adopt_classic(root: &str) -> Result<usize, Diagnostic> {
-        if !looks_classic(root) {
+        if !is_classic_gradle_layout(root) {
             return Ok(0);
         }
         let here = std::path::Path::new(root);
@@ -46088,7 +46105,7 @@ pub mod gradle {
     }
 
     pub fn adopt(root: &str) -> Result<Option<Adopted>, Diagnostic> {
-        if !looks_like_one(root) {
+        if !is_gradle_project(root) {
             return Ok(None);
         }
         let here = std::path::Path::new(root);
@@ -46317,10 +46334,13 @@ pub mod maven {
             if group.is_empty() || artifact.is_empty() {
                 return None;
             }
-            if !fit(&group) || !fit(&artifact) || !fit(&version) {
+            if !is_valid_coordinate_part(&group)
+                || !is_valid_coordinate_part(&artifact)
+                || !is_valid_coordinate_part(&version)
+            {
                 return None;
             }
-            if !classifier.is_empty() && !fit(&classifier) {
+            if !classifier.is_empty() && !is_valid_coordinate_part(&classifier) {
                 return None;
             }
             Some(Coordinate {
@@ -46415,7 +46435,7 @@ pub mod maven {
         }
     }
 
-    fn fit(said: &str) -> bool {
+    fn is_valid_coordinate_part(said: &str) -> bool {
         !said.is_empty()
             && said.len() <= 200
             && said.chars().all(|here| {
@@ -46499,7 +46519,7 @@ pub mod maven {
             .filter(|one| !one.is_empty())
     }
 
-    fn filled(said: &str, known: &std::collections::BTreeMap<String, String>) -> String {
+    fn interpolate(said: &str, known: &std::collections::BTreeMap<String, String>) -> String {
         let mut out = said.to_string();
         for _ in 0..4 {
             let Some(from) = out.find("${") else {
@@ -46564,13 +46584,13 @@ pub mod maven {
         known.insert("version".to_string(), of.version.clone());
 
         let parent = root.children_named("parent").next().and_then(|held| {
-            let version = filled(&child(held, "version").unwrap_or_default(), &known);
+            let version = interpolate(&child(held, "version").unwrap_or_default(), &known);
             known.insert("project.parent.version".to_string(), version.clone());
             known.insert("parent.version".to_string(), version.clone());
             Coordinate::parse(&format!(
                 "{}:{}:{}",
-                filled(&child(held, "groupId").unwrap_or_default(), &known),
-                filled(&child(held, "artifactId").unwrap_or_default(), &known),
+                interpolate(&child(held, "groupId").unwrap_or_default(), &known),
+                interpolate(&child(held, "artifactId").unwrap_or_default(), &known),
                 version,
             ))
         });
@@ -46583,7 +46603,7 @@ pub mod maven {
             let settled: Vec<(String, String)> = known
                 .iter()
                 .filter(|(_, value)| value.contains("${"))
-                .map(|(name, value)| (name.clone(), filled(value, &known)))
+                .map(|(name, value)| (name.clone(), interpolate(value, &known)))
                 .collect();
             if settled.is_empty() {
                 break;
@@ -46601,9 +46621,9 @@ pub mod maven {
                 let version = child(held, "version").unwrap_or_else(|| of.version.clone());
                 Coordinate::parse(&format!(
                     "{}:{}:{}",
-                    filled(&group, &known),
-                    filled(&artifact, &known),
-                    filled(&version, &known)
+                    interpolate(&group, &known),
+                    interpolate(&artifact, &known),
+                    interpolate(&version, &known)
                 ))
             })
             .filter(|moved| moved != of);
@@ -46625,9 +46645,9 @@ pub mod maven {
             .and_then(|one| one.children_named("dependencies").next())
         {
             for one in held.children_named("dependency") {
-                let group = filled(&child(one, "groupId").unwrap_or_default(), &known);
-                let artifact = filled(&child(one, "artifactId").unwrap_or_default(), &known);
-                let version = filled(&child(one, "version").unwrap_or_default(), &known);
+                let group = interpolate(&child(one, "groupId").unwrap_or_default(), &known);
+                let artifact = interpolate(&child(one, "artifactId").unwrap_or_default(), &known);
+                let version = interpolate(&child(one, "version").unwrap_or_default(), &known);
                 let Some(found) = Coordinate::parse(&format!("{group}:{artifact}:{version}"))
                 else {
                     continue;
@@ -46656,9 +46676,9 @@ pub mod maven {
             if optional || !(scope == "compile" || scope == "runtime") {
                 continue;
             }
-            let group = filled(&child(one, "groupId").unwrap_or_default(), known);
-            let artifact = filled(&child(one, "artifactId").unwrap_or_default(), known);
-            let version = filled(&child(one, "version").unwrap_or_default(), known);
+            let group = interpolate(&child(one, "groupId").unwrap_or_default(), known);
+            let artifact = interpolate(&child(one, "artifactId").unwrap_or_default(), known);
+            let version = interpolate(&child(one, "version").unwrap_or_default(), known);
             let parsed = if version.trim().is_empty() {
                 Coordinate::parse(&format!("{group}:{artifact}:0")).map(|mut bare| {
                     bare.version.clear();
@@ -46677,8 +46697,8 @@ pub mod maven {
                     held.children_named("exclusion")
                         .map(|gone| {
                             (
-                                filled(&child(gone, "groupId").unwrap_or_default(), known),
-                                filled(&child(gone, "artifactId").unwrap_or_default(), known),
+                                interpolate(&child(gone, "groupId").unwrap_or_default(), known),
+                                interpolate(&child(gone, "artifactId").unwrap_or_default(), known),
                             )
                         })
                         .collect()
@@ -46821,7 +46841,7 @@ pub mod maven {
         })
     }
 
-    pub fn newer(left: &str, right: &str) -> std::cmp::Ordering {
+    pub fn compare_versions(left: &str, right: &str) -> std::cmp::Ordering {
         use std::cmp::Ordering;
         #[derive(PartialEq)]
         enum Part {
@@ -46914,7 +46934,7 @@ pub mod maven {
     pub const OLD_SUPPORT_GROUP: &str = "com.android.support";
 
     impl Looked {
-        fn lack(&mut self, one: &Coordinate, kind: &'static str) {
+        fn record_missing(&mut self, one: &Coordinate, kind: &'static str) {
             if !self
                 .missing
                 .iter()
@@ -46926,7 +46946,7 @@ pub mod maven {
 
         fn pom(&mut self, root: &str, one: &Coordinate, depth: usize) -> Option<Pom> {
             let Some(text) = text_of(&pom_path(root, one)) else {
-                self.lack(one, POM);
+                self.record_missing(one, POM);
                 return None;
             };
             let empty = std::collections::BTreeMap::new();
@@ -46969,12 +46989,12 @@ pub mod maven {
             if let Some(found) = self.described.get(&key) {
                 return found.clone();
             }
-            let found = self.look(root, one);
+            let found = self.lookup_description(root, one);
             self.described.insert(key, found.clone());
             found
         }
 
-        fn look(&mut self, root: &str, one: &Coordinate) -> Option<Described> {
+        fn lookup_description(&mut self, root: &str, one: &Coordinate) -> Option<Described> {
             if !pom_path(root, one).is_file() {
                 if let Some(kind) = [AAR, JAR]
                     .into_iter()
@@ -46997,7 +47017,7 @@ pub mod maven {
                     }
                     Ok(_) => {}
                     Err(_) => {
-                        self.lack(one, MODULE);
+                        self.record_missing(one, MODULE);
                         return None;
                     }
                 }
@@ -47038,7 +47058,7 @@ pub mod maven {
         }
     }
 
-    fn left_out(excluded: &[(String, String)], one: &Coordinate) -> bool {
+    fn is_excluded(excluded: &[(String, String)], one: &Coordinate) -> bool {
         excluded.iter().any(|(group, artifact)| {
             (group == "*" || *group == one.group) && (artifact == "*" || *artifact == one.artifact)
         })
@@ -47104,7 +47124,7 @@ pub mod maven {
                     reached.push((here.clone(), described.kind.clone()));
                 }
                 for next in &described.needs {
-                    if left_out(&need.excluded, &next.coordinate) {
+                    if is_excluded(&need.excluded, &next.coordinate) {
                         continue;
                     }
 
@@ -47125,13 +47145,13 @@ pub mod maven {
                     .iter()
                     .filter(|(held, strict)| *strict && !held.is_empty())
                     .map(|(held, _)| held)
-                    .max_by(|a, b| newer(a, b));
+                    .max_by(|a, b| compare_versions(a, b));
                 let picked = strict.or_else(|| {
                     versions
                         .iter()
                         .map(|(held, _)| held)
                         .filter(|held| !held.is_empty())
-                        .max_by(|a, b| newer(a, b))
+                        .max_by(|a, b| compare_versions(a, b))
                 });
                 match picked {
                     Some(held) => {
@@ -47145,7 +47165,7 @@ pub mod maven {
                     .iter()
                     .filter(|(named, _)| named.starts_with(family))
                     .map(|(_, held)| held.clone())
-                    .max_by(|a, b| newer(a, b));
+                    .max_by(|a, b| compare_versions(a, b));
                 if let Some(top) = top {
                     for (named, held) in next.iter_mut() {
                         if named.starts_with(family) {
@@ -47189,8 +47209,8 @@ pub mod maven {
 
     pub type Roots = (Vec<Need>, Vec<String>);
 
-    pub fn wanted_roots(root: &str) -> Result<Option<Roots>, Diagnostic> {
-        let Some(settings) = crate::settings::held(root)? else {
+    pub fn root_dependencies(root: &str) -> Result<Option<Roots>, Diagnostic> {
+        let Some(settings) = crate::settings::read_settings(root)? else {
             return Ok(None);
         };
         let mut roots: Vec<Need> = Vec::new();
@@ -47271,7 +47291,7 @@ pub mod maven {
             }
         }
         let writes_kotlin = settings.languages.iter().any(|one| one == "kotlin")
-            || crate::builder::holds_kotlin(root);
+            || crate::builder::has_kotlin_sources(root);
         let named_already = roots
             .iter()
             .any(|held| held.coordinate.named() == "org.jetbrains.kotlin:kotlin-stdlib");
@@ -47288,7 +47308,7 @@ pub mod maven {
     }
 
     pub fn classified(root: &str) -> Vec<Coordinate> {
-        let Ok(Some(settings)) = crate::settings::held(root) else {
+        let Ok(Some(settings)) = crate::settings::read_settings(root) else {
             return Vec::new();
         };
         let mut out: Vec<Coordinate> = Vec::new();
@@ -47308,12 +47328,12 @@ pub mod maven {
 
     pub fn plan(root: &str) -> Result<Plan, Diagnostic> {
         let mut out = Plan::default();
-        let extra = crate::settings::held(root)
+        let extra = crate::settings::read_settings(root)
             .ok()
             .flatten()
             .map(|one| one.repositories)
             .unwrap_or_default();
-        let Some((roots, unresolved)) = wanted_roots(root)? else {
+        let Some((roots, unresolved)) = root_dependencies(root)? else {
             out.done = true;
             return Ok(out);
         };
@@ -47378,8 +47398,8 @@ pub mod maven {
         Ok(out)
     }
 
-    pub fn chosen_files(root: &str) -> Option<Vec<String>> {
-        let (roots, _) = wanted_roots(root).ok()??;
+    pub fn selected_files(root: &str) -> Option<Vec<String>> {
+        let (roots, _) = root_dependencies(root).ok()??;
         if roots.is_empty() {
             return None;
         }
@@ -48051,7 +48071,7 @@ pub mod scaffold {
     }
 
     pub fn is_untouched_starter(root: &str, relative: &str) -> bool {
-        let Ok(Some(settings)) = crate::settings::held(root) else {
+        let Ok(Some(settings)) = crate::settings::read_settings(root) else {
             return false;
         };
         let spec = Spec {
@@ -48074,7 +48094,7 @@ pub mod scaffold {
             if relative == format!("{folder}/{name}") {
                 return held == body;
             }
-            for (beside, extra) in beside_the_starter(language, &spec) {
+            for (beside, extra) in companion_sources(language, &spec) {
                 if relative == format!("{folder}/{beside}") {
                     return held == extra;
                 }
@@ -48085,7 +48105,7 @@ pub mod scaffold {
 
     pub fn drop_idle_starters(root: &str) -> usize {
         let base = std::path::Path::new(root);
-        let Ok(Some(settings)) = crate::settings::held(root) else {
+        let Ok(Some(settings)) = crate::settings::read_settings(root) else {
             return 0;
         };
         let spec = Spec {
@@ -48111,7 +48131,7 @@ pub mod scaffold {
             }
             let mut names = vec![starter_source(language, &spec).0];
             names.extend(
-                beside_the_starter(language, &spec)
+                companion_sources(language, &spec)
                     .into_iter()
                     .map(|(name, _)| name),
             );
@@ -48133,7 +48153,7 @@ pub mod scaffold {
         dropped
     }
 
-    fn beside_the_starter(language: &str, spec: &Spec) -> Vec<(String, String)> {
+    fn companion_sources(language: &str, spec: &Spec) -> Vec<(String, String)> {
         match language {
             "cpp" => vec![
                 (
@@ -48329,7 +48349,7 @@ pub mod scaffold {
             }
             files.push(format!("{folder}/{name}"));
 
-            for (beside, body) in beside_the_starter(language, spec) {
+            for (beside, body) in companion_sources(language, spec) {
                 let path = directory.join(&beside);
                 if !path.exists() {
                     std::fs::write(&path, body).map_err(|why| {
@@ -48390,7 +48410,7 @@ pub mod scaffold {
             files.push(path);
         }
 
-        plant_icon(root, &spec.package)?;
+        generate_launcher_icon(root, &spec.package)?;
 
         Ok(Created {
             root: root.to_string(),
@@ -48723,14 +48743,14 @@ pub mod scaffold {
             .unwrap_or_else(|| declared.to_string())
     }
 
-    pub fn plant_icon(root: &str, seed: &str) -> Result<bool, Diagnostic> {
+    pub fn generate_launcher_icon(root: &str, seed: &str) -> Result<bool, Diagnostic> {
         if std::path::Path::new(&icon_path(root)).is_file() {
             return Ok(false);
         }
         if has_its_own_launcher_icon(root) {
             return Ok(false);
         }
-        let drawn = crate::image::drawn_for(seed)?;
+        let drawn = crate::image::generate_icon(seed)?;
         std::fs::create_dir_all(format!("{}/{RES_FOLDER}", root.trim_end_matches('/'))).map_err(
             |why| {
                 fail("EP043", "The resource folder could not be made.")
@@ -48871,7 +48891,7 @@ pub mod inflate {
             }
         }
 
-        fn need(&mut self, count: u32) -> Result<(), Diagnostic> {
+        fn require_bits(&mut self, count: u32) -> Result<(), Diagnostic> {
             while self.bit < count {
                 if self.at >= self.data.len() {
                     return Err(fail(
@@ -48895,7 +48915,7 @@ pub mod inflate {
             if count == 0 {
                 return Ok(0);
             }
-            self.need(count)?;
+            self.require_bits(count)?;
             let value = self.held & ((1u32 << count) - 1);
             self.held >>= count;
             self.bit -= count;
@@ -51019,7 +51039,7 @@ pub mod image {
         )
     }
 
-    pub fn ground_colour(raster: &Raster) -> [u8; 4] {
+    pub fn background_colour(raster: &Raster) -> [u8; 4] {
         let mut red = 0u64;
         let mut green = 0u64;
         let mut blue = 0u64;
@@ -51051,7 +51071,7 @@ pub mod image {
         ]
     }
 
-    pub fn inside_the_safe_zone(raster: &Raster, layer: u32) -> Raster {
+    pub fn fit_to_safe_zone(raster: &Raster, layer: u32) -> Raster {
         let mut out = Raster::new(layer, layer);
         let inner = (layer * SAFE_NUMERATOR / SAFE_DENOMINATOR).max(1);
         let art = resize(raster, inner, inner);
@@ -51064,7 +51084,7 @@ pub mod image {
         out
     }
 
-    fn filled(edge: u32, colour: [u8; 4]) -> Raster {
+    fn solid_raster(edge: u32, colour: [u8; 4]) -> Raster {
         let mut out = Raster::new(edge, edge);
         for y in 0..edge {
             for x in 0..edge {
@@ -51117,7 +51137,7 @@ pub mod image {
 
     pub const DRAWN_EDGE: u32 = 512;
 
-    pub fn drawn_for(seed: &str) -> Result<Vec<u8>, Diagnostic> {
+    pub fn generate_icon(seed: &str) -> Result<Vec<u8>, Diagnostic> {
         let mut mixed: u32 = 2_166_136_261;
         for byte in seed.as_bytes() {
             mixed ^= u32::from(*byte);
@@ -51138,7 +51158,7 @@ pub mod image {
             for x in 0..edge {
                 let fx = x as f32 + 0.5;
                 let fy = y as f32 + 0.5;
-                if !inside_rounded(fx, fy, edge as f32, corner) {
+                if !is_inside_rounded_rectangle(fx, fy, edge as f32, corner) {
                     raster.put(x, y, [0, 0, 0, 0]);
                     continue;
                 }
@@ -51164,7 +51184,7 @@ pub mod image {
         encode_smallest(&raster)
     }
 
-    fn inside_rounded(x: f32, y: f32, edge: f32, corner: f32) -> bool {
+    fn is_inside_rounded_rectangle(x: f32, y: f32, edge: f32, corner: f32) -> bool {
         let left = corner;
         let right = edge - corner;
         let near_x = x.clamp(left, right);
@@ -51212,7 +51232,7 @@ pub mod image {
         }
 
         for (folder, layer) in ADAPTIVE_SIZES {
-            let front = inside_the_safe_zone(&raster, *layer);
+            let front = fit_to_safe_zone(&raster, *layer);
             out.push(Launcher {
                 folder: (*folder).to_string(),
                 name: FOREGROUND_NAME.to_string(),
@@ -51232,7 +51252,7 @@ pub mod image {
             folder: ground_folder.to_string(),
             name: BACKGROUND_NAME.to_string(),
             edge: ground_edge,
-            bytes: encode_smallest(&filled(ground_edge, ground_colour(&raster)))?,
+            bytes: encode_smallest(&solid_raster(ground_edge, background_colour(&raster)))?,
         });
 
         for name in ["ic_launcher.xml", "ic_launcher_round.xml"] {
@@ -51268,7 +51288,7 @@ pub mod trash {
     pub const MAX_ENTRIES: usize = 2_000;
     pub const KEPT: i64 = 0;
 
-    pub fn inside_a_project(root: &str) -> bool {
+    pub fn is_inside_project(root: &str) -> bool {
         std::path::Path::new(root)
             .parent()
             .map(|above| above.join(crate::settings::FILE_NAME).is_file())
@@ -51276,7 +51296,7 @@ pub mod trash {
     }
 
     fn held_for(root: &str) -> i64 {
-        if inside_a_project(root) {
+        if is_inside_project(root) {
             KEPT
         } else {
             HELD_SECONDS
@@ -51498,7 +51518,7 @@ pub mod trash {
         out
     }
 
-    fn forget_the_day(root: &str, id: &str) {
+    fn remove_empty_day_folder(root: &str, id: &str) {
         let Some((day, _)) = id.split_once('/') else {
             return;
         };
@@ -51634,7 +51654,7 @@ pub mod trash {
                 .with_context(format!("Reason: {why}"))
         })?;
         std::fs::remove_dir_all(&held).ok();
-        forget_the_day(root, id);
+        remove_empty_day_folder(root, id);
         Ok(entry)
     }
 
@@ -51649,7 +51669,7 @@ pub mod trash {
             fail("ET021", "That could not be removed from the trash.")
                 .with_context(format!("Reason: {why}"))
         })?;
-        forget_the_day(root, id);
+        remove_empty_day_folder(root, id);
         Ok(())
     }
 
@@ -51658,11 +51678,11 @@ pub mod trash {
         for id in identifiers(root) {
             let gone = match read_record(root, &id) {
                 Some(held) => !held.kept() && held.expires_at <= now,
-                None => !inside_a_project(root),
+                None => !is_inside_project(root),
             };
             if gone && std::fs::remove_dir_all(std::path::Path::new(root).join(&id)).is_ok() {
                 swept += 1;
-                forget_the_day(root, &id);
+                remove_empty_day_folder(root, &id);
             }
         }
         swept
@@ -51735,7 +51755,11 @@ pub mod packer {
         pub changed: u64,
     }
 
-    fn walked(here: &std::path::Path, ahead: &str, into: &mut Vec<Item>) -> Result<(), Diagnostic> {
+    fn walk_directory(
+        here: &std::path::Path,
+        ahead: &str,
+        into: &mut Vec<Item>,
+    ) -> Result<(), Diagnostic> {
         if into.len() >= MOST_ENTRIES {
             return Err(
                 fail("EZ010", "That is more entries than one archive holds here.")
@@ -51779,7 +51803,7 @@ pub mod packer {
                 listing.flatten().map(|one| one.path()).collect();
             children.sort();
             for child in children {
-                walked(&child, &named, into)?;
+                walk_directory(&child, &named, into)?;
             }
             return Ok(());
         }
@@ -51835,7 +51859,7 @@ pub mod packer {
         tail: Vec<u8>,
     }
 
-    fn seal(password: &str, mut body: Vec<u8>) -> Result<Sealed, Diagnostic> {
+    fn encrypt_body(password: &str, mut body: Vec<u8>) -> Result<Sealed, Diagnostic> {
         let salt = crate::random::bytes(AES_SALT_BYTES)?;
         let stretched = crate::cipher::pbkdf2_sha1(
             password.as_bytes(),
@@ -51952,7 +51976,7 @@ pub mod packer {
             let (method, extra, payload) = if password.is_empty() || item.folder {
                 (actual, Vec::new(), body)
             } else {
-                let locked = seal(password, body)?;
+                let locked = encrypt_body(password, body)?;
                 let mut joined = locked.head;
                 joined.extend_from_slice(&locked.body);
                 joined.extend_from_slice(&locked.tail);
@@ -52123,7 +52147,7 @@ pub mod packer {
                 return Err(fail("EZ004", "Something named to pack is not there.")
                     .with_context(format!("Path: {name}")));
             }
-            walked(&here, "", &mut items)?;
+            walk_directory(&here, "", &mut items)?;
         }
 
         let (bytes, counted) = if format == TAR {
@@ -52217,7 +52241,7 @@ pub mod packer {
         }
     }
 
-    fn its_locked(named: &str) -> Diagnostic {
+    fn archive_locked_error(named: &str) -> Diagnostic {
         fail("EZ023", "This archive is locked.")
             .with_context(format!("Entry: {named}"))
             .with_suggestion("Give the password it was locked with.")
@@ -52231,7 +52255,7 @@ pub mod packer {
     ) -> Result<Vec<u8>, Diagnostic> {
         if entry.compression == crate::archive::Compression::Other(AES_METHOD) {
             if password.is_empty() {
-                return Err(its_locked(&entry.name));
+                return Err(archive_locked_error(&entry.name));
             }
             let stored = archive.stored_bytes(data, entry)?;
             let plain = unseal(password, stored)?;
@@ -52242,7 +52266,7 @@ pub mod packer {
             return archive.content(data, entry);
         }
         if password.is_empty() {
-            return Err(its_locked(&entry.name));
+            return Err(archive_locked_error(&entry.name));
         }
         let stored = archive.stored_bytes(data, entry)?;
         if stored.len() < LEGACY_HEADER_BYTES {
@@ -52312,7 +52336,7 @@ pub mod workspace {
         )
     }
 
-    fn inside(root: &str, relative: &str) -> Result<std::path::PathBuf, Diagnostic> {
+    fn resolve_inside(root: &str, relative: &str) -> Result<std::path::PathBuf, Diagnostic> {
         let path = VirtualPath::parse(relative).map_err(|error| {
             fail(
                 "EW100",
@@ -52579,7 +52603,7 @@ pub mod workspace {
         }
     }
 
-    fn wordish(byte: u8) -> bool {
+    fn is_identifier_byte(byte: u8) -> bool {
         byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$' || byte >= 0x80
     }
 
@@ -52612,7 +52636,7 @@ pub mod workspace {
             if whole_word {
                 let before = at.checked_sub(1).map(|before| line[before]);
                 let after = line.get(at + needle.len()).copied();
-                if before.is_some_and(wordish) || after.is_some_and(wordish) {
+                if before.is_some_and(is_identifier_byte) || after.is_some_and(is_identifier_byte) {
                     continue;
                 }
             }
@@ -52656,7 +52680,7 @@ pub mod workspace {
                 found.files_too_large += 1;
                 continue;
             }
-            let path = inside(root, &entry.path)?;
+            let path = resolve_inside(root, &entry.path)?;
             let Ok(bytes) = std::fs::read(&path) else {
                 continue;
             };
@@ -52704,7 +52728,7 @@ pub mod workspace {
     }
 
     pub fn read_text(root: &str, relative: &str) -> Result<String, Diagnostic> {
-        let path = inside(root, relative)?;
+        let path = resolve_inside(root, relative)?;
         let size = std::fs::metadata(&path)
             .map_err(|why| {
                 fail("EW110", "That file is not in the project.")
@@ -52739,7 +52763,7 @@ pub mod workspace {
                 .with_context(format!("Size: {} bytes", contents.len()))
                 .with_context(format!("Largest saved: {MAX_TEXT_BYTES} bytes")));
         }
-        let path = inside(root, relative)?;
+        let path = resolve_inside(root, relative)?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|why| {
                 fail("EW121", "The folder for that file could not be made.")
@@ -52871,7 +52895,7 @@ pub mod workspace {
             if named.is_empty() {
                 continue;
             }
-            let target = inside(into, named.trim_end_matches('/'))?;
+            let target = resolve_inside(into, named.trim_end_matches('/'))?;
             if entry.is_directory() {
                 std::fs::create_dir_all(&target).map_err(|why| {
                     fail("EW173", "A folder in the archive could not be made.")
@@ -52984,7 +53008,9 @@ pub mod workspace {
             let mut quiet = crate::diag::Sink::new();
             let named = crate::xml::parse(&manifest, "AndroidManifest.xml", &mut quiet)
                 .and_then(|parsed| label_in(into, &parsed));
-            if let (Some(named), Ok(Some(mut settings))) = (named, crate::settings::held(into)) {
+            if let (Some(named), Ok(Some(mut settings))) =
+                (named, crate::settings::read_settings(into))
+            {
                 if settings.label != named {
                     settings.label = named;
                     crate::settings::write(into, &settings)?;
@@ -53022,18 +53048,18 @@ pub mod workspace {
             crate::settings::write(into, &settings)?;
             out.settings_written = true;
         }
-        let held = crate::settings::held(into).ok().flatten();
+        let held = crate::settings::read_settings(into).ok().flatten();
         out.package = held
             .as_ref()
             .map(|one| one.package.clone())
             .unwrap_or_default();
         out.label = held.map(|one| one.label).unwrap_or_default();
-        out.icon_drawn = crate::scaffold::plant_icon(into, &out.package)?;
+        out.icon_drawn = crate::scaffold::generate_launcher_icon(into, &out.package)?;
         Ok(out)
     }
 
     pub fn create_folder(root: &str, relative: &str) -> Result<(), Diagnostic> {
-        let path = inside(root, relative)?;
+        let path = resolve_inside(root, relative)?;
         std::fs::create_dir_all(&path).map_err(|why| {
             fail("EW130", "That folder could not be made.")
                 .with_context(format!("Path: {relative}"))
@@ -53059,7 +53085,7 @@ pub mod workspace {
                     ),
             );
         }
-        let path = inside(root, relative)?;
+        let path = resolve_inside(root, relative)?;
         if !path.exists() {
             return Err(fail("EW141", "That is not in the project.")
                 .with_context(format!("Path: {relative}")));
@@ -53082,8 +53108,8 @@ pub mod workspace {
     }
 
     pub fn copy(root: &str, from: &str, to: &str) -> Result<String, Diagnostic> {
-        let source = inside(root, from)?;
-        let target = inside(root, to)?;
+        let source = resolve_inside(root, from)?;
+        let target = resolve_inside(root, to)?;
         if !source.exists() {
             return Err(
                 fail("EW161", "That is not in the project.").with_context(format!("Path: {from}"))
@@ -53134,8 +53160,8 @@ pub mod workspace {
     }
 
     pub fn rename(root: &str, from: &str, to: &str) -> Result<String, Diagnostic> {
-        let source = inside(root, from)?;
-        let target = inside(root, to)?;
+        let source = resolve_inside(root, from)?;
+        let target = resolve_inside(root, to)?;
         if !source.exists() {
             return Err(
                 fail("EW151", "That is not in the project.").with_context(format!("Path: {from}"))
@@ -55067,7 +55093,7 @@ pub mod keystore {
             self.tag.is_some()
         }
 
-        pub fn adds_up(&self, whole: &[u8]) -> bool {
+        pub fn has_valid_checksum(&self, whole: &[u8]) -> bool {
             match self.checksum {
                 None => true,
                 Some(recorded) => crate::cipher::same_bytes(
@@ -55323,7 +55349,7 @@ pub mod keystore {
         let certificate = container.certificate;
         let sealed = container.sealed;
 
-        if !container.adds_up(&data) {
+        if !container.has_valid_checksum(&data) {
             return Err(
                 fail("EY051", "The key file is not the one that was written.")
                     .with_context(format!("Path: {path}"))
@@ -55481,7 +55507,7 @@ pub mod room {
             .unwrap_or_default()
     }
 
-    fn declares(classpath: &Classpath, class: &str, name: &str) -> bool {
+    fn declares_method(classpath: &Classpath, class: &str, name: &str) -> bool {
         !arities(classpath, class, name).is_empty()
     }
 
@@ -55530,7 +55556,7 @@ pub mod room {
             } else {
                 0
             },
-            cursor_util: declares(
+            cursor_util: declares_method(
                 classpath,
                 &format!("{slashed}/util/CursorUtil"),
                 "getColumnIndex",
@@ -55544,16 +55570,16 @@ pub mod room {
             } else {
                 1
             },
-            not_suspending: declares(classpath, &database, "assertNotSuspendingTransaction"),
-            converters_map: declares(classpath, &database, "getRequiredTypeConverters"),
-            auto_migrations: declares(classpath, &database, "getAutoMigrations"),
-            pre_migrate: declares(classpath, &format!("{helper}$Delegate"), "onPreMigrate"),
-            destructive: declares(
+            not_suspending: declares_method(classpath, &database, "assertNotSuspendingTransaction"),
+            converters_map: declares_method(classpath, &database, "getRequiredTypeConverters"),
+            auto_migrations: declares_method(classpath, &database, "getAutoMigrations"),
+            pre_migrate: declares_method(classpath, &format!("{helper}$Delegate"), "onPreMigrate"),
+            destructive: declares_method(
                 classpath,
                 &format!("{database}$Callback"),
                 "onDestructiveMigration",
             ),
-            clear_tables: declares(classpath, &database, "clearAllTables"),
+            clear_tables: declares_method(classpath, &database, "clearAllTables"),
         })
     }
 
@@ -55967,7 +55993,7 @@ pub mod room {
         Some((name.rsplit('.').next().unwrap_or(name).to_string(), pairs))
     }
 
-    fn listed(expression: &Expression) -> Vec<&Expression> {
+    fn list_elements(expression: &Expression) -> Vec<&Expression> {
         match expression {
             Expression::ArrayOf { values, .. } => values.iter().collect(),
             other => vec![other],
@@ -56115,7 +56141,7 @@ pub mod room {
             }
         }
 
-        fn above(&self, unit: &'a Unit) -> Vec<(&'a Unit, Vec<Written>)> {
+        fn supertype_chain(&self, unit: &'a Unit) -> Vec<(&'a Unit, Vec<Written>)> {
             let mut out = Vec::new();
             let mut waiting: Vec<(&'a Unit, Vec<Written>)> = vec![(unit, Vec::new())];
             while let Some((one, given)) = waiting.pop() {
@@ -56291,7 +56317,7 @@ pub mod room {
 
         fn pojo(&self, unit: &'a Unit) -> Result<Pojo, Diagnostic> {
             let mut columns: Vec<Column> = Vec::new();
-            let chain = self.found.above(unit);
+            let chain = self.found.supertype_chain(unit);
             let classes: Vec<&Unit> = chain
                 .iter()
                 .map(|(one, _)| *one)
@@ -56484,7 +56510,7 @@ pub mod room {
                 .unwrap_or_else(|| simple_of(unit).to_string());
             let mut primary: Vec<usize> = Vec::new();
             let mut auto_generate = false;
-            let chain = self.found.above(unit);
+            let chain = self.found.supertype_chain(unit);
             for (owner, _) in &chain {
                 for field in &owner.fields {
                     if let Some(held) = annotation(&field.annotations, "PrimaryKey") {
@@ -56502,7 +56528,7 @@ pub mod room {
                 }
             }
             if let Some(listed_keys) = marked.and_then(|held| value(held, "primaryKeys")) {
-                for one in listed(listed_keys) {
+                for one in list_elements(listed_keys) {
                     if let Some(name) = text_of(one) {
                         if let Some(at) = pojo.columns.iter().position(|held| held.column == name) {
                             if !primary.contains(&at) {
@@ -56534,7 +56560,7 @@ pub mod room {
                 }
             }
             if let Some(held) = marked.and_then(|held| value(held, "indices")) {
-                for one in listed(held) {
+                for one in list_elements(held) {
                     let Some((_, pairs)) = nested(one) else {
                         continue;
                     };
@@ -56544,7 +56570,10 @@ pub mod room {
                     for (key, said) in pairs {
                         match key.as_str() {
                             "value" => {
-                                columns = listed(said).into_iter().filter_map(text_of).collect()
+                                columns = list_elements(said)
+                                    .into_iter()
+                                    .filter_map(text_of)
+                                    .collect()
                             }
                             "name" => name = text_of(said).unwrap_or_default(),
                             "unique" => unique = boolean(said).unwrap_or(false),
@@ -56563,7 +56592,7 @@ pub mod room {
             }
             let mut foreign = Vec::new();
             if let Some(held) = marked.and_then(|held| value(held, "foreignKeys")) {
-                for one in listed(held) {
+                for one in list_elements(held) {
                     let Some((_, pairs)) = nested(one) else {
                         continue;
                     };
@@ -56591,12 +56620,16 @@ pub mod room {
                                 }
                             }
                             "parentColumns" => {
-                                parent_columns =
-                                    listed(said).into_iter().filter_map(text_of).collect()
+                                parent_columns = list_elements(said)
+                                    .into_iter()
+                                    .filter_map(text_of)
+                                    .collect()
                             }
                             "childColumns" => {
-                                child_columns =
-                                    listed(said).into_iter().filter_map(text_of).collect()
+                                child_columns = list_elements(said)
+                                    .into_iter()
+                                    .filter_map(text_of)
+                                    .collect()
                             }
                             "onDelete" => on_delete = action_named(said),
                             "onUpdate" => on_update = action_named(said),
@@ -57855,7 +57888,7 @@ pub mod room {
             counter: 0,
         };
         writer.body.depth = 1;
-        let chain = context.found.above(dao);
+        let chain = context.found.supertype_chain(dao);
         let mut done: Vec<String> = Vec::new();
         for (owner, given) in &chain {
             for method in &owner.methods {
@@ -58038,7 +58071,7 @@ pub mod room {
     }
 
     fn constant_field(context: &Context<'_>, owner: &Unit, name: &str) -> Option<String> {
-        for (unit, _) in context.found.above(owner) {
+        for (unit, _) in context.found.supertype_chain(owner) {
             if let Some(field) = unit.fields.iter().find(|one| one.name == name) {
                 return constant_text(context, unit, field.value.as_ref()?);
             }
@@ -58505,7 +58538,7 @@ pub mod room {
             let mut entities: Vec<(String, Entity)> = Vec::new();
             for one in marked
                 .and_then(|held| value(held, "entities"))
-                .map(listed)
+                .map(list_elements)
                 .unwrap_or_default()
             {
                 let Expression::ClassLiteral {
@@ -58526,7 +58559,7 @@ pub mod room {
             }
             let tables: Vec<String> = entities.iter().map(|(_, one)| one.table.clone()).collect();
             let mut daos: Vec<(String, &Unit)> = Vec::new();
-            for (owner, given) in context.found.above(database) {
+            for (owner, given) in context.found.supertype_chain(database) {
                 for method in &owner.methods {
                     if method.body.is_some() || method.constructor || !method.parameters.is_empty()
                     {
@@ -58784,7 +58817,7 @@ pub mod builder {
                 }
             }
         }
-        table.know_macros(&macros);
+        table.set_macros(&macros);
 
         let mut naming = Naming::new(project.seal_resources);
         let mut compiling: Vec<(String, crate::scaffold::Supplied)> = Vec::new();
@@ -58942,7 +58975,7 @@ pub mod builder {
                     })?;
                 let mut one =
                     crate::resources::Table::for_package(crate::resources::APPLICATION_PACKAGE_ID);
-                one.know_macros(&macros);
+                one.set_macros(&macros);
                 if !one.read_values_for(text, &origin, config, sink) {
                     let mut refused = fail("EB044", "A library's values file could not be read.")
                         .with_context(format!("File: {origin}"));
@@ -59240,7 +59273,7 @@ pub mod builder {
         });
     }
 
-    pub fn starter(package: &str, label: &str) -> Project {
+    pub fn starter_project(package: &str, label: &str) -> Project {
         let activity = format!("{package}.MainActivity");
         let descriptor = format!("L{};", activity.replace('.', "/"));
         let manifest = format!(
@@ -59450,7 +59483,7 @@ pub mod builder {
         project_for(root, None, None)
     }
 
-    pub fn sealed_project(root: &str, fingerprint: Option<&str>) -> Result<Project, Diagnostic> {
+    pub fn project_with_seal(root: &str, fingerprint: Option<&str>) -> Result<Project, Diagnostic> {
         project_for(root, fingerprint, crate::debugger::host().as_ref())
     }
 
@@ -59461,13 +59494,13 @@ pub mod builder {
     ) -> Result<Project, Diagnostic> {
         crate::progress::enter_checked("project")?;
         let manifest = crate::scaffold::read_manifest(root)?;
-        let held = crate::settings::held(root)?;
+        let held = crate::settings::read_settings(root)?;
         let manifest = match &held {
             Some(settings) => crate::settings::over_manifest(&manifest, settings),
-            None => crate::settings::with_the_sdk_it_needs(&manifest),
+            None => crate::settings::with_default_sdk_levels(&manifest),
         };
 
-        let brought = brought_by_libraries(root)?;
+        let brought = library_contents(root)?;
         let namespace = package_of(&manifest).unwrap_or_default();
         let application_id = held
             .as_ref()
@@ -59736,7 +59769,7 @@ pub mod builder {
                     w.field_str("code", code);
                     w.field_str("rule", rule);
                     w.field_str("says", says);
-                    w.field_bool("held", !guard::fired(policy, code));
+                    w.field_bool("held", !guard::rule_fired(policy, code));
                     w.end_object();
                 }
                 w.end_array();
@@ -59746,7 +59779,7 @@ pub mod builder {
                 w.field_str("error", &refusal.localized_message());
                 w.field_str("english", &refusal.message);
                 if let Some(suggestion) = &refusal.suggestion {
-                    w.field_str("suggestion", &crate::speech::sentence(suggestion));
+                    w.field_str("suggestion", &crate::speech::translate_sentence(suggestion));
                 }
                 if let Some(place) = &refusal.location {
                     w.begin_object(Some("location"));
@@ -59836,7 +59869,7 @@ pub mod builder {
     }
 
     impl Mended {
-        pub fn clean_enough(&self) -> bool {
+        pub fn is_clean(&self) -> bool {
             self.left.is_none()
         }
     }
@@ -59868,12 +59901,12 @@ pub mod builder {
         true
     }
 
-    fn what_refuses(root: &str) -> Option<Diagnostic> {
+    fn first_refusal(root: &str) -> Option<Diagnostic> {
         let held = check(root);
         held.refusal
     }
 
-    pub fn mendable(root: &str) -> Mended {
+    pub fn available_repairs(root: &str) -> Mended {
         let mut out = Mended::default();
         let scratch = std::env::temp_dir().join(format!(
             "builder-mend-{}-{}",
@@ -59884,7 +59917,7 @@ pub mod builder {
         let mut budget = MOST_MENDING_FILES;
         if !copy_tree(std::path::Path::new(root), &scratch, &mut budget) {
             std::fs::remove_dir_all(&scratch).ok();
-            out.left = what_refuses(root);
+            out.left = first_refusal(root);
             return out;
         }
         let Some(copy) = scratch.to_str().map(str::to_string) else {
@@ -59893,7 +59926,7 @@ pub mod builder {
         };
 
         for _ in 0..MOST_MENDING_ROUNDS {
-            let Some(refusal) = what_refuses(&copy) else {
+            let Some(refusal) = first_refusal(&copy) else {
                 out.left = None;
                 break;
             };
@@ -60424,7 +60457,7 @@ public final class R {{
             return Ok(Vec::new());
         }
         let file = format!("lib{}.so", native_library_name(root));
-        let asked: Vec<String> = crate::settings::held(root)?
+        let asked: Vec<String> = crate::settings::read_settings(root)?
             .map(|held| held.abis)
             .unwrap_or_default();
         let targets: Vec<&(&str, &str)> = NATIVE_TARGETS
@@ -60457,7 +60490,7 @@ public final class R {{
     }
 
     pub fn uncompiled_source(root: &str) -> Vec<(&'static str, String)> {
-        let declared = crate::settings::held(root)
+        let declared = crate::settings::read_settings(root)
             .ok()
             .flatten()
             .map(|held| held.languages)
@@ -60592,11 +60625,11 @@ public final class R {{
         }
         read.extend(generated);
 
-        let classpath = what_it_may_call_into(root)?;
+        let classpath = compile_classpath(root)?;
         if classpath.get("androidx/viewbinding/ViewBinding").is_some() {
             read.retain(|(name, _)| name != "androidx/viewbinding/ViewBinding.java");
         }
-        crate::progress::keep_going()?;
+        crate::progress::check_not_stopped()?;
         let made = crate::room::generated(&read, &classpath)?;
         read.extend(made);
         let produced = if kotlin.is_empty() {
@@ -60620,10 +60653,10 @@ public final class R {{
                     "Add the Kotlin standard library to the project's dependencies and let them be fetched. A project that has no Builder.json cannot fetch them: make that file first.",
                 ));
             }
-            crate::progress::keep_going()?;
+            crate::progress::check_not_stopped()?;
             crate::compilers::kotlin::compile_mixed(&kotlin, &read, &classpath, jars)?
         };
-        let min_sdk = crate::settings::held(root)?
+        let min_sdk = crate::settings::read_settings(root)?
             .map(|held| held.min_sdk)
             .or_else(|| {
                 crate::scaffold::read_manifest(root)
@@ -60635,7 +60668,7 @@ public final class R {{
         let produced = crate::desugar::lowered(produced, min_sdk)?;
         let mut out = Vec::new();
         for (name, bytes) in produced {
-            crate::progress::keep_going()?;
+            crate::progress::check_not_stopped()?;
             let class = crate::jvm::read(&bytes)
                 .map_err(|error| error.with_context(format!("Class: {name}")))?;
             out.extend(
@@ -60765,12 +60798,12 @@ public final class R {{
         (element.name.clone(), key)
     }
 
-    fn told(element: &crate::xml::Element) -> &str {
+    fn merge_rule(element: &crate::xml::Element) -> &str {
         element.attribute("tools:node").unwrap_or("merge")
     }
 
     fn merge_into(mine: &mut crate::xml::Element, theirs: &crate::xml::Element, package: &str) {
-        if told(mine) == "replace" || told(mine) == "remove" {
+        if merge_rule(mine) == "replace" || merge_rule(mine) == "remove" {
             return;
         }
         for attribute in &theirs.attributes {
@@ -60784,7 +60817,7 @@ public final class R {{
             }
         }
         for child in &theirs.children {
-            if child.name == "uses-sdk" || matches!(told(child), "remove" | "removeAll") {
+            if child.name == "uses-sdk" || matches!(merge_rule(child), "remove" | "removeAll") {
                 continue;
             }
             let key = known_as(child);
@@ -60792,7 +60825,7 @@ public final class R {{
                 Some(existing) => merge_into(existing, child, package),
                 None => {
                     mine.child_at.push(mine.text.len());
-                    mine.children.push(instead(child, package));
+                    mine.children.push(with_application_id(child, package));
                 }
             }
         }
@@ -60805,7 +60838,7 @@ public final class R {{
             .into_iter()
             .enumerate()
         {
-            if matches!(told(&child), "remove" | "removeAll") {
+            if matches!(merge_rule(&child), "remove" | "removeAll") {
                 continue;
             }
             settle_tools(&mut child);
@@ -60869,7 +60902,7 @@ public final class R {{
                     .with_context(format!("Library: {}", which + 1)));
             };
             for child in &brought.children {
-                if child.name == "uses-sdk" || matches!(told(child), "remove" | "removeAll") {
+                if child.name == "uses-sdk" || matches!(merge_rule(child), "remove" | "removeAll") {
                     continue;
                 }
                 let key = known_as(child);
@@ -60877,7 +60910,7 @@ public final class R {{
                     Some(existing) => merge_into(existing, child, &package),
                     None => {
                         root.child_at.push(root.text.len());
-                        root.children.push(instead(child, &package));
+                        root.children.push(with_application_id(child, &package));
                     }
                 }
             }
@@ -60890,7 +60923,7 @@ public final class R {{
         Ok(out)
     }
 
-    fn instead(element: &crate::xml::Element, package: &str) -> crate::xml::Element {
+    fn with_application_id(element: &crate::xml::Element, package: &str) -> crate::xml::Element {
         let mut out = element.clone();
         for attribute in &mut out.attributes {
             attribute.value = attribute.value.replace("${applicationId}", package);
@@ -60898,7 +60931,7 @@ public final class R {{
         out.children = element
             .children
             .iter()
-            .map(|one| instead(one, package))
+            .map(|one| with_application_id(one, package))
             .collect();
         out
     }
@@ -60956,7 +60989,7 @@ public final class R {{
         PREBUILT_ABIS.iter().copied().find(|one| *one == abi)
     }
 
-    fn natives_carried(
+    fn collect_native_libraries(
         path: &std::path::Path,
         abi: &str,
         out: &mut Brought,
@@ -60986,11 +61019,11 @@ public final class R {{
         Ok(())
     }
 
-    pub fn brought_by_libraries(root: &str) -> Result<Brought, Diagnostic> {
+    pub fn library_contents(root: &str) -> Result<Brought, Diagnostic> {
         let mut out = Brought::default();
         for path in packaged_jars(root) {
             if let Some(abi) = native_abi_of(&path) {
-                natives_carried(&path, abi, &mut out)?;
+                collect_native_libraries(&path, abi, &mut out)?;
                 continue;
             }
             if path.extension().is_none_or(|held| held != "aar") {
@@ -61214,7 +61247,7 @@ public final class R {{
                     .map(|text| (path.display().to_string(), text))
             })
             .collect();
-        let classpath = what_it_may_call_into(root)?;
+        let classpath = compile_classpath(root)?;
         let stores = binding_stores(root);
         let made =
             crate::databinding::generate(namespace, &layouts, &sources, &classpath, &stores)?;
@@ -61289,7 +61322,7 @@ public final class R {{
     pub fn java_resources(root: &str) -> Result<Vec<(String, Vec<u8>)>, Diagnostic> {
         let mut out: Vec<(String, Vec<u8>)> = crate::scaffold::java_resource_files(root)
             .into_iter()
-            .filter(|(named, _)| carried_along(named))
+            .filter(|(named, _)| is_packaged_resource(named))
             .collect();
         for path in packaged_jars(root) {
             let where_from = path.display().to_string();
@@ -61306,7 +61339,7 @@ public final class R {{
                 let mut entries: Vec<&crate::archive::Entry> = archive
                     .entries()
                     .iter()
-                    .filter(|entry| !entry.is_directory() && carried_along(&entry.name))
+                    .filter(|entry| !entry.is_directory() && is_packaged_resource(&entry.name))
                     .collect();
                 entries.sort_by(|left, right| left.name.cmp(&right.name));
                 for entry in entries {
@@ -61335,7 +61368,7 @@ public final class R {{
         Ok(out)
     }
 
-    fn carried_along(named: &str) -> bool {
+    fn is_packaged_resource(named: &str) -> bool {
         if named.ends_with(".class") || named.ends_with(".kotlin_metadata") {
             return false;
         }
@@ -61418,7 +61451,7 @@ public final class R {{
             })
             .collect();
 
-        if let Some(chosen) = crate::maven::chosen_files(root) {
+        if let Some(chosen) = crate::maven::selected_files(root) {
             let cache = folder.join(crate::maven::CACHE);
             found.retain(|path| {
                 let named = path
@@ -61513,9 +61546,7 @@ public final class R {{
         Ok(out)
     }
 
-    pub fn what_it_may_call_into(
-        root: &str,
-    ) -> Result<crate::compilers::java::Classpath, Diagnostic> {
+    pub fn compile_classpath(root: &str) -> Result<crate::compilers::java::Classpath, Diagnostic> {
         let mut classpath = crate::compilers::java::Classpath::new();
         let mut jars: Vec<std::path::PathBuf> = Vec::new();
 
@@ -61551,7 +61582,7 @@ public final class R {{
             })?;
             for held in jars_within(&path, &bytes)? {
                 classpath
-                    .learn_jar(&held)
+                    .register_jar(&held)
                     .map_err(|error| error.with_context(format!("Path: {}", path.display())))?;
             }
         }
@@ -61606,7 +61637,7 @@ public final class R {{
         Some((major.parse().ok()?, minor))
     }
 
-    pub fn holds_kotlin(root: &str) -> bool {
+    pub fn has_kotlin_sources(root: &str) -> bool {
         let mut found = Vec::new();
         for folder in [crate::scaffold::KOTLIN_FOLDER, crate::scaffold::JAVA_FOLDER] {
             gather_by_suffix(&std::path::Path::new(root).join(folder), ".kt", &mut found);
@@ -61704,19 +61735,19 @@ public final class R {{
         assemble(project, key, &certificate_der, sink)
     }
 
-    pub fn made_by_all(
+    pub fn signer_fingerprints(
         certificate_der: &[u8],
         quantum: Option<&crate::signing::Quantum>,
     ) -> Result<String, Diagnostic> {
-        let mut out = made_by(certificate_der)?;
+        let mut out = certificate_fingerprint(certificate_der)?;
         if let Some(held) = quantum {
             out.push(',');
-            out.push_str(&made_by(&held.certificate)?);
+            out.push_str(&certificate_fingerprint(&held.certificate)?);
         }
         Ok(out)
     }
 
-    pub fn made_by(certificate_der: &[u8]) -> Result<String, Diagnostic> {
+    pub fn certificate_fingerprint(certificate_der: &[u8]) -> Result<String, Diagnostic> {
         Ok(crate::x509::Certificate::parse(certificate_der)?
             .fingerprint
             .to_hex()
@@ -61895,9 +61926,9 @@ public final class R {{
             let package = package_of(&project.manifest).unwrap_or_default();
             let written = if project.shrink {
                 let mut roots = crate::shrink::roots_from_manifest(&project.manifest, &package);
-                let mut whole = crate::shrink::beyond_the_package(&project.code, &package);
-                whole.extend(crate::shrink::found_by_name(&project.code));
-                whole.extend(crate::shrink::kept_by_rules(
+                let mut whole = crate::shrink::classes_outside_package(&project.code, &package);
+                whole.extend(crate::shrink::classes_loaded_by_name(&project.code));
+                whole.extend(crate::shrink::classes_kept_by_rules(
                     &project.code,
                     &project.keep_rules,
                 ));
@@ -62062,7 +62093,7 @@ public final class R {{
 
         let mut checking = Sink::new();
         let verified = match crate::archive::read(&package, &mut checking) {
-            Some(archive) => crate::signing::examine(
+            Some(archive) => crate::signing::verify_signing_block(
                 &package,
                 archive.central_directory_offset(),
                 archive.end_record_offset(),
@@ -62079,7 +62110,7 @@ public final class R {{
                 ))
             }
         };
-        if !verified.everything_checkable_passed() {
+        if !verified.all_checks_passed() {
             let mut refusal = fail(
                 "EB057",
                 "The package this build signed does not verify against its own key.",
@@ -62847,7 +62878,7 @@ pub mod jvm {
         out
     }
 
-    fn held_constant(constants: &[Constant], index: u16, descriptor: &str) -> Option<Element> {
+    fn constant_element(constants: &[Constant], index: u16, descriptor: &str) -> Option<Element> {
         let held = constants.get(usize::from(index))?;
         Some(match held {
             Constant::Integer(number) => match descriptor.chars().next() {
@@ -62910,7 +62941,7 @@ pub mod jvm {
                     let index = u16::from_be_bytes([content[0], content[1]]);
                     let descriptor = constant_utf8(constants, descriptor_index, "descriptor")
                         .unwrap_or_default();
-                    constant = held_constant(constants, index, &descriptor);
+                    constant = constant_element(constants, index, &descriptor);
                 }
 
                 if named == "RuntimeVisibleAnnotations" || named == "RuntimeInvisibleAnnotations" {
@@ -63519,7 +63550,7 @@ pub mod inspect {
         }
         out.abis.sort();
 
-        let report = crate::signing::examine(
+        let report = crate::signing::verify_signing_block(
             &bytes,
             archive.central_directory_offset(),
             archive.end_record_offset(),
@@ -63531,7 +63562,7 @@ pub mod inspect {
         out.signatures_verified = report.signatures_verified;
         out.signatures_failed = report.signatures_failed;
         out.key_matches_certificate = report.key_matches_certificate;
-        out.sound = report.everything_checkable_passed();
+        out.sound = report.all_checks_passed();
         for signer in &report.signers {
             for certificate in &signer.certificates {
                 if !out.signed_by.contains(&certificate.subject) {
@@ -63751,7 +63782,7 @@ pub mod symbols {
         out
     }
 
-    pub fn where_written(root: &str, qualified: &str) -> Option<(String, u32)> {
+    pub fn find_declaration(root: &str, qualified: &str) -> Option<(String, u32)> {
         let internal = qualified.replace('.', "/");
         let Ok(entries) = crate::workspace::tree(root) else {
             return None;
@@ -63885,7 +63916,7 @@ pub mod manifest {
         root.children.iter().find(|held| held.name == name)
     }
 
-    pub fn facts(root: &str) -> Result<Facts, Diagnostic> {
+    pub fn read_facts(root: &str) -> Result<Facts, Diagnostic> {
         let element = parsed(&read(root)?)?;
         let application = under(&element, "application");
         Ok(Facts {
@@ -64025,7 +64056,7 @@ pub mod manifest {
         let _ = element;
         let before = read(root)?;
         crate::workspace::write_text(root, FILE, text)?;
-        let after = facts(root)?;
+        let after = read_facts(root)?;
         if !check(&after) {
             crate::workspace::write_text(root, FILE, &before)?;
             return Err(fail(
@@ -64093,7 +64124,7 @@ pub mod manifest {
         }
 
         let text = read(root)?;
-        let held = facts(root)?;
+        let held = read_facts(root)?;
         let there = held.permissions.iter().any(|one| one == name);
         if there == wanted {
             return Ok(held);
@@ -64262,7 +64293,7 @@ pub mod depends {
 
     pub const MOST_PACKAGES: usize = 6;
 
-    pub fn held(root: &str) -> Result<Held, Diagnostic> {
+    pub fn read_dependencies(root: &str) -> Result<Held, Diagnostic> {
         let folder = std::path::Path::new(root).join(crate::scaffold::LIBRARY_FOLDER);
         let mut out = Held {
             folder: crate::scaffold::LIBRARY_FOLDER.to_string(),
@@ -64850,17 +64881,17 @@ pub mod progress {
         }
 
         fn expected(&self) -> Vec<u64> {
-            if self.knows_this_device() {
+            if self.has_device_timings() {
                 return self.learned.clone();
             }
             FIRST_GUESS.to_vec()
         }
 
-        pub fn knows_this_device(&self) -> bool {
+        pub fn has_device_timings(&self) -> bool {
             self.learned.len() == STAGES.len()
         }
 
-        pub fn learn(&mut self, held: &str) {
+        pub fn load_timings(&mut self, held: &str) {
             let mut found = Vec::with_capacity(STAGES.len());
             for piece in held.split(',') {
                 match piece.trim().parse::<u64>() {
@@ -64984,7 +65015,7 @@ pub mod progress {
             w.field_u64("elapsedMillis", as_millis(whole as f64));
             w.field_u64("leftMillis", as_millis(left));
             w.field_u64("wholeMillis", as_millis(total));
-            w.field_bool("estimated", self.knows_this_device());
+            w.field_bool("estimated", self.has_device_timings());
             w.field_str("timings", &self.timings());
             w.begin_array(Some("stages"));
             for (at, name) in STAGES.iter().enumerate() {
@@ -65019,13 +65050,13 @@ pub mod progress {
         (micros / 1000.0).round() as u64
     }
 
-    fn held() -> &'static Mutex<Channel> {
+    fn shared_channel() -> &'static Mutex<Channel> {
         static HELD: OnceLock<Mutex<Channel>> = OnceLock::new();
         HELD.get_or_init(|| Mutex::new(Channel::new()))
     }
 
     fn with<T>(what: impl FnOnce(&mut Channel) -> T) -> T {
-        match held().lock() {
+        match shared_channel().lock() {
             Ok(mut channel) => what(&mut channel),
 
             Err(poisoned) => what(&mut poisoned.into_inner()),
@@ -65042,7 +65073,7 @@ pub mod progress {
 
     pub const STOPPED_CODE: &str = "EB059";
 
-    pub fn one_at_a_time() -> std::sync::MutexGuard<'static, ()> {
+    pub fn acquire_build_lock() -> std::sync::MutexGuard<'static, ()> {
         static TURN: Mutex<()> = Mutex::new(());
         TURN.lock().unwrap_or_else(|held| held.into_inner())
     }
@@ -65063,7 +65094,7 @@ pub mod progress {
         mine != 0 && ASKED.load(Ordering::SeqCst) == mine
     }
 
-    pub fn keep_going() -> Result<(), Diagnostic> {
+    pub fn check_not_stopped() -> Result<(), Diagnostic> {
         if !stopped() {
             return Ok(());
         }
@@ -65082,7 +65113,7 @@ pub mod progress {
 
     pub fn enter_checked(stage: &str) -> Result<(), Diagnostic> {
         enter(stage);
-        keep_going()
+        check_not_stopped()
     }
 
     pub fn enter(stage: &str) {
@@ -65093,8 +65124,8 @@ pub mod progress {
         with(|channel| channel.finish(built));
     }
 
-    pub fn learn(timings: &str) {
-        with(|channel| channel.learn(timings));
+    pub fn load_timings(timings: &str) {
+        with(|channel| channel.load_timings(timings));
     }
 
     pub fn report() -> String {
@@ -65907,7 +65938,7 @@ pub mod ffi {
         done
     }
 
-    fn hand_back(w: crate::json::Writer) -> *mut c_char {
+    fn into_c_string(w: crate::json::Writer) -> *mut c_char {
         match CString::new(w.finish()) {
             Ok(report) => report.into_raw(),
             Err(_) => std::ptr::null_mut(),
@@ -65952,7 +65983,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn code_builder_speak(tag: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_set_language(tag: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let asked = text_from(tag).unwrap_or_default();
             let spoken = crate::speech::choose(&asked);
@@ -65986,7 +66017,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn code_builder_vibe(request: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_assistant_request(request: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let asked = text_from(request).unwrap_or_default();
             match CString::new(crate::vibe_coding::answer(&asked)) {
@@ -66001,7 +66032,7 @@ pub mod ffi {
     pub unsafe extern "C" fn code_builder_build_expect(timings: *const c_char) {
         let _ = catch_unwind(|| {
             if let Some(held) = text_from(timings) {
-                crate::progress::learn(&held);
+                crate::progress::load_timings(&held);
             }
         });
     }
@@ -66031,7 +66062,7 @@ pub mod ffi {
                 }
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66060,10 +66091,11 @@ pub mod ffi {
 
             let outcome = (|| {
                 let (key, certificate) = signing_pair(&key_path, &password, now, &mut w)?;
-                let quantum =
-                    crate::signing::Quantum::from_seed(&crate::mldsa::seed_beside(&key_path)?)?;
-                let made_by = crate::builder::made_by_all(&certificate, Some(&quantum))?;
-                let project = crate::builder::sealed_project(&root, Some(&made_by))?;
+                let quantum = crate::signing::Quantum::from_seed(
+                    &crate::mldsa::load_adjacent_seed(&key_path)?,
+                )?;
+                let made_by = crate::builder::signer_fingerprints(&certificate, Some(&quantum))?;
+                let project = crate::builder::project_with_seal(&root, Some(&made_by))?;
                 w.field_bool("carriesImage", project.icon.is_some());
                 w.field_bool("sealed", project.sealed.is_some());
                 crate::builder::assemble_with(
@@ -66100,7 +66132,7 @@ pub mod ffi {
             w.field_str("timings", &crate::progress::timings());
             sink.write_json(&mut w, "diagnostics");
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66137,7 +66169,7 @@ pub mod ffi {
             }
 
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66153,12 +66185,12 @@ pub mod ffi {
             };
             let expected = text_from(expected_certificate);
 
-            let check = crate::integrity::examine_self(&package_path, expected.as_deref());
+            let check = crate::integrity::verify_own_package(&package_path, expected.as_deref());
             let mut w = crate::json::Writer::new();
             w.begin_object(None);
             check.write_json(&mut w, "integrity");
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66174,7 +66206,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "configured", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66209,7 +66241,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "created", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66225,7 +66257,7 @@ pub mod ffi {
             w.begin_object(None);
             w.field_bool("bound", crate::keystore::device_is_bound());
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66247,7 +66279,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "ready", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66280,10 +66312,11 @@ pub mod ffi {
 
             let outcome = (|| {
                 let (key, certificate) = signing_pair(&key_path, &password, now, &mut w)?;
-                let quantum =
-                    crate::signing::Quantum::from_seed(&crate::mldsa::seed_beside(&key_path)?)?;
-                let made_by = crate::builder::made_by_all(&certificate, Some(&quantum))?;
-                let project = crate::builder::sealed_project(&root, Some(&made_by))?;
+                let quantum = crate::signing::Quantum::from_seed(
+                    &crate::mldsa::load_adjacent_seed(&key_path)?,
+                )?;
+                let made_by = crate::builder::signer_fingerprints(&certificate, Some(&quantum))?;
+                let project = crate::builder::project_with_seal(&root, Some(&made_by))?;
                 w.field_bool("carriesImage", project.icon.is_some());
                 w.field_bool("sealed", project.sealed.is_some());
                 w.field_u64(
@@ -66344,7 +66377,7 @@ pub mod ffi {
             w.field_str("timings", &crate::progress::timings());
             sink.write_json(&mut w, "diagnostics");
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66364,7 +66397,7 @@ pub mod ffi {
             }
             w.end_array();
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66385,7 +66418,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "removed", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66409,7 +66442,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "opened", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66429,7 +66462,7 @@ pub mod ffi {
             }
             w.end_array();
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66461,7 +66494,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "read", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66482,13 +66515,13 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "read", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn code_builder_lay_out(
+    pub unsafe extern "C" fn code_builder_format_source(
         name: *const c_char,
         text: *const c_char,
     ) -> *mut c_char {
@@ -66515,7 +66548,7 @@ pub mod ffi {
                 w.end_array();
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66528,7 +66561,7 @@ pub mod ffi {
             };
             let mut w = crate::json::Writer::new();
             w.begin_object(None);
-            match crate::depends::held(&root) {
+            match crate::depends::read_dependencies(&root) {
                 Ok(found) => {
                     w.field_bool("read", true);
                     found.write_json(&mut w, "dependencies");
@@ -66536,7 +66569,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "read", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66560,7 +66593,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "removed", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66573,7 +66606,7 @@ pub mod ffi {
             };
             let mut w = crate::json::Writer::new();
             w.begin_object(None);
-            match crate::manifest::facts(&root) {
+            match crate::manifest::read_facts(&root) {
                 Ok(facts) => {
                     w.field_bool("read", true);
                     facts.write_json(&mut w, "manifest");
@@ -66581,7 +66614,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "read", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66608,7 +66641,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "changed", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66633,7 +66666,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "changed", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66664,13 +66697,13 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "found", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn code_builder_where_written(
+    pub unsafe extern "C" fn code_builder_find_declaration(
         root: *const c_char,
         qualified: *const c_char,
     ) -> *mut c_char {
@@ -66680,7 +66713,7 @@ pub mod ffi {
             };
             let mut w = crate::json::Writer::new();
             w.begin_object(None);
-            match crate::symbols::where_written(&root, &qualified) {
+            match crate::symbols::find_declaration(&root, &qualified) {
                 Some((path, line)) => {
                     w.field_bool("written", true);
                     w.field_str("path", &path);
@@ -66692,7 +66725,7 @@ pub mod ffi {
                 }
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66714,7 +66747,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "opened", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66732,7 +66765,7 @@ pub mod ffi {
             w.field_str("root", &root);
             checked.write_json(&mut w, "code");
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66753,7 +66786,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "planned", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66764,7 +66797,7 @@ pub mod ffi {
             let Some(root) = text_from(root) else {
                 return std::ptr::null_mut();
             };
-            let held = crate::builder::mendable(&root);
+            let held = crate::builder::available_repairs(&root);
             let mut w = crate::json::Writer::new();
             w.begin_object(None);
             w.field_bool("looked", true);
@@ -66774,13 +66807,13 @@ pub mod ffi {
             match held.left {
                 Some(error) => {
                     w.field_bool("clean", false);
-                    w.field_str("left", &crate::speech::sentence(&error.message));
+                    w.field_str("left", &crate::speech::translate_sentence(&error.message));
                     w.field_str("leftCode", &error.code);
                 }
                 None => w.field_bool("clean", true),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66808,7 +66841,7 @@ pub mod ffi {
                 w.field_bool("mended", false);
                 w.field_str("reason", "Nothing was named to repair.");
                 w.end_object();
-                return hand_back(w);
+                return into_c_string(w);
             }
             let mut done = 0u64;
             let mut refusal = None;
@@ -66832,7 +66865,7 @@ pub mod ffi {
                 }
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66859,7 +66892,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "searched", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66885,7 +66918,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "read", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66913,7 +66946,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "saved", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66967,7 +67000,7 @@ pub mod ffi {
                 },
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -66993,7 +67026,7 @@ pub mod ffi {
                 }
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67036,7 +67069,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "packed", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67085,7 +67118,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "unpacked", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67129,7 +67162,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "opened", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67153,7 +67186,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "made", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67184,7 +67217,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "removed", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67212,7 +67245,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "moved", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67256,8 +67289,8 @@ pub mod ffi {
                         }
                         _ => None,
                     };
-                    let made_by = crate::builder::made_by_all(&held, quantum.as_ref())?;
-                    let project = crate::builder::sealed_project(&root, Some(&made_by))?;
+                    let made_by = crate::builder::signer_fingerprints(&held, quantum.as_ref())?;
+                    let project = crate::builder::project_with_seal(&root, Some(&made_by))?;
                     let made = crate::builder::unsigned(&project, &mut sink)?;
                     let asked = crate::signing::to_sign_hybrid(
                         &made.package,
@@ -67314,7 +67347,7 @@ pub mod ffi {
             crate::progress::finish(ready);
             sink.write_json(&mut w, "diagnostics");
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67395,7 +67428,7 @@ pub mod ffi {
             let _ = sealed_ok;
             sink.write_json(&mut w, "diagnostics");
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67485,7 +67518,7 @@ pub mod ffi {
 
         let mut checking = crate::diag::Sink::new();
         let report = match crate::archive::read(&out, &mut checking) {
-            Some(archive) => crate::signing::examine(
+            Some(archive) => crate::signing::verify_signing_block(
                 &out,
                 archive.central_directory_offset(),
                 archive.end_record_offset(),
@@ -67498,7 +67531,7 @@ pub mod ffi {
                 ))
             }
         };
-        if !report.everything_checkable_passed() {
+        if !report.all_checks_passed() {
             let mut refusal = named(
                 "EB064",
                 "The signature the device made does not verify against its own certificate.",
@@ -67540,7 +67573,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "copied", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67560,7 +67593,7 @@ pub mod ffi {
             }
             w.end_array();
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67587,7 +67620,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "removed", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67611,7 +67644,7 @@ pub mod ffi {
             }
             w.end_array();
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67637,7 +67670,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "restored", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67661,7 +67694,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "purged", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67677,7 +67710,7 @@ pub mod ffi {
             w.field_bool("emptied", true);
             w.field_u64("removed", crate::trash::empty(&trash_root) as u64);
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -67709,7 +67742,7 @@ pub mod ffi {
                 Err(error) => write_failure(&mut w, "stored", &error),
             }
             w.end_object();
-            hand_back(w)
+            into_c_string(w)
         });
         result.unwrap_or(std::ptr::null_mut())
     }
@@ -68083,7 +68116,7 @@ pub mod baseline {
         }
     }
 
-    fn launches(activity: &crate::xml::Element) -> bool {
+    fn is_launcher_activity(activity: &crate::xml::Element) -> bool {
         activity.children_named("intent-filter").any(|filter| {
             let main = filter
                 .children_named("action")
@@ -68110,7 +68143,7 @@ pub mod baseline {
             }
             for kind in ["activity", "activity-alias"] {
                 for activity in application.children_named(kind) {
-                    if !launches(activity) {
+                    if !is_launcher_activity(activity) {
                         continue;
                     }
                     let target = activity

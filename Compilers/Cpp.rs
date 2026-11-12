@@ -17689,7 +17689,7 @@ impl ExpressionValue {
         }
     }
 
-    fn truth(value: bool) -> ExpressionValue {
+    fn boolean_result(value: bool) -> ExpressionValue {
         ExpressionValue::signed(i64::from(value))
     }
 
@@ -19557,7 +19557,7 @@ impl<'files> Preprocessor<'files> {
             return Err(());
         }
         let definition = self.macros.get(&peek.spelling).cloned();
-        let value = ExpressionValue::truth(definition.is_some());
+        let value = ExpressionValue::boolean_result(definition.is_some());
         self.defined_state = Some((false, peek.spelling.clone()));
         let special = matches!(&*peek.spelling, b"INFINITY" | b"NAN");
         self.emit_macro_expansion_warnings(&peek, special);
@@ -19620,7 +19620,7 @@ impl<'files> Preprocessor<'files> {
                 if self.language.at_least(CStandard::C23)
                     && (&*token.spelling == b"true" || &*token.spelling == b"false")
                 {
-                    let mut value = ExpressionValue::truth(&*token.spelling == b"true");
+                    let mut value = ExpressionValue::boolean_result(&*token.spelling == b"true");
                     value.identifier = Some(token.clone());
                     *token = self.lex_non_comment();
                     return Ok(value);
@@ -19766,7 +19766,7 @@ impl<'files> Preprocessor<'files> {
                 if let Some((negated, name)) = self.defined_state.take() {
                     self.defined_state = Some((!negated, name));
                 }
-                Ok(ExpressionValue::truth(value.is_zero()))
+                Ok(ExpressionValue::boolean_result(value.is_zero()))
             }
             _ => {
                 let current = token.clone();
@@ -19996,15 +19996,19 @@ impl<'files> Preprocessor<'files> {
                         TokenKind::GreaterEqual => ordering.is_ge(),
                         _ => ordering.is_gt(),
                     };
-                    ExpressionValue::truth(value)
+                    ExpressionValue::boolean_result(value)
                 }
-                TokenKind::ExclaimEqual => ExpressionValue::truth(left.bits != right.bits),
-                TokenKind::EqualEqual => ExpressionValue::truth(left.bits == right.bits),
+                TokenKind::ExclaimEqual => ExpressionValue::boolean_result(left.bits != right.bits),
+                TokenKind::EqualEqual => ExpressionValue::boolean_result(left.bits == right.bits),
                 TokenKind::Amp => ExpressionValue::of(left.bits & right.bits, result_unsigned),
                 TokenKind::Caret => ExpressionValue::of(left.bits ^ right.bits, result_unsigned),
                 TokenKind::Pipe => ExpressionValue::of(left.bits | right.bits, result_unsigned),
-                TokenKind::AmpAmp => ExpressionValue::truth(!left.is_zero() && !right.is_zero()),
-                TokenKind::PipePipe => ExpressionValue::truth(!left.is_zero() || !right.is_zero()),
+                TokenKind::AmpAmp => {
+                    ExpressionValue::boolean_result(!left.is_zero() && !right.is_zero())
+                }
+                TokenKind::PipePipe => {
+                    ExpressionValue::boolean_result(!left.is_zero() || !right.is_zero())
+                }
                 TokenKind::Comma => {
                     if !self.language.at_least(CStandard::C99) || live {
                         self.report_token(Message::CommaInIfOperand, &operator_token, Vec::new());
@@ -32591,7 +32595,7 @@ impl IceResult {
         }
     }
 
-    fn worst(left: IceResult, right: IceResult) -> IceResult {
+    fn worse_result(left: IceResult, right: IceResult) -> IceResult {
         if left.kind >= right.kind {
             left
         } else {
@@ -32884,7 +32888,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                         }
                         return IceResult::ice();
                     }
-                    return IceResult::worst(left_result, right_result);
+                    return IceResult::worse_result(left_result, right_result);
                 }
                 if matches!(operator, BinaryOperator::Divide | BinaryOperator::Remainder)
                     && left_result.kind == IceKind::Ice
@@ -32920,7 +32924,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                         return IceResult::not_ice(expression.start);
                     }
                 }
-                IceResult::worst(left_result, right_result)
+                IceResult::worse_result(left_result, right_result)
             }
             ExpressionKind::Cast {
                 kind,

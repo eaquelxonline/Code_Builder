@@ -9041,7 +9041,7 @@ pub mod native {
             }
         }
 
-        fn home(&self, value: Value) -> Home {
+        fn location_of(&self, value: Value) -> Home {
             self.homes
                 .get(value.index())
                 .copied()
@@ -9049,7 +9049,7 @@ pub mod native {
         }
 
         fn register_of(&self, value: Value) -> Option<String> {
-            match self.home(value) {
+            match self.location_of(value) {
                 Home::Register(held) => Some(Self::held(held)),
                 _ => None,
             }
@@ -9066,7 +9066,7 @@ pub mod native {
         }
 
         fn small_constant(&self, value: Value) -> Option<u64> {
-            match self.home(value) {
+            match self.location_of(value) {
                 Home::Constant(constant) if constant <= 4095 => Some(constant),
                 _ => None,
             }
@@ -9128,7 +9128,7 @@ pub mod native {
                 BinaryOp::ShiftLeft
                 | BinaryOp::ShiftRightLogical
                 | BinaryOp::ShiftRightArithmetic => {
-                    let Home::Constant(count) = self.home(right) else {
+                    let Home::Constant(count) = self.location_of(right) else {
                         return false;
                     };
                     let mnemonic = match op {
@@ -9161,7 +9161,7 @@ pub mod native {
         }
 
         fn access(&mut self, load: bool, register: &str, value: Value) {
-            match self.home(value) {
+            match self.location_of(value) {
                 Home::Stack(index) => self.frame_access(load, register, -16 * (index as i64 + 1)),
                 Home::Register(held) => {
                     let name = Self::held(held);
@@ -9644,8 +9644,8 @@ pub mod native {
                 .zip(parameters)
                 .map(|(argument, parameter)| {
                     (
-                        self.home(*argument),
-                        self.home(*parameter),
+                        self.location_of(*argument),
+                        self.location_of(*parameter),
                         *argument,
                         *parameter,
                     )
@@ -9889,7 +9889,10 @@ pub mod native {
             let argument_type = |at: usize| function.type_of(arguments[at]);
             match &instruction.operation {
                 Operation::IntegerConstant(value) => {
-                    if !matches!(result.map(|held| self.home(held)), Some(Home::Constant(_))) {
+                    if !matches!(
+                        result.map(|held| self.location_of(held)),
+                        Some(Home::Constant(_))
+                    ) {
                         let bits = shared::type_bits(result_type.unwrap_or(Type::I64));
                         self.constant((*value as u64) & shared::all_ones(bits), A);
                         self.store_result(A, result);
@@ -9906,7 +9909,10 @@ pub mod native {
                     self.store_result(A, result);
                 }
                 Operation::Null | Operation::Poison => {
-                    if !matches!(result.map(|held| self.home(held)), Some(Home::Constant(_))) {
+                    if !matches!(
+                        result.map(|held| self.location_of(held)),
+                        Some(Home::Constant(_))
+                    ) {
                         self.line(&format!("mov {A}, xzr"));
                         self.store_result(A, result);
                     }

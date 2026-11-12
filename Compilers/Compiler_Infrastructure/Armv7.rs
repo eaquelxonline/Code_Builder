@@ -17832,7 +17832,7 @@ pub mod disassembler {
             self.state.it.last().copied().unwrap_or(14)
         }
 
-        pub fn in_it(&self) -> bool {
+        pub fn in_it_block(&self) -> bool {
             !self.state.it.is_empty()
         }
 
@@ -18021,7 +18021,7 @@ pub mod disassembler {
                     Status::Success
                 }
                 "DecodeCCOutOperand" => {
-                    let register = if self.in_it() {
+                    let register = if self.in_it_block() {
                         NO_REGISTER
                     } else {
                         self.reg("cpsr")
@@ -21722,7 +21722,7 @@ pub mod disassembler {
                 "tBcc" | "t2Bcc" | "tCBZ" | "tCBNZ" | "tCPS" | "t2CPS3p" | "t2CPS2p"
                 | "t2CPS1p" | "t2CSEL" | "t2CSINC" | "t2CSINV" | "t2CSNEG" | "tMOVSr"
                 | "tSETEND" => {
-                    if self.in_it() {
+                    if self.in_it_block() {
                         status = Status::SoftFail;
                     } else {
                         return Status::Success;
@@ -21733,16 +21733,16 @@ pub mod disassembler {
                         status = Status::SoftFail;
                     }
                 }
-                "tB" | "t2B" | "t2TBB" | "t2TBH" if self.in_it() && !self.last_in_it() => {
+                "tB" | "t2B" | "t2TBB" | "t2TBH" if self.in_it_block() && !self.last_in_it() => {
                     status = Status::SoftFail;
                 }
                 _ => {}
             }
             let vector = self.vector_predicable(mc);
-            if (!vector && self.in_vpt()) || (vector && self.in_it()) {
+            if (!vector && self.in_vpt()) || (vector && self.in_it_block()) {
                 status = Status::SoftFail;
             }
-            if self.in_it() {
+            if self.in_it_block() {
                 self.state.it.pop();
             } else if self.in_vpt() {
                 self.state.vpt.pop();
@@ -21755,7 +21755,7 @@ pub mod disassembler {
             if condition == 0xf {
                 condition = 14;
             }
-            if self.in_it() {
+            if self.in_it_block() {
                 self.state.it.pop();
             } else if self.in_vpt() {
                 condition = self.vpt_predicate();
@@ -21852,7 +21852,7 @@ pub mod disassembler {
                 }
             }
             if let Some(mut decoded) = self.decode(&["Thumb2"], half, 16, address) {
-                if self.record_name(&decoded.instruction) == "t2IT" && self.in_it() {
+                if self.record_name(&decoded.instruction) == "t2IT" && self.in_it_block() {
                     decoded.status = Status::SoftFail;
                 }
                 let predicate = self.check_thumb_predicate(&decoded.instruction);
@@ -21951,7 +21951,7 @@ pub mod disassembler {
                 check(&mut decoded.status, predicate);
                 return (Some(decoded), 4);
             }
-            if self.in_it() {
+            if self.in_it_block() {
                 self.state.it.pop();
             }
             (None, 0)

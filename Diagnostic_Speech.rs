@@ -19,7 +19,7 @@ pub fn choose(tag: &str) -> &'static str {
     LANGUAGES[at]
 }
 
-pub fn chosen() -> &'static str {
+pub fn selected_language() -> &'static str {
     LANGUAGES[at_hand()]
 }
 
@@ -79,7 +79,7 @@ fn found(table: &'static [(&'static str, &'static str)], key: &str) -> Option<&'
         .map(|at| table[at].1)
 }
 
-pub fn sentence(english: &str) -> String {
+pub fn translate_sentence(english: &str) -> String {
     let at = at_hand();
     match found(lines(at), english) {
         Some(said) => said.to_string(),

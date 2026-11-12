@@ -916,7 +916,7 @@ pub fn problem(code: &str, message: &str) -> Diagnostic {
     fail(code, message).with_class(FailureClass::UserError)
 }
 
-pub fn caution(code: &str, message: &str) -> Diagnostic {
+pub fn make_warning(code: &str, message: &str) -> Diagnostic {
     let mut diagnostic = fail(code, message).with_class(FailureClass::UserError);
     diagnostic.severity = Severity::Warning;
     diagnostic
@@ -2591,7 +2591,7 @@ fn apply_z_keyword(options: &mut Options, keyword: &str) -> Result<(), Diagnosti
                     .with_context(format!("Cause: invalid {keyword}: ")));
             } else if !apply_target_keyword(options, keyword)? {
                 options.pending_warnings.push(
-                    caution(
+                    make_warning(
                         "EI247",
                         "The linker ignores an option it does not recognize.",
                     )
@@ -4319,7 +4319,7 @@ impl<'s> Context<'s> {
     fn flush_debug_warnings(&mut self) {
         let pending = std::mem::take(&mut *self.pending_debug_warnings.borrow_mut());
         for text in pending {
-            let mut diagnostic = caution(
+            let mut diagnostic = make_warning(
                 "EI282",
                 "The linker cannot use the debug information of an input file.",
             )
@@ -4551,7 +4551,7 @@ impl<'s> Context<'s> {
                 if self.options.warn_common {
                     let name = self.symbols[symbol].name.clone();
                     self.warn(
-                        caution("EI251", "A common symbol is overridden.")
+                        make_warning("EI251", "A common symbol is overridden.")
                             .with_context(format!("Symbol: {name}"))
                             .with_context(format!("Cause: common {name} is overridden")),
                     );
@@ -4590,7 +4590,7 @@ impl<'s> Context<'s> {
             if self.options.warn_common {
                 let name = self.symbols[symbol].name.clone();
                 self.warn(
-                    caution("EI251", "A common symbol is overridden.")
+                    make_warning("EI251", "A common symbol is overridden.")
                         .with_context(format!("Symbol: {name}"))
                         .with_context(format!("Cause: common {name} is overridden")),
                 );
@@ -4601,7 +4601,7 @@ impl<'s> Context<'s> {
             if self.options.warn_common {
                 let name = self.symbols[symbol].name.clone();
                 self.warn(
-                    caution("EI252", "A common symbol is declared more than once.")
+                    make_warning("EI252", "A common symbol is declared more than once.")
                         .with_context(format!("Symbol: {name}"))
                         .with_context(format!("Cause: multiple common of {name}")),
                 );
@@ -5227,7 +5227,7 @@ impl<'s> Context<'s> {
             }
             if symbol.size != SECURE_GATEWAY_SIZE {
                 self.warn(
-                    caution("EI299", "The linker reports a detail of the link.")
+                    make_warning("EI299", "The linker reports a detail of the link.")
                         .with_context(format!("Symbol: {name}"))
                         .with_context(format!(
                             "Cause: CMSE symbol '{name}' in import library '{path}' does not have correct size of {SECURE_GATEWAY_SIZE} bytes"
@@ -5389,7 +5389,7 @@ impl<'s> Context<'s> {
         {
             if !present.contains(&name) {
                 self.warn(
-                    caution("EI299", "The linker reports a detail of the link.")
+                    make_warning("EI299", "The linker reports a detail of the link.")
                         .with_context(format!("Symbol: {name}"))
                         .with_context(format!(
                             "Cause: entry function '{name}' from CMSE import library is not present in secure application"
@@ -5402,7 +5402,7 @@ impl<'s> Context<'s> {
                 let name = self.symbols[entry].name.clone();
                 if !present.contains(&name) {
                     self.warn(
-                        caution("EI299", "The linker reports a detail of the link.")
+                        make_warning("EI299", "The linker reports a detail of the link.")
                             .with_context(format!("Symbol: {name}"))
                             .with_context(format!(
                                 "Cause: new entry function '{name}' introduced but no output import library specified"
@@ -6096,7 +6096,7 @@ impl<'s> Context<'s> {
                         let file = self.file_name(self.sections[section].file);
                         let name = self.sections[section].name.clone();
                         self.warn(
-                            caution("EI238", "This branch cannot reach its target on the architecture the inputs describe.")
+                            make_warning("EI238", "This branch cannot reach its target on the architecture the inputs describe.")
                                 .with_context(format!("Section: {name}"))
                                 .with_context(format!(
                                     "Cause: {file}: skipping cortex-a8 657417 erratum sequence{ERRATUM_SECTION}{name} is too large to patch"
@@ -6921,7 +6921,7 @@ impl<'s> Context<'s> {
     fn gdb_warning(&mut self, file: FileIndex, section: &str, text: String) {
         let display = self.file_name(Some(file));
         self.warn(
-            caution(
+            make_warning(
                 "EI282",
                 "The linker cannot use the debug information of an input file.",
             )
@@ -7402,7 +7402,7 @@ impl<'s> Context<'s> {
                     let file = self.sections[file_section].file;
                     let display = self.file_name(file);
                     self.warn(
-                        caution(
+                        make_warning(
                             "EI282",
                             "The linker cannot use the debug information of an input file.",
                         )
@@ -8262,7 +8262,7 @@ impl<'s> Context<'s> {
             let name = self.symbols[symbol].name.clone();
             let from = self.file_name(Some(reference));
             self.warn(
-                caution(
+                make_warning(
                     "EI250",
                     "A symbol is resolved by an archive that comes earlier on the command line.",
                 )
@@ -10350,7 +10350,7 @@ impl<'s> Context<'s> {
                 let end = data.len();
                 let until = at + 4;
                 self.warn(
-                    caution("EI254", "The ARM attributes of an input could not be read.")
+                    make_warning("EI254", "The ARM attributes of an input could not be read.")
                         .with_context(format!("File: {display}"))
                         .with_context(format!(
                             "Cause: {display}:({name}): unexpected end of data at offset 0x{end:x} while reading [0x{at:x}, 0x{until:x})"
@@ -10369,7 +10369,7 @@ impl<'s> Context<'s> {
         let Some(attributes) = parse_arm_attributes(data, self.encoding()) else {
             let display = self.file_name(Some(index));
             let mut diagnostic =
-                caution("EI254", "The ARM attributes of an input could not be read.")
+                make_warning("EI254", "The ARM attributes of an input could not be read.")
                     .with_context(format!("File: {display}"));
             if let Some(version) = data.first().filter(|version| **version != b'A') {
                 diagnostic = diagnostic.with_context(format!(
@@ -10382,7 +10382,7 @@ impl<'s> Context<'s> {
         if let Some(arguments) = attributes.get(&28).copied().filter(|value| *value > 3) {
             let display = self.file_name(Some(index));
             self.warn(
-                caution("EI254", "The ARM attributes of an input could not be read.")
+                make_warning("EI254", "The ARM attributes of an input could not be read.")
                     .with_context(format!("File: {display}"))
                     .with_context(format!(
                         "Cause: {display}:({name}): unknown ABI_VFP_args value: {arguments}"
@@ -13356,7 +13356,7 @@ impl<'s> Context<'s> {
                 let previous = self.version_label(self.symbols[id].version);
                 let requested = self.version_label(version);
                 self.warn(
-                    caution(
+                    make_warning(
                         "EI244",
                         "A version script assigns a symbol to a second version.",
                     )
@@ -13445,14 +13445,14 @@ impl<'s> Context<'s> {
                     if !reported {
                         if (local && global_asterisk) || (!local && local_asterisk) {
                             self.warn(
-                                caution("EI245", "The wildcard pattern * is used more than once in the version script.")
+                                make_warning("EI245", "The wildcard pattern * is used more than once in the version script.")
                                     .with_context("Scope: both local and global".to_string())
                                     .with_context(format!("Cause: {BOTH_SCOPES}")),
                             );
                             reported = true;
                         } else if !local && global_asterisk {
                             self.warn(
-                                caution("EI245", "The wildcard pattern * is used more than once in the version script.")
+                                make_warning("EI245", "The wildcard pattern * is used more than once in the version script.")
                                     .with_context("Scope: multiple version definitions".to_string())
                                     .with_context(format!("Cause: {MULTIPLE_DEFINITIONS}")),
                             );
@@ -19577,7 +19577,7 @@ impl<'s> Context<'s> {
             }
             if !address.is_multiple_of(alignment) {
                 self.warn(
-                    caution(
+                    make_warning(
                         "EI263",
                         "A linker script places sections in a way the linker cannot carry out.",
                     )
@@ -21781,7 +21781,7 @@ impl<'s> Context<'s> {
 
     fn arm_state_change_warning(&mut self, location: &str, relocation: &Relocation) {
         let name = relocation_name(Architecture::Arm, relocation.kind);
-        let mut diagnostic = caution(
+        let mut diagnostic = make_warning(
             "EI253",
             "A branch and link relocation does not switch between ARM and Thumb state.",
         )
@@ -24285,7 +24285,7 @@ impl<'s> Context<'s> {
         self.import_secure_symbols();
         if self.has_dynamic_debug && self.options.folding != IdenticalCodeFolding::None {
             self.warn(
-                caution("EI287", "An option has no effect in this link.")
+                make_warning("EI287", "An option has no effect in this link.")
                     .with_context("Option: --icf".to_string())
                     .with_context(format!("Cause: {DYNAMIC_DEBUG_FOLDING}")),
             );
@@ -24303,7 +24303,7 @@ impl<'s> Context<'s> {
             ] {
                 if enabled {
                     self.warn(
-                        caution("EI287", "An option has no effect in this link.")
+                        make_warning("EI287", "An option has no effect in this link.")
                             .with_context(format!("Option: {option}"))
                             .with_context(format!(
                                 "Cause: -z memtag-mode is none{MEMTAG_LEAVING}{option} a no-op"
@@ -24450,7 +24450,7 @@ impl<'s> Context<'s> {
             for (option, given, default) in defaults {
                 if given.is_some_and(|value| value != default) {
                     self.warn(
-                        caution("EI287", "An option has no effect in this link.")
+                        make_warning("EI287", "An option has no effect in this link.")
                             .with_context(format!("Option: {option}"))
                             .with_context(format!("Cause: {option} set{MAGIC_DISABLES_PAGING}")),
                     );
@@ -24463,7 +24463,7 @@ impl<'s> Context<'s> {
             if base % self.maximum_page_size != 0 {
                 let text = self.options.image_base_text.clone();
                 self.warn(
-                    caution("EI287", "An option has no effect in this link.")
+                    make_warning("EI287", "An option has no effect in this link.")
                         .with_context("Option: --image-base".to_string())
                         .with_context(format!(
                             "Cause: --image-base: address isn't multiple of page size: {text}"
@@ -25964,7 +25964,7 @@ impl ThunkKind {
         }
     }
 
-    fn checks_short_when_created(self) -> bool {
+    fn verifies_range_at_creation(self) -> bool {
         !matches!(
             self,
             ThunkKind::Aarch64PagedLong
@@ -26868,7 +26868,7 @@ impl<'s> Context<'s> {
                                 "$a"
                             };
                             self.add_thunk_local(thunk, mapping, symbol_type::NO_TYPE, 0);
-                            if kind.checks_short_when_created() {
+                            if kind.verifies_range_at_creation() {
                                 self.may_use_short_thunk(thunk);
                             }
                             let target = self.thunk_state.thunks[thunk].symbols[0];
@@ -28128,7 +28128,7 @@ pub fn parse_coff_command_line(
                         "full" | "ghash" | "noghash" | "fastlink" => {
                             if part == "fastlink" {
                                 options.warnings.push(
-                                    caution("EI287", "An option has no effect in this link.")
+                                    make_warning("EI287", "An option has no effect in this link.")
                                         .with_context("Option: /debug:fastlink".to_string())
                                         .with_context(
                                             "Cause: /debug:fastlink unsupported; using /debug:full"
@@ -28239,7 +28239,7 @@ pub fn parse_coff_command_line(
             "mapinfo" => options.map_information.push(need(&value)?),
             "help" | "?" => options.help = true,
             "pdbstripped" => options.warnings.push(
-                caution(
+                make_warning(
                     "EI247",
                     "The linker ignores an option it does not recognize.",
                 )
@@ -28250,7 +28250,7 @@ pub fn parse_coff_command_line(
                 for part in need(&value)?.split(',').filter(|part| !part.is_empty()) {
                     if !["cv", "pdata", "fixup"].contains(&part.to_ascii_lowercase().as_str()) {
                         options.warnings.push(
-                            caution(
+                            make_warning(
                                 "EI247",
                                 "The linker ignores an option it does not recognize.",
                             )
@@ -28442,7 +28442,7 @@ pub fn parse_coff_command_line(
             _ if argument.starts_with('/') => options.inputs.push(CoffInput::File(argument)),
             _ => {
                 options.warnings.push(
-                    caution(
+                    make_warning(
                         "EI247",
                         "The linker ignores an option it does not recognize.",
                     )
@@ -29868,7 +29868,7 @@ impl<'s> CoffContext<'s> {
                                 .any(|code| code == "importeddllmain");
                             if warn {
                                 self.warn(
-                                    caution("EI295", "The linker skips an imported DllMain symbol.")
+                                    make_warning("EI295", "The linker skips an imported DllMain symbol.")
                                         .with_context(format!("File: {path}"))
                                         .with_context(format!(
                                             "Cause: {path}: skipping imported DllMain symbol [importeddllmain]\nNOTE: this might be a mistake when the DLL/library was produced."
@@ -31224,7 +31224,7 @@ impl<'s> CoffContext<'s> {
                         }
                     } else {
                         self.warn(
-                            caution(
+                            make_warning(
                                 "EI247",
                                 "The linker ignores an option it does not recognize.",
                             )
@@ -31299,7 +31299,7 @@ impl<'s> CoffContext<'s> {
             if existing != to {
                 let existing = existing.clone();
                 self.warn(
-                    caution(
+                    make_warning(
                         "EI247",
                         "The linker ignores an option it does not recognize.",
                     )
@@ -31452,7 +31452,7 @@ impl<'s> CoffContext<'s> {
             }
         } else if self.options.tools_directory.is_some() || self.options.system_root.is_some() {
             self.warn(
-                caution("EI287", "An option has no effect in this link.")
+                make_warning("EI287", "An option has no effect in this link.")
                     .with_context("Option: /winsysroot".to_string())
                     .with_context(format!("Cause: {SYSTEM_ROOT_IGNORED}")),
             );
@@ -31579,7 +31579,7 @@ impl<'s> CoffContext<'s> {
             return None;
         }
         if self.machine == 0 {
-            self.warn(caution(
+            self.warn(make_warning(
                 "EI258",
                 "The target machine was not given, so x64 is assumed.",
             ));
@@ -31888,7 +31888,7 @@ impl<'s> CoffContext<'s> {
         for (name, alignment) in self.align_common.clone() {
             match self.find(&name) {
                 None => self.warn(
-                    caution(
+                    make_warning(
                         "EI247",
                         "The linker ignores an option it does not recognize.",
                     )
@@ -31928,7 +31928,7 @@ impl<'s> CoffContext<'s> {
                     "wWinMain"
                 };
                 self.warn(
-                    caution("EI287", "An option has no effect in this link.")
+                    make_warning("EI287", "An option has no effect in this link.")
                         .with_context("Option: /subsystem".to_string())
                         .with_context(format!(
                             "Cause: found {console} and {graphical}; defaulting to /subsystem:console"
@@ -31962,7 +31962,7 @@ impl<'s> CoffContext<'s> {
                 return self.mangle(&format!("{wide}CRTStartup"));
             }
             self.warn(
-                caution("EI294", "The linker found two candidate entry points.").with_context(
+                make_warning("EI294", "The linker found two candidate entry points.").with_context(
                     format!("Cause: found both {wide} and {narrow}; using latter"),
                 ),
             );
@@ -32176,7 +32176,7 @@ impl<'s> CoffContext<'s> {
                     let name = self.symbols[*target].name.clone();
                     let defined = self.defining_file_label(*target);
                     self.warn(
-                        caution("EI259", "A locally defined symbol is imported.")
+                        make_warning("EI259", "A locally defined symbol is imported.")
                             .with_context(format!("Symbol: {name}"))
                             .with_context("Reference: <root>".to_string())
                             .with_context(format!(
@@ -32208,7 +32208,7 @@ impl<'s> CoffContext<'s> {
                         let label = self.file_label(Some(file));
                         let defined = self.defining_file_label(*target);
                         self.warn(
-                            caution("EI259", "A locally defined symbol is imported.")
+                            make_warning("EI259", "A locally defined symbol is imported.")
                                 .with_context(format!("Symbol: {name}"))
                                 .with_context(format!("Reference: {label}"))
                                 .with_context(format!(
@@ -32574,7 +32574,7 @@ impl<'s> CoffContext<'s> {
 
     fn load_config_warning(&mut self, cause: String) {
         self.warn(
-            caution(
+            make_warning(
                 "EI275",
                 "The load configuration does not match what the linker writes.",
             )
@@ -33430,7 +33430,7 @@ impl<'s> CoffContext<'s> {
                         )
                     };
                     self.warn(
-                        caution("EI256", "A symbol is exported more than once.")
+                        make_warning("EI256", "A symbol is exported more than once.")
                             .with_context(format!("Symbol: {}", export.name))
                             .with_context(format!("Cause: {cause}")),
                     );
@@ -35131,7 +35131,7 @@ impl<'s> CoffContext<'s> {
         let expected = if name == ".debug$H" { 0x0133_c9c5 } else { 4 };
         if magic != expected {
             self.warn(
-                caution(
+                make_warning(
                     "EI281",
                     "The linker ignores a debug section with an unknown signature.",
                 )
@@ -35433,7 +35433,7 @@ impl<'s> CoffContext<'s> {
                     continue;
                 }
                 self.warn(
-                    caution("EI282", "The linker cannot use the debug information of an input file.")
+                    make_warning("EI282", "The linker cannot use the debug information of an input file.")
                         .with_context(format!("File: {label}"))
                         .with_context(format!(
                             "Cause: Cannot use debug info for '{label}' [LNK4099]\n>>> failed to load reference {reference}"
@@ -35538,7 +35538,7 @@ impl<'s> CoffContext<'s> {
                     ),
                     0xf7 | 0xf8 | 0xf9 | 0xfa | 0xfb | 0xfc | 0xfd | 0xff | 0x100 => {}
                     _ => self.warn(
-                        caution("EI283", "The linker ignores a debug subsection of an unknown kind.")
+                        make_warning("EI283", "The linker ignores a debug subsection of an unknown kind.")
                             .with_context(format!("File: {label}"))
                             .with_context(format!(
                                 "Cause: ignoring unknown debug$S subsection kind 0x{kind:X} in file {label}"
@@ -35560,7 +35560,7 @@ impl<'s> CoffContext<'s> {
                 );
             } else if !file_static_fixups.is_empty() {
                 self.warn(
-                    caution("EI280", "A CodeView debug section is malformed.")
+                    make_warning("EI280", "A CodeView debug section is malformed.")
                         .with_context(format!("File: {label}"))
                         .with_context(format!("Cause: {STRING_TABLE_MISSING}")),
                 );
@@ -35592,7 +35592,7 @@ impl<'s> CoffContext<'s> {
                     Some(text) => database.strings.insert(&text),
                     None => {
                         self.warn(
-                            caution("EI280", "A CodeView debug section is malformed.")
+                            make_warning("EI280", "A CodeView debug section is malformed.")
                                 .with_context(format!("File: {label}"))
                                 .with_context("Cause: Invalid string table reference".to_string()),
                         );
@@ -35619,7 +35619,7 @@ impl<'s> CoffContext<'s> {
                 Some(text) => database.strings.insert(&text),
                 None => {
                     self.warn(
-                        caution("EI280", "A CodeView debug section is malformed.")
+                        make_warning("EI280", "A CodeView debug section is malformed.")
                             .with_context(format!("File: {label}"))
                             .with_context("Cause: Invalid string table reference".to_string()),
                     );
@@ -35676,7 +35676,7 @@ impl<'s> CoffContext<'s> {
         let label = self.file_label(Some(source.file));
         if body.is_empty() {
             self.warn(
-                caution(
+                make_warning(
                     "EI284",
                     "A symbols subsection in the debug information is empty.",
                 )
@@ -35686,7 +35686,7 @@ impl<'s> CoffContext<'s> {
         }
         let Some(records) = code_view_records(body) else {
             self.warn(
-                caution("EI280", "A CodeView debug section is malformed.")
+                make_warning("EI280", "A CodeView debug section is malformed.")
                     .with_context(format!("File: {label}"))
                     .with_context(format!("Cause: corrupt symbol records in {label}")),
             );
@@ -35730,7 +35730,7 @@ impl<'s> CoffContext<'s> {
                         None => {
                             let name = String::from_utf8_lossy(&symbol_name(&record)).to_string();
                             self.warn(
-                                caution(
+                                make_warning(
                                     "EI285",
                                     "A procedure symbol refers to an item that is not a function identifier.",
                                 )
@@ -35795,7 +35795,7 @@ impl<'s> CoffContext<'s> {
                         storage[open + 8..open + 12].copy_from_slice(&end.to_le_bytes());
                     }
                     None => self.warn(
-                        caution(
+                        make_warning(
                             "EI286",
                             "The symbol scopes in the debug information are not balanced.",
                         )
@@ -35822,14 +35822,14 @@ impl<'s> CoffContext<'s> {
     fn report_ignored_options(&mut self) {
         if self.options.align_given && !self.options.driver_plain {
             self.warn(
-                caution("EI287", "An option has no effect in this link.")
+                make_warning("EI287", "An option has no effect in this link.")
                     .with_context("Option: /align".to_string())
                     .with_context(format!("Cause: {ALIGN_WITHOUT_DRIVER}")),
             );
         }
         if self.options.infer_sanitizer_libraries {
             self.warn(
-                caution("EI287", "An option has no effect in this link.")
+                make_warning("EI287", "An option has no effect in this link.")
                     .with_context("Option: /inferasanlibs".to_string())
                     .with_context(format!("Cause: {INFER_SANITIZER_IGNORED}")),
             );
@@ -35841,7 +35841,7 @@ impl<'s> CoffContext<'s> {
         let mut incremental = self.options.incremental.unwrap_or(default);
         let ignore = |context: &mut CoffContext, reason: &str| {
             context.warn(
-                caution("EI287", "An option has no effect in this link.")
+                make_warning("EI287", "An option has no effect in this link.")
                     .with_context("Option: /incremental".to_string())
                     .with_context(format!("Cause: ignoring '/incremental' {reason}")),
             );
@@ -35883,7 +35883,7 @@ impl<'s> CoffContext<'s> {
             let name = line.split(' ').next().unwrap_or("").to_string();
             if order.contains_key(&name) {
                 self.warn(
-                    caution("EI287", "An option has no effect in this link.")
+                    make_warning("EI287", "An option has no effect in this link.")
                         .with_context("Option: /sectionlayout".to_string())
                         .with_context(format!(
                             "Cause: duplicate section '{name}' in section layout file{LAYOUT_DUPLICATE}"
@@ -35959,7 +35959,7 @@ impl<'s> CoffContext<'s> {
                         None => {
                             if warn {
                                 context.warn(
-                                    caution(
+                                    make_warning(
                                         "EI289",
                                         "A symbol named in the order file does not exist.",
                                     )
@@ -36207,7 +36207,7 @@ impl<'s> CoffContext<'s> {
             if !known.contains(&name) {
                 if warn {
                     self.warn(
-                        caution("EI289", "A symbol named in the order file does not exist.")
+                        make_warning("EI289", "A symbol named in the order file does not exist.")
                             .with_context(format!("Symbol: {name}"))
                             .with_context(format!(
                                 "Cause: /order:{line}: missing symbol: {name} [LNK4037]"
@@ -36277,7 +36277,7 @@ impl<'s> CoffContext<'s> {
             let program = self.map_path_for(&requested);
             if self.map_path_for(&linker) == program {
                 self.warn(
-                    caution("EI287", "An option has no effect in this link.")
+                    make_warning("EI287", "An option has no effect in this link.")
                         .with_context("Option: /lldmap".to_string())
                         .with_context(format!(
                             "Cause: /lldmap and /map have the same output file '{program}'.\n>>> ignoring /lldmap"
@@ -36833,7 +36833,7 @@ impl<'s> CoffContext<'s> {
                 out.push_str(&extension);
             } else {
                 self.warn(
-                    caution(
+                    make_warning(
                         "EI277",
                         "The PDB alternate path uses a variable the linker does not expand.",
                     )
@@ -37059,7 +37059,7 @@ impl<'s> CoffContext<'s> {
         for file in self.options.natvis_files.clone() {
             let Some(content) = (self.source)(&file) else {
                 self.warn(
-                    caution(
+                    make_warning(
                         "EI278",
                         "The linker cannot open a file that the PDB should contain.",
                     )
@@ -37088,7 +37088,7 @@ impl<'s> CoffContext<'s> {
                     database.named_data.push((name, data))
                 }
                 None => self.warn(
-                    caution(
+                    make_warning(
                         "EI278",
                         "The linker cannot open a file that the PDB should contain.",
                     )
@@ -38015,9 +38015,10 @@ impl<'s> CoffContext<'s> {
             self.export_range = Some((first, last));
             if self.had_explicit_exports {
                 self.warn(
-                    caution("EI257", "Literal .edata sections override the exports.").with_context(
-                        "Cause: literal .edata sections override exports".to_string(),
-                    ),
+                    make_warning("EI257", "Literal .edata sections override the exports.")
+                        .with_context(
+                            "Cause: literal .edata sections override exports".to_string(),
+                        ),
                 );
             }
         } else if !self.exports.is_empty() {
@@ -38034,7 +38035,7 @@ impl<'s> CoffContext<'s> {
             if self.symbols[id].name.starts_with("??_G") {
                 let shown = self.display_symbol_name(&self.symbols[id].name);
                 self.warn(
-                    caution("EI292", "An export names a deleting destructor.")
+                    make_warning("EI292", "An export names a deleting destructor.")
                         .with_context(format!("Symbol: {}", self.symbols[id].name))
                         .with_context(format!("Cause: export of deleting dtor: {shown}")),
                 );
@@ -38601,7 +38602,7 @@ impl<'s> CoffContext<'s> {
             }
             if warn {
                 self.warn(
-                    caution(
+                    make_warning(
                         "EI274",
                         "A section name is longer than eight characters and uses a non-standard string table.",
                     )
@@ -39643,7 +39644,7 @@ impl<'s> CoffContext<'s> {
                     let width = if self.is_64() { 64 } else { 32 };
                     if bits < width {
                         self.warn(
-                            caution("EI276", "A runtime pseudo relocation is narrower than an address.")
+                            make_warning("EI276", "A runtime pseudo relocation is narrower than an address.")
                                 .with_context(format!("Symbol: {name}"))
                                 .with_context(format!(
                                     "Cause: runtime pseudo relocation in {label} against symbol {name} is too narrow (only {bits} bits wide){PSEUDO_RELOCATION_NARROW}"
@@ -39813,7 +39814,7 @@ impl<'s> CoffContext<'s> {
                             let text = format!("Resolving {name} by linking to {replacement}");
                             if self.options.stdcall_fixup.is_none() {
                                 self.warn(
-                                    caution(
+                                    make_warning(
                                         "EI290",
                                         "An undecorated symbol resolves a decorated reference.",
                                     )
@@ -40316,7 +40317,7 @@ impl<'s> CoffContext<'s> {
             crate::compilers::pe::machine::ARM64 | 0x01c4 => 8usize,
             _ => {
                 self.warn(
-                    caution(
+                    make_warning(
                         "EI212",
                         "The linker does not support what this input asks for yet.",
                     )
@@ -45121,7 +45122,7 @@ impl<'s> Context<'s> {
                 );
             } else {
                 self.warn(
-                    caution(
+                    make_warning(
                         "EI263",
                         "A linker script places sections in a way the linker cannot carry out.",
                     )

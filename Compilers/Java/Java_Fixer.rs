@@ -60,8 +60,8 @@ pub struct Repair {
 }
 
 impl Repair {
-    pub fn spoken_title(&self) -> String {
-        crate::speech::sentence(&self.title)
+    pub fn localized_title(&self) -> String {
+        crate::speech::translate_sentence(&self.title)
     }
 
     pub fn from_json(held: &crate::json::Json) -> Option<Repair> {
@@ -100,7 +100,7 @@ impl Repair {
         w.begin_object(None);
         w.field_str("code", &self.code);
         w.field_str("path", &self.path);
-        w.field_str("title", &self.spoken_title());
+        w.field_str("title", &self.localized_title());
         w.field_str("english", &self.title);
         w.field_u64("line", u64::from(self.line));
         w.field_str("confidence", self.confidence.as_str());

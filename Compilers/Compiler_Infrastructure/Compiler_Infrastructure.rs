@@ -325,7 +325,7 @@ impl BinaryOp {
         )
     }
 
-    pub fn yields_bool(self) -> bool {
+    pub fn produces_boolean(self) -> bool {
         matches!(
             self,
             BinaryOp::AddOverflowsSigned
@@ -1100,7 +1100,7 @@ impl<'f> FunctionBuilder<'f> {
     }
 
     pub fn binary(&mut self, op: BinaryOp, left: Value, right: Value) -> Value {
-        let ty = if op.yields_bool() {
+        let ty = if op.produces_boolean() {
             Type::BOOL
         } else {
             self.function.type_of(left)
@@ -2047,7 +2047,7 @@ enum Token {
 }
 
 impl Token {
-    fn shown(&self) -> String {
+    fn display_text(&self) -> String {
         match self {
             Token::Word(word) => word.clone(),
             Token::Local(name) => symbol('%', name),
@@ -2284,7 +2284,7 @@ impl Tokens {
                 "unexpected-end"
             },
             expected: expected.to_string(),
-            found: found.map(|token| token.shown()).unwrap_or_default(),
+            found: found.map(|token| token.display_text()).unwrap_or_default(),
         })
     }
 
@@ -4944,7 +4944,7 @@ impl<'m> Verifier<'m> {
             self.report(Rule::ArrayClass, shown.clone(), None, None);
         }
         let concrete = !class.interface && !class.abstract_class;
-        if concrete && self.leaves_a_method_abstract(class) {
+        if concrete && self.has_unimplemented_method(class) {
             self.report(Rule::VirtualTable, shown.clone(), None, None);
         }
         for slot in class
@@ -4985,7 +4985,7 @@ impl<'m> Verifier<'m> {
         }
     }
 
-    fn leaves_a_method_abstract(&self, class: &ClassType) -> bool {
+    fn has_unimplemented_method(&self, class: &ClassType) -> bool {
         let module = self.module;
         if class.methods.iter().any(Option::is_none) {
             return true;
@@ -5332,14 +5332,18 @@ impl<'v, 'm> FunctionVerifier<'v, 'm> {
                     } else {
                         ty.is_integer()
                     };
-                    let scalar_needed = op.yields_bool();
+                    let scalar_needed = op.produces_boolean();
                     self.expect(
                         arguments[1] == ty && fits && (!scalar_needed || ty.is_scalar_integer()),
                         Rule::OperandType,
                         block,
                         position,
                     );
-                    let wanted = if op.yields_bool() { Type::BOOL } else { ty };
+                    let wanted = if op.produces_boolean() {
+                        Type::BOOL
+                    } else {
+                        ty
+                    };
                     rule_ok = produces(Some(wanted));
                 } else {
                     rule_ok = true;
@@ -12527,7 +12531,7 @@ block6:
             is_wide(self.function.type_of(value))
         }
 
-        fn half(&self, value: Value) -> Result<(Value, Value), Diagnostic> {
+        fn split_halves(&self, value: Value) -> Result<(Value, Value), Diagnostic> {
             self.halves
                 .get(&value)
                 .copied()
@@ -12583,7 +12587,7 @@ block6:
             let mut out = Vec::with_capacity(values.len());
             for value in values {
                 if self.wide(*value) {
-                    let (low, high) = self.half(*value)?;
+                    let (low, high) = self.split_halves(*value)?;
                     out.push(low);
                     out.push(high);
                 } else {
@@ -12593,13 +12597,13 @@ block6:
             Ok(out)
         }
 
-        fn involved(&self, instruction: &Instruction) -> bool {
+        fn uses_wide_integer(&self, instruction: &Instruction) -> bool {
             instruction.result.is_some_and(|value| self.wide(value))
                 || instruction.arguments.iter().any(|value| self.wide(*value))
         }
 
         fn instruction(&mut self, inst: Inst, instruction: Instruction) -> Result<(), Diagnostic> {
-            if !self.involved(&instruction) {
+            if !self.uses_wide_integer(&instruction) {
                 self.list.push(inst);
                 return Ok(());
             }
@@ -12629,8 +12633,8 @@ block6:
                     self.convert_operation(*conversion, &arguments, result)
                 }
                 Operation::Select => {
-                    let (low_yes, high_yes) = self.half(arguments[1])?;
-                    let (low_no, high_no) = self.half(arguments[2])?;
+                    let (low_yes, high_yes) = self.split_halves(arguments[1])?;
+                    let (low_no, high_no) = self.split_halves(arguments[2])?;
                     let low = self.select(arguments[0], low_yes, low_no, Type::I64);
                     let high = self.select(arguments[0], high_yes, high_no, Type::I64);
                     self.bind(result, low, high)
@@ -12656,7 +12660,7 @@ block6:
                     volatile,
                     ordering: None,
                 } if self.wide(arguments[0]) => {
-                    let (low, high) = self.half(arguments[0])?;
+                    let (low, high) = self.split_halves(arguments[0])?;
                     let operation = Operation::Store {
                         align: (*align).min(8),
                         volatile: *volatile,
@@ -12755,8 +12759,8 @@ block6:
             arguments: &[Value],
             result: Option<Value>,
         ) -> Result<(), Diagnostic> {
-            let left = self.half(arguments[0])?;
-            let right = self.half(arguments[1])?;
+            let left = self.split_halves(arguments[0])?;
+            let right = self.split_halves(arguments[1])?;
             let Some(result) = result else {
                 return Ok(());
             };
@@ -12856,7 +12860,7 @@ block6:
                     self.bind(result, low, high)
                 }
                 Conversion::SignedToFloat | Conversion::UnsignedToFloat if self.wide(source) => {
-                    let (low, high) = self.half(source)?;
+                    let (low, high) = self.split_halves(source)?;
                     let Some(result) = result else {
                         return Ok(());
                     };
@@ -12897,7 +12901,7 @@ block6:
                     self.call_with(Operation::Call(callee), &signature, &[operand], result, 0)
                 }
                 Conversion::Truncate if self.wide(source) => {
-                    let (low, _) = self.half(source)?;
+                    let (low, _) = self.split_halves(source)?;
                     let Some(result) = result else {
                         return Ok(());
                     };
@@ -12931,7 +12935,7 @@ block6:
             arguments: &[Value],
             result: Option<Value>,
         ) -> Result<(), Diagnostic> {
-            let (low, high) = self.half(arguments[0])?;
+            let (low, high) = self.split_halves(arguments[0])?;
             let zero = self.int(0);
             let (new_low, new_high) = match op {
                 UnaryOp::Not => {
@@ -12998,8 +13002,8 @@ block6:
             arguments: &[Value],
             result: Option<Value>,
         ) -> Result<(), Diagnostic> {
-            let (left_low, left_high) = self.half(arguments[0])?;
-            let (right_low, right_high) = self.half(arguments[1])?;
+            let (left_low, left_high) = self.split_halves(arguments[0])?;
+            let (right_low, right_high) = self.split_halves(arguments[1])?;
             let left = (left_low, left_high);
             let right = (right_low, right_high);
             match op {
@@ -13329,7 +13333,7 @@ block6:
                     default.arguments = self.expanded(&default.arguments)?;
                 }
                 Terminator::Return(Some(value)) if self.wide(*value) => {
-                    let (low, high) = self.half(*value)?;
+                    let (low, high) = self.split_halves(*value)?;
                     let pointer = self
                         .out_pointer
                         .ok_or_else(|| unsupported("returns without a result slot"))?;

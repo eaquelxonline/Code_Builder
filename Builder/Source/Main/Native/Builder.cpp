@@ -393,7 +393,7 @@ JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeProjectTree(
   return HandBack(env, code_builder_project_tree(root_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeLayOut(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeFormatSource(
     JNIEnv *env, jobject , jstring name, jstring text) {
   std::string name_text;
   std::string body_text;
@@ -402,7 +402,7 @@ JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeLayOut(
     ThrowJava(env, kIllegalState, "Laying out needs a name and the text.");
     return nullptr;
   }
-  return HandBack(env, code_builder_lay_out(name_text.c_str(), body_text.c_str()));
+  return HandBack(env, code_builder_format_source(name_text.c_str(), body_text.c_str()));
 }
 
 JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeDependencies(
@@ -477,7 +477,7 @@ JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeSymbols(
   return HandBack(env, code_builder_symbols(root_text.c_str(), needle_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeWhereWritten(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeFindDeclaration(
     JNIEnv *env, jobject , jstring root, jstring qualified) {
   std::string root_text;
   std::string qualified_text;
@@ -486,7 +486,7 @@ JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeWhereWritten(
     ThrowJava(env, kIllegalState, "Finding where a type is written needs a project and a type.");
     return nullptr;
   }
-  return HandBack(env, code_builder_where_written(root_text.c_str(), qualified_text.c_str()));
+  return HandBack(env, code_builder_find_declaration(root_text.c_str(), qualified_text.c_str()));
 }
 
 JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeInspectPackage(
@@ -871,14 +871,14 @@ JNIEXPORT void JNICALL Java_com_code_builder_Builder_nativeBuildStop(
   code_builder_build_stop();
 }
 
-JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeSpeak(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeSetLanguage(
     JNIEnv *env, jobject , jstring tag) {
   std::string held;
   if (tag != nullptr && !JavaStringToUtf8(env, tag, &held)) {
     ThrowJava(env, kIllegalState, "A language has to be named as text.");
     return nullptr;
   }
-  return HandBack(env, code_builder_speak(held.c_str()));
+  return HandBack(env, code_builder_set_language(held.c_str()));
 }
 
 JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeTerminalDocs(
@@ -891,14 +891,14 @@ JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeTerminalDocs(
   return HandBack(env, code_builder_terminal_docs(held.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeVibe(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeAssistantRequest(
     JNIEnv *env, jobject , jstring request) {
   std::string held;
   if (request == nullptr || !JavaStringToUtf8(env, request, &held)) {
     ThrowJava(env, kIllegalState, "A request has to be given as text.");
     return nullptr;
   }
-  return HandBack(env, code_builder_vibe(held.c_str()));
+  return HandBack(env, code_builder_assistant_request(held.c_str()));
 }
 
 JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeDebuggerConfigure(

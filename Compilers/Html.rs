@@ -2667,7 +2667,7 @@ impl TreeBuilder {
         self.open.retain(|id| *id != target);
     }
 
-    fn implied(&mut self, except: Option<&str>) {
+    fn generate_implied_end_tags(&mut self, except: Option<&str>) {
         while let Some(id) = self.current() {
             if self.is_one_of(
                 id,
@@ -2683,7 +2683,7 @@ impl TreeBuilder {
         }
     }
 
-    fn implied_thoroughly(&mut self) {
+    fn generate_all_implied_end_tags(&mut self) {
         while let Some(id) = self.current() {
             if self.is_one_of(
                 id,
@@ -2700,7 +2700,7 @@ impl TreeBuilder {
     }
 
     fn close_p(&mut self) {
-        self.implied(Some("p"));
+        self.generate_implied_end_tags(Some("p"));
         if !self.current_is("p") {
             self.fault("unexpected-open-element");
         }
@@ -2903,7 +2903,7 @@ impl TreeBuilder {
         self.mode = Mode::InBody;
     }
 
-    fn adoption(&mut self, subject: &str) -> bool {
+    fn run_adoption_agency(&mut self, subject: &str) -> bool {
         if let Some(current) = self.current() {
             if self.is(current, subject) && !self.listed.contains(&Listed::Element(current)) {
                 self.open.pop();
@@ -3241,7 +3241,7 @@ impl TreeBuilder {
             self.fault("unexpected-end-tag");
             return;
         }
-        self.implied_thoroughly();
+        self.generate_all_implied_end_tags();
         if !self.current_is("template") {
             self.fault("unexpected-open-element");
         }
@@ -3553,7 +3553,7 @@ impl TreeBuilder {
                     at -= 1;
                     let node = self.open[at];
                     if self.is(node, "li") {
-                        self.implied(Some("li"));
+                        self.generate_implied_end_tags(Some("li"));
                         if !self.current_is("li") {
                             self.fault("unexpected-open-element");
                         }
@@ -3575,7 +3575,7 @@ impl TreeBuilder {
                     let node = self.open[at];
                     if self.is_one_of(node, &["dd", "dt"]) {
                         let held = self.name_of(node).to_string();
-                        self.implied(Some(&held));
+                        self.generate_implied_end_tags(Some(&held));
                         if !self.is(self.open[self.open.len() - 1], &held) {
                             self.fault("unexpected-open-element");
                         }
@@ -3597,7 +3597,7 @@ impl TreeBuilder {
             "button" => {
                 if self.in_scope("button", Scope::Default) {
                     self.fault("nested-button");
-                    self.implied(None);
+                    self.generate_implied_end_tags(None);
                     self.pop_until("button");
                 }
                 self.reconstruct();
@@ -3619,7 +3619,7 @@ impl TreeBuilder {
                 }
                 if let Some(held) = found {
                     self.fault("nested-anchor");
-                    self.adoption("a");
+                    self.run_adoption_agency("a");
                     self.listed.retain(|entry| *entry != Listed::Element(held));
                     self.remove_from_stack(held);
                 }
@@ -3637,7 +3637,7 @@ impl TreeBuilder {
                 self.reconstruct();
                 if self.in_scope("nobr", Scope::Default) {
                     self.fault("nested-nobr");
-                    self.adoption("nobr");
+                    self.run_adoption_agency("nobr");
                     self.reconstruct();
                 }
                 let id = self.insert_html(name, attributes);
@@ -3734,7 +3734,7 @@ impl TreeBuilder {
             }
             "rb" | "rtc" => {
                 if self.in_scope("ruby", Scope::Default) {
-                    self.implied(None);
+                    self.generate_implied_end_tags(None);
                     if !self.current_is("ruby") {
                         self.fault("unexpected-open-element");
                     }
@@ -3743,7 +3743,7 @@ impl TreeBuilder {
             }
             "rp" | "rt" => {
                 if self.in_scope("ruby", Scope::Default) {
-                    self.implied(Some("rtc"));
+                    self.generate_implied_end_tags(Some("rtc"));
                     if !self.current_is("rtc") && !self.current_is("ruby") {
                         self.fault("unexpected-open-element");
                     }
@@ -3801,7 +3801,7 @@ impl TreeBuilder {
             }
             _ if BLOCK_END.contains(&name) => {
                 if self.in_scope(name, Scope::Default) {
-                    self.implied(None);
+                    self.generate_implied_end_tags(None);
                     if !self.current_is(name) {
                         self.fault("unexpected-open-element");
                     }
@@ -3815,7 +3815,7 @@ impl TreeBuilder {
                     let node = self.form.take();
                     match node {
                         Some(held) if self.node_in_scope(held, Scope::Default) => {
-                            self.implied(None);
+                            self.generate_implied_end_tags(None);
                             if self.current() != Some(held) {
                                 self.fault("unexpected-open-element");
                             }
@@ -3824,7 +3824,7 @@ impl TreeBuilder {
                         _ => self.fault("unexpected-end-tag"),
                     }
                 } else if self.in_scope("form", Scope::Default) {
-                    self.implied(None);
+                    self.generate_implied_end_tags(None);
                     if !self.current_is("form") {
                         self.fault("unexpected-open-element");
                     }
@@ -3842,7 +3842,7 @@ impl TreeBuilder {
             }
             "li" => {
                 if self.in_scope("li", Scope::ListItem) {
-                    self.implied(Some("li"));
+                    self.generate_implied_end_tags(Some("li"));
                     if !self.current_is("li") {
                         self.fault("unexpected-open-element");
                     }
@@ -3853,7 +3853,7 @@ impl TreeBuilder {
             }
             "dd" | "dt" => {
                 if self.in_scope(name, Scope::Default) {
-                    self.implied(Some(name));
+                    self.generate_implied_end_tags(Some(name));
                     if !self.current_is(name) {
                         self.fault("unexpected-open-element");
                     }
@@ -3864,7 +3864,7 @@ impl TreeBuilder {
             }
             _ if HEADINGS.contains(&name) => {
                 if self.in_scope_one_of(HEADINGS, Scope::Default) {
-                    self.implied(None);
+                    self.generate_implied_end_tags(None);
                     if !self.current_is(name) {
                         self.fault("unexpected-open-element");
                     }
@@ -3874,13 +3874,13 @@ impl TreeBuilder {
                 }
             }
             _ if FORMATTING.contains(&name) => {
-                if !self.adoption(name) {
+                if !self.run_adoption_agency(name) {
                     self.any_other_end(name);
                 }
             }
             "applet" | "marquee" | "object" => {
                 if self.in_scope(name, Scope::Default) {
-                    self.implied(None);
+                    self.generate_implied_end_tags(None);
                     if !self.current_is(name) {
                         self.fault("unexpected-open-element");
                     }
@@ -3909,7 +3909,7 @@ impl TreeBuilder {
             at -= 1;
             let node = self.open[at];
             if self.is(node, name) {
-                self.implied(Some(name));
+                self.generate_implied_end_tags(Some(name));
                 if self.current() != Some(node) {
                     self.fault("unexpected-open-element");
                 }
@@ -4060,7 +4060,7 @@ impl TreeBuilder {
             self.fault("unexpected-end-tag");
             return false;
         }
-        self.implied(None);
+        self.generate_implied_end_tags(None);
         if !self.current_is("caption") {
             self.fault("unexpected-open-element");
         }
@@ -4269,7 +4269,7 @@ impl TreeBuilder {
     }
 
     fn close_cell(&mut self) {
-        self.implied(None);
+        self.generate_implied_end_tags(None);
         if !self.current_is_one_of(&["td", "th"]) {
             self.fault("unexpected-open-element");
         }
@@ -4282,7 +4282,7 @@ impl TreeBuilder {
         match token {
             Token::End { name } if matches!(name.as_str(), "td" | "th") => {
                 if self.in_scope(name, Scope::Table) {
-                    self.implied(None);
+                    self.generate_implied_end_tags(None);
                     if !self.current_is(name) {
                         self.fault("unexpected-open-element");
                     }
@@ -5450,7 +5450,7 @@ impl crate::compiler::Compiler for HtmlCompiler {
             if let Some(problem) = check_embedded(&document, &source.path).into_iter().next() {
                 return Err(problem.with_context(format!("File: {}", source.path)));
             }
-            session.offer(
+            session.add_input(
                 source.path.clone(),
                 crate::compiler::Kind::Resource,
                 serialize(&document, document.root()).into_bytes(),

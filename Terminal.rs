@@ -102,17 +102,17 @@ fn entry(lines: &[&str]) -> Option<Entry> {
             continue;
         }
         if line.starts_with(FENCE) {
-            said(&mut blocks, &mut prose);
+            flush_prose(&mut blocks, &mut prose);
             code = Some(Vec::new());
             continue;
         }
         if line.trim().is_empty() {
-            said(&mut blocks, &mut prose);
+            flush_prose(&mut blocks, &mut prose);
             continue;
         }
         prose.push(line.trim_end());
     }
-    said(&mut blocks, &mut prose);
+    flush_prose(&mut blocks, &mut prose);
     if let Some(open) = code {
         blocks.push(Block::Code(open.join("\n")));
     }
@@ -123,7 +123,7 @@ fn entry(lines: &[&str]) -> Option<Entry> {
     })
 }
 
-fn said(blocks: &mut Vec<Block>, prose: &mut Vec<&str>) {
+fn flush_prose(blocks: &mut Vec<Block>, prose: &mut Vec<&str>) {
     if !prose.is_empty() {
         blocks.push(Block::Text(prose.join("\n")));
         prose.clear();
