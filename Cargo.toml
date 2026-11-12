@@ -1,0 +1,36 @@
+[package]
+name          = "apk_builder_core"
+version       = "1.0.0"
+edition       = "2021"
+rust-version  = "1.97.1"
+publish       = false
+description   = "Apk_Builder Core — build graph, capability security and toolchain infrastructure"
+license       = "MIT"
+
+[lib]
+name       = "apk_builder_core"
+path       = "Builder.rs"
+crate-type = ["staticlib", "lib"]
+
+[dependencies]
+
+# The suite generates real 4096-bit RSA keys and pushes real archives through
+# the deflate and resource writers. Unoptimised that is minutes of arithmetic
+# per run, so the development profile is optimised too. Overflow checks and
+# debug assertions stay on, which is the reason to run the suite here at all.
+[profile.dev]
+opt-level        = 2
+debug            = false
+codegen-units    = 256
+incremental      = true
+debug-assertions = true
+overflow-checks  = true
+
+[profile.release]
+opt-level       = "s"
+lto             = true
+codegen-units   = 1
+strip           = "symbols"
+overflow-checks = true
+
+panic = "unwind"

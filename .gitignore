@@ -1,0 +1,17 @@
+/build/
+/Builder/build/
+/Builder/.cxx/
+/target/
+/.gradle/
+/.kotlin/
+
+/local.properties
+
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+
+/Tests/
+__pycache__/
