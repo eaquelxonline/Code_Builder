@@ -1,4 +1,4 @@
-# Apk_Builder — Koordinasyon
+# Code_Builder — Koordinasyon
 
 Bu dosya projenin ortak hafızasıdır. Kalıcı kararlar ve güncel durum burada tutulur.
 Bir iş bitince ya da yeni bir işe başlanınca ilgili bölüm güncellenir.
@@ -9,11 +9,11 @@ Aşağıdaki "Claude-A" ve "Claude-B" adları o dönemin kayıtlarıdır.
 
 ## 1. Proje hedefi
 
-Apk_Builder, Android cihazın üzerinde çalışan, dışarıdan hiçbir araç
+Code_Builder, Android cihazın üzerinde çalışan, dışarıdan hiçbir araç
 (javac, kotlinc, d8, aapt2, apksigner, clang, ld) çağırmadan kaynak koddan
 imzalı APK/AAB üreten bir derleme ortamıdır. Uygulamanın kendisi
 Kotlin/Gradle ile yazılır; tüm derleme, paketleme, imzalama ve dil
-derleyicileri Rust'ta, tek bir crate (`apk_builder_core`) içinde yazılır ve
+derleyicileri Rust'ta, tek bir crate (`code_builder_core`) içinde yazılır ve
 uygulamaya JNI köprüsüyle (C++ `Builder.cpp`) bağlanır.
 
 Uzun vadeli hedef: Java, Kotlin, C/C++ ve Rust kaynaklarını cihazda derlemek.
@@ -26,7 +26,7 @@ Bu bileşenlerin doğruluğu, LLVM/LLD/GCC'nin kendi test paketleriyle ölçül�
 
 | Yol | Ne işe yarar |
 | --- | --- |
-| `Builder.rs` | Crate kökü (`apk_builder_core`). Derleme grafiği, zamanlayıcı, önbellek, VFS, Gradle/Maven okuma, kaynak (res/arsc/AXML) derleme, Dex yazma, R8 benzeri küçültme (`shrink`), desugar, APK/AAB paketleme, imzalama (v1–v4, RSA, ML-DSA, X.509), inflate/deflate, görüntü işleme, JNI `ffi` modülü ve `compilers` modül kaydı. |
+| `Builder.rs` | Crate kökü (`code_builder_core`). Derleme grafiği, zamanlayıcı, önbellek, VFS, Gradle/Maven okuma, kaynak (res/arsc/AXML) derleme, Dex yazma, R8 benzeri küçültme (`shrink`), desugar, APK/AAB paketleme, imzalama (v1–v4, RSA, ML-DSA, X.509), inflate/deflate, görüntü işleme, JNI `ffi` modülü ve `compilers` modül kaydı. |
 | `Diagnostic_Speech.rs` | Tüm tanı cümlelerinin ve etiketlerinin 14 dile çevirisi (`*_LINES`, `*_WORDS`, İngilizce anahtara göre sıralı). |
 | `Terminal.rs`, `Terminal_Speech.rs` | Uygulama içi terminal ve çevirileri. |
 | `Vibe_Coding.rs` | Yapay zekâ destekli kodlama yardımcısı (katmanlar: keyless/free/byok). |
@@ -124,8 +124,8 @@ python3 Test/Builder_Test.py <denetim> --record   # taban çizgisini yükselt
 cargo test --lib -- --ignored --exact tests::table_gen::write_tables_into_the_tree   # tabloları yeniden üret
 ```
 
-Yararlı ortam değişkenleri: `APK_BUILDER_SUITE_THREADS`, `APK_BUILDER_MC_FILTER`,
-`APK_BUILDER_LLD_FILTER`, `APK_BUILDER_SUITE_TRACE`. Paket ayrıntıları `Tests/suites/<paket>.txt`
+Yararlı ortam değişkenleri: `CODE_BUILDER_SUITE_THREADS`, `CODE_BUILDER_MC_FILTER`,
+`CODE_BUILDER_LLD_FILTER`, `CODE_BUILDER_SUITE_TRACE`. Paket ayrıntıları `Tests/suites/<paket>.txt`
 ve `Tests/suites/<paket>-out-of-scope.txt` dosyalarına yazılır.
 
 Not: `pkill -f "cargo test"` kullanma (kendi kabuğunu öldürür); `pgrep -x rustc | xargs -r kill` kullan.
@@ -199,7 +199,7 @@ Not: `pkill -f "cargo test"` kullanma (kendi kabuğunu öldürür); `pgrep -x ru
   (EI400 kaynak hatası, EI401 desteklenmeyen yapı, EI402 yinelenen sembol); ABI/hedef seçimi çağıranın işi.
 - Claude-B, gerçek proje hazırlığı (PR #6): C++ ön yüzü yazılmayacak; C, Java, Kotlin ve Assembly gerçek GitHub projeleriyle
   sınanıyor. Yöntem: depoyu klonla → `workspace::adopt_folder` ile Gradle yapısını benimse → `maven::plan` ile bağımlılıkları indir →
-  `apk_builder_build_project` ile APK üret; her hata sınıfı kalıcı bir test olarak (`mod java_real_world`, `mod kotlin_real_world`,
+  `code_builder_build_project` ile APK üret; her hata sınıfı kalıcı bir test olarak (`mod java_real_world`, `mod kotlin_real_world`,
   `mod dex_*`) kaydedilir. Ayrıştırma taraması (25 depo): Kotlin 5369/5382, Java 1811/1833 (kalan 22 dosya `module-info.java`; derlemede atlanır).
   Uçtan uca APK'ya derlenenler: KISS (Java, ~500 sınıf) ve Fossify Notes (Kotlin, AndroidX, Compose kütüphaneli, 38 MB). Compose
   derleyici eklentisi gerektiren uygulamalar (Fossify Calculator gibi `@Composable` yazanlar) bilerek reddedilir. Bu turda eklenenler:
@@ -254,16 +254,16 @@ Her satır: proje, kim sınadı, ne doğrulandı, sonuç. Yeni bir projeye başl
 | GCC `gcc.c-torture/execute` (1775 kendi kendini denetleyen C programı) | C | A | derle + x86-64 yerel çalıştır; ayrıca arm64 emülatörü | 453 geçer, 18 çalışma hatası (ön yüz), 1304 ön yüz boşluğu (`mod torture`, paketler `gcc-torture-x86/arm64`) |
 | `kotlin-omni` ve `kotlin-omni-native` (Kotlin kutu testleri, JVM karşılaştırmalı) | Kotlin | A (B'nin `7041c2a` dalında) | JVM = Omni yorumlayıcı = yerel x86-64 | 3826 ve 3908 geçer, 0 başarısız; baseline 3790 ve 3870 (+36, +38); yerelde ~2 saat |
 | 128 bitlik tamsayılar (`wide::legalize`: her `i128` iki `i64`) | IR | A | yorumlayıcı = x86-64 = arm64 = arm32; 12 değer × toplama, çarpma, kaydırma, bölme, karşılaştırma, `select`, dönüşüm, yük/saklama, çağrı | geçer (`wide_integers_agree_...`); yok: kayan noktaya dönüşüm, `popcount/clz/ctz/bswap`, dönme, `switch` |
-| SQLite 3.46 amalgamation (`sqlite3.c`, 250 bin satır) | C | A | gcc ile aynı SQL betiği çıktısı hedefi; gerçek glibc başlıklarıyla (`APK_BUILDER_C_INCLUDE=/usr/include:<gcc include>`) ayrıştırma ve işlev indirgeme | **B'de bekliyor**: `__atomic_load_n/__atomic_store_n` (19 yer), `yy_reduce`: "statements before the first switch label", `unixFileLock/unixRemapfile/unixCheckReservedLock`: "calls through variadic function pointers", `long double` yerelleri (`-DLONGDOUBLE_TYPE=double` ile aşılabilir) |
+| SQLite 3.46 amalgamation (`sqlite3.c`, 250 bin satır) | C | A | gcc ile aynı SQL betiği çıktısı hedefi; gerçek glibc başlıklarıyla (`CODE_BUILDER_C_INCLUDE=/usr/include:<gcc include>`) ayrıştırma ve işlev indirgeme | **B'de bekliyor**: `__atomic_load_n/__atomic_store_n` (19 yer), `yy_reduce`: "statements before the first switch label", `unixFileLock/unixRemapfile/unixCheckReservedLock`: "calls through variadic function pointers", `long double` yerelleri (`-DLONGDOUBLE_TYPE=double` ile aşılabilir) |
 | benchmarks-game tarzı Kotlin programları: n-body (1000 adım), spectral-norm (n=100), fannkuch-redux (n=7), binary-trees (derinlik 10, öbek baskısı), mandelbrot (96x96) | Kotlin | A | JVM = yorumlayıcı = yerel x86-64 (+ arm64 emülatörü); bilinen sonuçlar (enerji -0.169075164 / -0.169087605, 1.274219991, `228 16`, 4095 / 2047) | geçer (`real_kotlin_and_java_projects_...`, 13 proje); küçük iş yükünde yerel kod JVM'in başlatma süresinden hızlı |
-| musl libc x86-64 Assembly (31 `.s` dosyası: `memcpy`, `memmove`, `memset`, `setjmp`, `longjmp`, x87 `floorl/expl/logl/exp2l/log2l`, `fenv`, `clone`, `vfork`...) | Assembly | A | 31 dosyanın tamamı A'nın assembler'ından hatasız geçiyor; 12'si bağlanıp 130 satırlık bir Assembly sürücüyle çalıştırılıyor: boyut 0-300 aralığında bellek rutinleri sınır korumalarıyla, çakışan `memmove` yönleri, `setjmp/longjmp`, x87 yuvarlama ve üstel/logaritma | geçer (`mod real_musl_assembly`, `APK_BUILDER_MUSL_ROOT=<musl>` ile) |
+| musl libc x86-64 Assembly (31 `.s` dosyası: `memcpy`, `memmove`, `memset`, `setjmp`, `longjmp`, x87 `floorl/expl/logl/exp2l/log2l`, `fenv`, `clone`, `vfork`...) | Assembly | A | 31 dosyanın tamamı A'nın assembler'ından hatasız geçiyor; 12'si bağlanıp 130 satırlık bir Assembly sürücüyle çalıştırılıyor: boyut 0-300 aralığında bellek rutinleri sınır korumalarıyla, çakışan `memmove` yönleri, `setjmp/longjmp`, x87 yuvarlama ve üstel/logaritma | geçer (`mod real_musl_assembly`, `CODE_BUILDER_MUSL_ROOT=<musl>` ile) |
 | expat 2.x (`xmlparse.c`, `xmltok.c`, `xmlrole.c`; 445 işlev) | C | A | ad alanlı belge, DTD varlığı, CDATA, yorum; 801 öğe, 800 öznitelik, özet; hatalı belgede hata kodu ve satır/sütun gcc ile aynı | geçer (`expat_config.h` elle yazıldı) |
 | Brotli (`common`, `dec`, `enc`; 3871 işlev) | C | A | 300 KB girdi, kalite 0/4/9/11, sıkıştırılmış baytların özeti ve açılmış veri gcc ile aynı | geçer; SSE yolları kapatıldı (`-U__SSE2__` vb.), `-DBROTLI_MODEL(M)=`, `__builtin_constant_p` ve `__builtin_prefetch` makroyla susturuldu (B'ye bildirilen boşluk) |
 | jansson 2.x | C | A | JSON oluştur/yaz/oku/karşılaştır | **B'de bekliyor**: `hashtable_seed.c`, `strconv.c`: "calls to a function without a fixed prototype" (K&R/prototipsiz çağrı, B'nin 1 numaralı maddesi) |
 | PCRE2 10.x (UTF-8 + Unicode özellikleri, 215 işlev) | C | A | 8 desen (adlı gruplar, ileri bakış, `\\p{Lu}`, tembel nicelik, büyük/küçük harf duyarsız): tüm eşleşme aralıkları ve özet gcc ile aynı | geçer (JIT kapalı; `config.h`, `pcre2.h`, `pcre2_chartables.c` genel şablonlardan) |
 | mbedTLS 4.x | C | A | — | **atlandı**: kriptografi `tf-psa-crypto` alt modülünde, sığ klonda yok |
 | libpng + zlib (701 işlev) | C | A | Adam7 serpiştirmeli RGBA yazma ve okuma, bellekten G/Ç geri çağrıları, kesik akışta `png_error` → `longjmp` ile hata yakalama; PNG baytlarının özeti gcc ile aynı | geçer; SIMD yolları kapatıldı (`-U__SSE2__`), `fcntl.h` yalnızca bildirim saplaması |
-| ARM optimized-routines (34 aarch64 `.S`: `memcpy`, `memmove`, `memset`, `memchr`, `strlen`, `strcmp`, `strcpy`... SVE, SVE2, MTE, MOPS varyantları dahil) | Assembly | A | ön işlemci + A'nın aarch64 assembler'ı; 34 dosyanın tamamı hatasız nesneye çevriliyor | geçer (`mod real_arm_routines`, `APK_BUILDER_ARM_ROUTINES_ROOT=<kök>` ile); koşturma yok: emülatör NEON/SVE komutlarını yürütmüyor |
+| ARM optimized-routines (34 aarch64 `.S`: `memcpy`, `memmove`, `memset`, `memchr`, `strlen`, `strcmp`, `strcpy`... SVE, SVE2, MTE, MOPS varyantları dahil) | Assembly | A | ön işlemci + A'nın aarch64 assembler'ı; 34 dosyanın tamamı hatasız nesneye çevriliyor | geçer (`mod real_arm_routines`, `CODE_BUILDER_ARM_ROUTINES_ROOT=<kök>` ile); koşturma yok: emülatör NEON/SVE komutlarını yürütmüyor |
 | LZMA SDK (C; `LzmaEnc`, `LzmaDec`, `LzFind`, `7zCrc`) | C | A | LZMA sıkıştırma/açma, düzey 1/5/9 | **B'de bekliyor**: `7zCrc.c`: "calls to a function without a fixed prototype" (K&R), `CpuArch.c`: `asm` (cpuid). gcc referansı hazır (özet `883e9709...`, `a611c770...`) |
 
 zstd için B'ye ön yüz boşlukları: gerçek `__asm__` (`ZSTD_selectAddr` cmov, `cpuid`, bariyer olarak `__asm__("" : "+r"(x))` ve hizalama `__asm__(".p2align 6")`), `__builtin_prefetch` (etkisiz ipucu olarak kabul edilmeli), zayıf tanımsız sembol (`__attribute__((weak))` bildirimi çağrılmadan önce `if (f)` ile sınanıyor; içe aktarma zayıf olmalı).
@@ -290,7 +290,7 @@ zstd (60 dosya, çıkarma kıyası gcc ile aynı), makine ±%10 oynar; kesin say
 | Derleyici | Süre | Komut sayısı |
 |---|---|---|
 | gcc 13 `-O0` | 1,02 sn | ölçülmedi |
-| Apk Builder x86-64 (f69245a) | 0,49 sn | 5,86 G |
+| Code Builder x86-64 (f69245a) | 0,49 sn | 5,86 G |
 | gcc `-O1` / `-O2` / `-O3` | 0,284 / 0,29 / 0,296 sn | 2,81 G (`-O2`) |
 | gcc `-O2 -fno-inline` | 0,61 sn | ölçülmedi |
 

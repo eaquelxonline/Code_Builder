@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Apk Builder</string>
+    <string name="app_name">Code Builder</string>
     <string name="version_shown">1.0.0</string>
     <string name="help_title">Centro de ajuda</string>
     <string name="find_project">Procurar no projeto</string>
@@ -216,7 +216,7 @@
     <string name="theme_active">Em uso agora</string>
     <string name="about_version">Versão %1$s</string>
     <string name="policy_six_body">A internet só é usada para as ações descritas acima. Instalar pacotes entrega um APK que compilou ao instalador do Android, que pergunta sempre primeiro. As notificações avisam quando uma compilação longa terminou. A leitura de registos nunca é concedida automaticamente: pode concedê-la por ADB para que o ecrã Logcat mostre os registos de outras aplicações, e revogá-la quando quiser. A aplicação não pede contactos, localização, câmara, microfone nem registo de chamadas.</string>
-    <string name="legal_stamp">Este texto pertence à versão %1$s. © %2$s Eaquel · Apk Builder.</string>
+    <string name="legal_stamp">Este texto pertence à versão %1$s. © %2$s Eaquel · Code Builder.</string>
     <string name="policy_six_head">Permissões</string>
     <string name="policy_five_body">Quando usa o assistente, a sua mensagem, os ficheiros e fotografias que anexa e o contexto de projeto que escolhe são enviados diretamente do dispositivo para o fornecedor selecionado, como GitHub Copilot, Pollinations AI, KeylessAI, OpenZoo, Kilo Gateway, maximumsats.com ou LLM7.io. O que acontece a esses dados lá rege-se pela política de privacidade desse fornecedor. Não envie segredos nem dados pessoais que não queira que ele receba.</string>
     <string name="policy_five_head">Fornecedores do assistente de IA</string>
@@ -225,7 +225,7 @@
     <string name="policy_three_head">Chaves, palavras-passe e tokens</string>
     <string name="policy_two_body">Os seus projetos, ficheiros de código, rascunhos por guardar, resultados de compilação, keystores de assinatura, preferências, conversas com o assistente e o registo da própria aplicação ficam no armazenamento privado da aplicação neste dispositivo. O Android mantém esse armazenamento fora do alcance de outras aplicações. Nada disso é enviado ao programador.</string>
     <string name="policy_two_head">O que fica guardado no dispositivo</string>
-    <string name="policy_one_body">O Apk Builder é um ambiente de desenvolvimento Android que funciona no seu dispositivo. Esta política explica o que a aplicação guarda, o que sai do seu dispositivo e quando, e as escolhas que tem. A aplicação não tem contas, análises, publicidade nem qualquer tipo de rastreio.</string>
+    <string name="policy_one_body">O Code Builder é um ambiente de desenvolvimento Android que funciona no seu dispositivo. Esta política explica o que a aplicação guarda, o que sai do seu dispositivo e quando, e as escolhas que tem. A aplicação não tem contas, análises, publicidade nem qualquer tipo de rastreio.</string>
     <string name="policy_one_head">Visão geral</string>
     <string name="terms_six_body">Os fornecedores de IA, o GitHub, os servidores Git e os repositórios Maven são geridos por terceiros segundo os seus próprios termos. A disponibilidade, os limites e as respostas estão fora do controlo do programador. O código sugerido por um assistente pode estar errado; reveja-o e teste-o antes de o publicar.</string>
     <string name="terms_six_head">Serviços de terceiros</string>
@@ -235,14 +235,14 @@
     <string name="terms_four_head">Utilização aceitável</string>
     <string name="terms_three_body">Os seus projetos, código-fonte, recursos e os pacotes que compila pertencem-lhe. A aplicação não reivindica direitos sobre eles nem os usa para fins próprios.</string>
     <string name="terms_three_head">O seu trabalho é seu</string>
-    <string name="terms_two_body">O Apk Builder compila, empacota e assina aplicações Android no seu dispositivo. O compilador, o compilador de recursos, o dexer, o redutor e o assinante correm no processador do telefone; nenhum passo da compilação é enviado para um servidor.</string>
+    <string name="terms_two_body">O Code Builder compila, empacota e assina aplicações Android no seu dispositivo. O compilador, o compilador de recursos, o dexer, o redutor e o assinante correm no processador do telefone; nenhum passo da compilação é enviado para um servidor.</string>
     <string name="terms_two_head">O que a aplicação oferece</string>
-    <string name="terms_one_body">Ao instalar ou usar o Apk Builder aceita estes termos. Se não os aceitar, desinstale a aplicação; nada é guardado depois de removida.</string>
+    <string name="terms_one_body">Ao instalar ou usar o Code Builder aceita estes termos. Se não os aceitar, desinstale a aplicação; nada é guardado depois de removida.</string>
     <string name="terms_one_head">Aceitação destes termos</string>
     <string name="about_contact">Contacto</string>
     <string name="about_developer">Programador</string>
     <string name="about_developer_name">Eaquel</string>
-    <string name="about_rights">© %1$s Eaquel · Apk Builder</string>
+    <string name="about_rights">© %1$s Eaquel · Code Builder</string>
     <string name="counted">%1$d/%2$d</string>
     <string name="feedback_title">Comentários</string>
     <string name="feedback_send">Enviar o comentário</string>
@@ -267,7 +267,7 @@
     <string name="faq_search">Procurar perguntas...</string>
     <string name="terminal_search">Pesquisar nos comandos...</string>
     <string name="help_popular">Populares:</string>
-    <string name="help_note">Tudo o que queres saber sobre o Apk Builder está aqui. Aprende depressa e descobre mais.</string>
+    <string name="help_note">Tudo o que queres saber sobre o Code Builder está aqui. Aprende depressa e descobre mais.</string>
     <string name="help_hello">Olá! 👋</string>
     <string name="help_none">Aqui não há nada que corresponda.</string>
     <string name="help_band_all">Tudo</string>
@@ -279,7 +279,7 @@
     <string name="help_band_terminal">Utilização do terminal</string>
     <string name="help_first">Primeiros passos</string>
     <string name="help_first_note">O que é esta aplicação e por onde começar</string>
-    <string name="help_first_body">O Apk Builder compila pacotes Android neste aparelho. Não há servidor nem cadeia de ferramentas de secretária: o compilador, o empacotador e o assinador correm aqui. Cria um projeto a partir do Início, escreve o teu código em Java e depois constrói-o.</string>
+    <string name="help_first_body">O Code Builder compila pacotes Android neste aparelho. Não há servidor nem cadeia de ferramentas de secretária: o compilador, o empacotador e o assinador correm aqui. Cria um projeto a partir do Início, escreve o teu código em Java e depois constrói-o.</string>
     <string name="help_project">Um projeto novo</string>
     <string name="help_project_note">Nome, pacote, versão e ícone</string>
     <string name="help_project_body">Um projeto precisa de um nome, de um nome de pacote como com.example.app, de uma versão e das versões de Android em que corre. O Android conhece uma aplicação instalada pelo nome do pacote, por isso escolhe-o antes de publicares e não depois. O ícone pode ser juntado a qualquer momento a partir de Ficheiros.</string>
@@ -361,7 +361,7 @@
     <string name="kinds_holds">Linguagens suportadas:</string>
     <string name="kinds_holds_web">Tecnologias web suportadas:</string>
     <string name="brand_note">Ambiente de desenvolvimento Android</string>
-    <string name="app_shown">Apk Builder %1$s</string>
+    <string name="app_shown">Code Builder %1$s</string>
     <string name="raise_open">Abrir projeto</string>
     <string name="import_none">Nada aqui conseguiu abrir esse ficheiro.</string>
     <string name="import_done">%1$d ficheiros abertos num projeto</string>
@@ -374,11 +374,11 @@
     <string name="rate_two">Ajuda-nos a chegar a mais programadores.</string>
     <string name="rate_one">Motiva-nos a melhorar a aplicação.</string>
     <string name="rate_why">Avaliar a aplicação na Play Store apoia-nos. Assim chega a mais pessoas.</string>
-    <string name="rate_ask">Gostaste do Apk Builder?</string>
-    <string name="about_head">Tudo sobre o Apk Builder.</string>
-    <string name="about_note">O Apk Builder é um ambiente poderoso e acolhedor\npara escrever, editar e testar aplicações Android.\nUma forma mais livre de criar,\npara todos, em qualquer lugar.</string>
+    <string name="rate_ask">Gostaste do Code Builder?</string>
+    <string name="about_head">Tudo sobre o Code Builder.</string>
+    <string name="about_note">O Code Builder é um ambiente poderoso e acolhedor\npara escrever, editar e testar aplicações Android.\nUma forma mais livre de criar,\npara todos, em qualquer lugar.</string>
     <string name="about_contact_note">Entre em contacto connosco.</string>
-    <string name="about_terms_note">As regras de utilização do Apk Builder</string>
+    <string name="about_terms_note">As regras de utilização do Code Builder</string>
     <string name="about_terms">Termos de Utilização</string>
     <string name="about_policy_note">O que fica no seu dispositivo e o que sai dele</string>
     <string name="about_policy">Política de Privacidade</string>
@@ -451,7 +451,7 @@
     <string name="log_apps">Escolher app</string>
     <string name="log_apps_find">Procurar uma aplicação</string>
     <string name="log_written">Eventos</string>
-    <string name="log_empty_note">Escolhe uma app criada com o Apk Builder e toca em Iniciar.</string>
+    <string name="log_empty_note">Escolhe uma app criada com o Code Builder e toca em Iniciar.</string>
     <string name="log_about">O que o depurador guarda</string>
     <string name="log_guide">Abrir o guia</string>
     <string name="clone_title">Clonar um repositório</string>
@@ -555,7 +555,7 @@
     <string name="about_join">Participar</string>
     <string name="about_join_note">Juntos, por uma melhor</string>
     <string name="about_reserved">Todos os direitos reservados.</string>
-    <string name="about_thanks">Obrigado por usares o Apk Builder!</string>
+    <string name="about_thanks">Obrigado por usares o Code Builder!</string>
     <string name="about_thanks_note">Estamos aqui por uma melhor experiência de desenvolvimento.</string>
     <string name="feedback_kind_fault_note">Algo está mal</string>
     <string name="feedback_kind_idea_note">Uma ideia nova</string>
@@ -589,7 +589,7 @@
     <string name="policy_seven_head">Sem código de terceiros</string>
     <string name="policy_seven_body">A aplicação não contém SDK de terceiros: sem análises, sem serviço de relatórios de falhas e sem rede de publicidade. Os registos de falhas ficam no dispositivo, e decide se os partilha no ecrã Feedback. As ligações para sites abrem no navegador ou na aplicação que escolher, segundo a política desse site.</string>
     <string name="policy_eight_head">Crianças</string>
-    <string name="policy_eight_body">O Apk Builder é uma ferramenta para programadores e não se destina a crianças com menos de 13 anos. Não recolhe conscientemente informações de ninguém, incluindo crianças.</string>
+    <string name="policy_eight_body">O Code Builder é uma ferramenta para programadores e não se destina a crianças com menos de 13 anos. Não recolhe conscientemente informações de ninguém, incluindo crianças.</string>
     <string name="policy_nine_head">Apagar os seus dados</string>
     <string name="policy_nine_body">Pode apagar uma conversa, um projeto ou uma chave de assinatura na aplicação a qualquer momento. Desinstalar a aplicação apaga o seu armazenamento privado, incluindo projetos, chaves e conversas. Os projetos exportados para o armazenamento partilhado ficam onde os deixou.</string>
     <string name="policy_ten_head">Alterações e contacto</string>
@@ -603,19 +603,19 @@
     <string name="terms_ten_head">Alterações e contacto</string>
     <string name="terms_ten_body">Estes termos podem ser atualizados com a aplicação. Continuar a usá-la depois de uma atualização significa aceitar a nova versão. Pode enviar perguntas no ecrã Feedback.</string>
     <string name="rights_one_head">Direitos de autor</string>
-    <string name="rights_one_body">© %1$s Eaquel. O Apk Builder, o seu código-fonte, design, ícones, ilustrações e textos estão protegidos por direitos de autor. Todos os direitos reservados.</string>
+    <string name="rights_one_body">© %1$s Eaquel. O Code Builder, o seu código-fonte, design, ícones, ilustrações e textos estão protegidos por direitos de autor. Todos os direitos reservados.</string>
     <string name="rights_two_head">Nome e logótipo</string>
-    <string name="rights_two_body">O nome e o logótipo do Apk Builder identificam esta aplicação. Não podem ser usados noutro produto de forma a sugerir que vem do programador ou que é aprovado por ele.</string>
+    <string name="rights_two_body">O nome e o logótipo do Code Builder identificam esta aplicação. Não podem ser usados noutro produto de forma a sugerir que vem do programador ou que é aprovado por ele.</string>
     <string name="rights_three_head">O que cria é seu</string>
     <string name="rights_three_body">O aviso acima abrange a aplicação em si. Os projetos que cria e as aplicações que compila com ela são seus: pode publicá-los, vendê-los e licenciá-los como quiser.</string>
     <string name="rights_four_head">Outras marcas</string>
     <string name="rights_four_body">Android é uma marca da Google LLC. Java é uma marca registada da Oracle e/ou das suas afiliadas. Kotlin é uma marca da JetBrains s.r.o. GitHub e GitHub Copilot são marcas da GitHub, Inc. Os outros nomes pertencem aos respetivos donos e são usados apenas para descrever a compatibilidade.</string>
     <string name="rights_five_head">Pedir autorização</string>
     <string name="rights_five_body">Para perguntar sobre o uso de qualquer parte da aplicação, escreva ao programador no ecrã Feedback.</string>
-    <string name="developer_role">Programador independente · Criador do Apk Builder</string>
+    <string name="developer_role">Programador independente · Criador do Code Builder</string>
     <string name="developer_about_head">Sobre o programador</string>
-    <string name="developer_about">Eaquel concebe e desenvolve o Apk Builder: um ambiente de desenvolvimento Android completo que funciona no próprio telefone. O compilador, o compilador de recursos, o dexer, o redutor e o assinante foram escritos de raiz em Rust, e a interface em Kotlin, sem bibliotecas de terceiros.</string>
-    <string name="developer_work_head">O que está dentro do Apk Builder</string>
+    <string name="developer_about">Eaquel concebe e desenvolve o Code Builder: um ambiente de desenvolvimento Android completo que funciona no próprio telefone. O compilador, o compilador de recursos, o dexer, o redutor e o assinante foram escritos de raiz em Rust, e a interface em Kotlin, sem bibliotecas de terceiros.</string>
+    <string name="developer_work_head">O que está dentro do Code Builder</string>
     <string name="developer_core">Núcleo em Rust</string>
     <string name="developer_core_note">Compilador, dex, empacotamento e assinatura</string>
     <string name="developer_face">Interface em Kotlin</string>
@@ -655,9 +655,9 @@
     <string name="vibe_custom_template_note">{{model}}, {{prompt}}, {{system}}, {{messages}}, {{max_tokens}} e {{effort}} são preenchidos antes do envio.</string>
     <string name="vibe_custom_test">Testar</string>
     <string name="vibe_custom_window">Janela de contexto</string>
-    <string name="vibe_disclaimer_1">1. RESPONSABILIDADE: Cumprir os termos de serviço, a política de privacidade e as condições de utilização do fornecedor escolhido é inteiramente da sua responsabilidade. O APK Builder não é parte da relação entre si e estes fornecedores.</string>
-    <string name="vibe_disclaimer_2">2. TRANSFERÊNCIA DE DADOS: Ao configurar este fornecedor, os pedidos e dados que envia são transmitidos para os servidores dele. O APK Builder não guarda, não processa nem partilha estes dados com terceiros. A privacidade dos seus dados depende das políticas do fornecedor escolhido.</string>
-    <string name="vibe_disclaimer_3">3. RISCOS DE TERCEIROS: O APK Builder não pode ser responsabilizado por falhas causadas pelo fornecedor, alterações da API, limites de utilização, alterações de preços, suspensão de conta ou fuga de chaves.</string>
+    <string name="vibe_disclaimer_1">1. RESPONSABILIDADE: Cumprir os termos de serviço, a política de privacidade e as condições de utilização do fornecedor escolhido é inteiramente da sua responsabilidade. O Code Builder não é parte da relação entre si e estes fornecedores.</string>
+    <string name="vibe_disclaimer_2">2. TRANSFERÊNCIA DE DADOS: Ao configurar este fornecedor, os pedidos e dados que envia são transmitidos para os servidores dele. O Code Builder não guarda, não processa nem partilha estes dados com terceiros. A privacidade dos seus dados depende das políticas do fornecedor escolhido.</string>
+    <string name="vibe_disclaimer_3">3. RISCOS DE TERCEIROS: O Code Builder não pode ser responsabilizado por falhas causadas pelo fornecedor, alterações da API, limites de utilização, alterações de preços, suspensão de conta ou fuga de chaves.</string>
     <string name="vibe_disclaimer_4">4. RESPONSABILIDADE PELOS RESULTADOS: Os resultados da IA podem estar errados, incompletos ou ser enganadores (\"alucinação\"). Verificar a correção, a segurança e a conformidade legal do código gerado é inteiramente da sua responsabilidade.</string>
     <string name="vibe_disclaimer_5">5. CONFORMIDADE LEGAL: Cumprir as leis do país do fornecedor e do seu próprio país é da sua responsabilidade.</string>
     <string name="vibe_disclaimer_accept">Li, compreendi e aceito.</string>
@@ -729,10 +729,10 @@
     <string name="agent_checking">A compilar e verificar o que foi escrito…</string>
     <string name="debugger_title">Debugger</string>
     <string name="debugger_app_pick">Escolhe uma app que criaste</string>
-    <string name="debugger_app_none">Nenhuma app instalada tem ainda o depurador. Cria uma com o Apk Builder, instala-a e volta a ver.</string>
+    <string name="debugger_app_none">Nenhuma app instalada tem ainda o depurador. Cria uma com o Code Builder, instala-a e volta a ver.</string>
     <string name="debugger_linked">Ligado</string>
     <string name="debugger_unlinked">Não ligado</string>
-    <string name="debugger_refused">Esta app foi criada por um Apk Builder assinado com outra chave, por isso o depurador não responde aqui.</string>
+    <string name="debugger_refused">Esta app foi criada por um Code Builder assinado com outra chave, por isso o depurador não responde aqui.</string>
     <string name="debugger_gone">A app não está instalada ou foi criada sem o depurador.</string>
     <string name="debugger_level">Nível</string>
     <string name="debugger_profile">Perfil de compilação</string>
@@ -754,7 +754,7 @@
     <string name="debugger_kind_lifecycle">Ciclo de vida</string>
     <string name="debugger_kind_performance">Desempenho</string>
     <string name="debugger_kind_log">Registo</string>
-    <string name="debugger_privacy">Tudo fica no dispositivo, no armazenamento privado da app. Só um Apk Builder assinado com a mesma chave o pode ler, nada é enviado e não é preciso internet. Não guarda palavras-passe, contactos, localização nem ficheiros.</string>
+    <string name="debugger_privacy">Tudo fica no dispositivo, no armazenamento privado da app. Só um Code Builder assinado com a mesma chave o pode ler, nada é enviado e não é preciso internet. Não guarda palavras-passe, contactos, localização nem ficheiros.</string>
     <string name="debugger_collect_crashes">Falhas, com o rastreio completo e todas as outras threads</string>
     <string name="debugger_collect_native">Falhas nativas em código C, C++ e Rust</string>
     <string name="debugger_collect_anr">Bloqueios da thread principal</string>

@@ -1144,7 +1144,7 @@ mod core {
             r#"<?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- a comment -->
-    <string name="app">Apk_Builder</string>
+    <string name="app">Code_Builder</string>
     <color name="accent">#6cb6ff</color>
     <item android:id="x" empty="yes" />
 </resources>"#,
@@ -1162,7 +1162,7 @@ mod core {
         let string = &root.children[0];
         assert_eq!(string.name, "string");
         assert_eq!(string.attribute("name"), Some("app"));
-        assert_eq!(string.text, "Apk_Builder");
+        assert_eq!(string.text, "Code_Builder");
 
         let item = &root.children[2];
         assert_eq!(item.attributes.len(), 2);
@@ -1307,7 +1307,7 @@ mod core {
     fn a_values_file_becomes_resources() {
         let (table, sink) = values(
             r#"<resources>
-    <string name="app_name">Apk_Builder</string>
+    <string name="app_name">Code_Builder</string>
     <color name="accent">#6cb6ff</color>
     <dimen name="gap">16dp</dimen>
     <bool name="enabled">true</bool>
@@ -1330,7 +1330,7 @@ mod core {
 
         assert_eq!(
             by_name(ResourceKind::String, "app_name"),
-            Some(ResourceValue::Text("Apk_Builder".into()))
+            Some(ResourceValue::Text("Code_Builder".into()))
         );
         assert_eq!(
             by_name(ResourceKind::Color, "accent"),
@@ -1572,8 +1572,8 @@ mod core {
     fn a_reference_to_something_undeclared_is_refused_with_a_suggestion() {
         let (table, _) = values(
             r#"<resources>
-    <color name="apk_builder_accent">#123456</color>
-    <color name="other">@color/apk_builder_accen</color>
+    <color name="code_builder_accent">#123456</color>
+    <color name="other">@color/code_builder_accen</color>
 </resources>"#,
         );
         let mut sink = Sink::new();
@@ -1582,7 +1582,7 @@ mod core {
         assert!(error
             .context
             .iter()
-            .any(|line| line.contains("apk_builder_accent")));
+            .any(|line| line.contains("code_builder_accent")));
     }
 
     #[test]
@@ -1683,7 +1683,7 @@ mod core {
     const THE_WORDS: &str = r####"
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Apk Builder</string>
+    <string name="app_name">Code Builder</string>
     <string name="hint">say something</string>
     <string name="save">Save</string>
     <string name="clear">Clear</string>
@@ -2152,7 +2152,7 @@ mod core {
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <skip />
     <eat-comment />
-    <string name="app_name">Apk Builder</string>
+    <string name="app_name">Code Builder</string>
     <string name="main_label">Hello <u>th<ignore>e</ignore>re</u>, <i>you</i> <b>Activity</b>!</string>
     <string name="connected">connected to <xliff:g id="device_name">%1$s</xliff:g></string>
     <string name="coloured">Plain <font color="#ff0000">red</font> end</string>
@@ -2344,7 +2344,7 @@ mod core {
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ink">#ff102030</color>
-    <string name="app_name">Apk Builder</string>
+    <string name="app_name">Code Builder</string>
     <style name="Theme" parent="android:Theme.Material.Light">
         <item name="android:textSize">16sp</item>
         <item name="android:windowNoTitle">true</item>
@@ -3025,7 +3025,7 @@ mod core {
     </declare-styleable>
     <declare-styleable name="Empty" />
     <color name="ink">#ff102030</color>
-    <string name="app_name">Apk Builder</string>
+    <string name="app_name">Code Builder</string>
     <style name="Custom">
         <item name="withEnum">second</item>
         <item name="localOnly">hi</item>
@@ -4602,8 +4602,8 @@ public class Written {
         let Ok(done) = done else {
             std::fs::remove_dir_all(&directory).ok();
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_JAVAC").is_err(),
-                "APK_BUILDER_REQUIRE_JAVAC is set but javac is not here"
+                std::env::var("CODE_BUILDER_REQUIRE_JAVAC").is_err(),
+                "CODE_BUILDER_REQUIRE_JAVAC is set but javac is not here"
             );
             eprintln!("javac conformance: javac is not available here");
             return;
@@ -5705,7 +5705,7 @@ final class Model implements Runnable {
         let certificate = crate::certificate::self_signed(
             &key,
             "Side",
-            "Apk Builder",
+            "Code Builder",
             "TR",
             crate::certificate::moment_from_epoch(1_700_000_000),
             crate::certificate::moment_from_epoch(2_000_000_000),
@@ -5813,7 +5813,7 @@ final class Model implements Runnable {
         let certificate = crate::certificate::self_signed(
             &key,
             "Sealed",
-            "Apk Builder",
+            "Code Builder",
             "TR",
             crate::certificate::moment_from_epoch(1_700_000_000),
             crate::certificate::moment_from_epoch(2_000_000_000),
@@ -5899,7 +5899,7 @@ final class Model implements Runnable {
         let certificate = crate::certificate::self_signed(
             &key,
             "Plain",
-            "Apk Builder",
+            "Code Builder",
             "TR",
             crate::certificate::moment_from_epoch(1_700_000_000),
             crate::certificate::moment_from_epoch(2_000_000_000),
@@ -6053,7 +6053,7 @@ final class Doubling extends Counter {
         let certificate = crate::certificate::self_signed(
             &key,
             "Several",
-            "Apk Builder",
+            "Code Builder",
             "TR",
             crate::certificate::moment_from_epoch(1_700_000_000),
             crate::certificate::moment_from_epoch(2_000_000_000),
@@ -6127,7 +6127,7 @@ final class Doubling extends Counter {
         let certificate = crate::certificate::self_signed(
             &key,
             "Page",
-            "Apk Builder",
+            "Code Builder",
             "TR",
             crate::certificate::moment_from_epoch(1_700_000_000),
             crate::certificate::moment_from_epoch(2_000_000_000),
@@ -6184,7 +6184,7 @@ final class Doubling extends Counter {
         };
         let key = crate::rsa::parse_private_key(&key_bytes).expect("the key must parse");
 
-        let (root, sink) = parse_xml(APK_BUILDER_BUILT_MANIFEST);
+        let (root, sink) = parse_xml(CODE_BUILDER_BUILT_MANIFEST);
         assert!(!sink.has_blocking(), "{:?}", sink.entries());
         let manifest = axml::encode(&root.expect("the manifest must parse")).unwrap();
         let mut builder = ArchiveBuilder::for_android();
@@ -6254,7 +6254,7 @@ final class Doubling extends Counter {
     fn ml_dsa_signs_what_it_verifies_and_nothing_else() {
         let keys = crate::mldsa::Keys::from_seed(&[7u8; 32]);
         assert_eq!(keys.public.len(), crate::mldsa::PUBLIC_KEY_BYTES);
-        let said = b"apk builder signs for the quantum age";
+        let said = b"code builder signs for the quantum age";
         let signature = keys.sign(said, &[3u8; 32]);
         assert_eq!(signature.len(), crate::mldsa::SIGNATURE_BYTES);
         assert!(crate::mldsa::verify(&keys.public, said, &signature));
@@ -6306,7 +6306,7 @@ final class Doubling extends Counter {
             return;
         };
         let key = crate::rsa::parse_private_key(&key_bytes).expect("the key must parse");
-        let (root, sink) = parse_xml(APK_BUILDER_BUILT_MANIFEST);
+        let (root, sink) = parse_xml(CODE_BUILDER_BUILT_MANIFEST);
         assert!(!sink.has_blocking(), "{:?}", sink.entries());
         let manifest = axml::encode(&root.expect("the manifest must parse")).unwrap();
         let mut builder = ArchiveBuilder::for_android();
@@ -7294,8 +7294,8 @@ public class Outer {
         let Ok(done) = done else {
             std::fs::remove_dir_all(&directory).ok();
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_JAVAC").is_err(),
-                "APK_BUILDER_REQUIRE_JAVAC is set but javac is not here"
+                std::env::var("CODE_BUILDER_REQUIRE_JAVAC").is_err(),
+                "CODE_BUILDER_REQUIRE_JAVAC is set but javac is not here"
             );
             eprintln!("nests: javac is not available here");
             return;
@@ -7610,7 +7610,7 @@ public class Outer {
     }
 
     fn library_corpus() -> Vec<std::path::PathBuf> {
-        let folder = std::env::var("APK_BUILDER_LIBRARY_CORPUS")
+        let folder = std::env::var("CODE_BUILDER_LIBRARY_CORPUS")
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|_| {
                 std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/library-corpus")
@@ -7643,7 +7643,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        String said = StringUtils.reverse("apk builder");
+        String said = StringUtils.reverse("code builder");
         String padded = StringUtils.leftPad(said, 20, '.');
         boolean numeric = StringUtils.isNumeric(padded);
         TextView view = new TextView(this);
@@ -7835,8 +7835,8 @@ public final class MainActivity extends Activity {
         let corpus = library_corpus();
         if corpus.is_empty() {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_LIBRARY_CORPUS").is_err(),
-                "APK_BUILDER_REQUIRE_LIBRARY_CORPUS is set but no library is here"
+                std::env::var("CODE_BUILDER_REQUIRE_LIBRARY_CORPUS").is_err(),
+                "CODE_BUILDER_REQUIRE_LIBRARY_CORPUS is set but no library is here"
             );
             eprintln!("libraries: no published library is available here");
             return;
@@ -8020,8 +8020,8 @@ public final class Greeting {
         let Ok(done) = done else {
             std::fs::remove_dir_all(&directory).ok();
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_JAVAC").is_err(),
-                "APK_BUILDER_REQUIRE_JAVAC is set but javac is not here"
+                std::env::var("CODE_BUILDER_REQUIRE_JAVAC").is_err(),
+                "CODE_BUILDER_REQUIRE_JAVAC is set but javac is not here"
             );
             eprintln!("library packaging: javac is not available here");
             return;
@@ -8789,7 +8789,7 @@ public final class MainActivity extends Activity {
             let mut builder = ArchiveBuilder::for_android();
             builder.add("classes.dex", vec![7; 64]).unwrap();
             builder
-                .add("lib/arm64-v8a/libapk_builder.so", vec![9; 100])
+                .add("lib/arm64-v8a/libcode_builder.so", vec![9; 100])
                 .unwrap();
             builder.finish().unwrap()
         };
@@ -8804,10 +8804,10 @@ public final class MainActivity extends Activity {
             .add("AndroidManifest.xml", b"<manifest/>".to_vec())
             .unwrap();
         builder
-            .add("lib/arm64-v8a/libapk_builder.so", vec![0x7f; 5_000])
+            .add("lib/arm64-v8a/libcode_builder.so", vec![0x7f; 5_000])
             .unwrap();
         builder
-            .add("lib/arm64-v8a/libapk_builder_bridge.so", vec![0x7f; 3_000])
+            .add("lib/arm64-v8a/libcode_builder_bridge.so", vec![0x7f; 3_000])
             .unwrap();
         builder.add("classes.dex", vec![1; 200]).unwrap();
         let bytes = builder.finish().unwrap();
@@ -9065,7 +9065,7 @@ public final class MainActivity extends Activity {
             .unwrap();
         builder.add("classes.dex", vec![0x64; 1_234]).unwrap();
         builder
-            .add("lib/arm64-v8a/libapk_builder.so", vec![0x7f; 9_999])
+            .add("lib/arm64-v8a/libcode_builder.so", vec![0x7f; 9_999])
             .unwrap();
         builder
             .add("res/values/strings.arsc", b"table".to_vec())
@@ -9098,7 +9098,7 @@ public final class MainActivity extends Activity {
             for name in [
                 "AndroidManifest.xml",
                 "classes.dex",
-                "lib/arm64-v8a/libapk_builder.so",
+                "lib/arm64-v8a/libcode_builder.so",
                 "res/values/strings.arsc",
             ] {
                 assert!(text.contains(name), "unzip -l did not list {name}:\n{text}");
@@ -9158,64 +9158,65 @@ public final class MainActivity extends Activity {
     }
 
     const CONFORMANCE_CERTIFICATE: &[u8] = &[
-        0x30, 0x82, 0x03, 0x5f, 0x30, 0x82, 0x02, 0x47, 0xa0, 0x03, 0x02, 0x01, 0x02, 0x02, 0x08,
+        0x30, 0x82, 0x03, 0x63, 0x30, 0x82, 0x02, 0x4b, 0xa0, 0x03, 0x02, 0x01, 0x02, 0x02, 0x08,
         0x5d, 0x97, 0xb8, 0x2e, 0x92, 0x26, 0xcb, 0xb1, 0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48,
-        0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0c, 0x05, 0x00, 0x30, 0x45, 0x31, 0x0b, 0x30, 0x09, 0x06,
-        0x03, 0x55, 0x04, 0x06, 0x13, 0x02, 0x54, 0x52, 0x31, 0x14, 0x30, 0x12, 0x06, 0x03, 0x55,
-        0x04, 0x0a, 0x0c, 0x0b, 0x41, 0x70, 0x6b, 0x20, 0x42, 0x75, 0x69, 0x6c, 0x64, 0x65, 0x72,
-        0x31, 0x20, 0x30, 0x1e, 0x06, 0x03, 0x55, 0x04, 0x03, 0x0c, 0x17, 0x41, 0x70, 0x6b, 0x20,
-        0x42, 0x75, 0x69, 0x6c, 0x64, 0x65, 0x72, 0x20, 0x43, 0x6f, 0x6e, 0x66, 0x6f, 0x72, 0x6d,
-        0x61, 0x6e, 0x63, 0x65, 0x30, 0x1e, 0x17, 0x0d, 0x32, 0x36, 0x30, 0x39, 0x32, 0x36, 0x31,
-        0x32, 0x31, 0x32, 0x31, 0x32, 0x5a, 0x17, 0x0d, 0x32, 0x36, 0x31, 0x30, 0x32, 0x36, 0x31,
-        0x32, 0x31, 0x32, 0x31, 0x32, 0x5a, 0x30, 0x45, 0x31, 0x0b, 0x30, 0x09, 0x06, 0x03, 0x55,
-        0x04, 0x06, 0x13, 0x02, 0x54, 0x52, 0x31, 0x14, 0x30, 0x12, 0x06, 0x03, 0x55, 0x04, 0x0a,
-        0x0c, 0x0b, 0x41, 0x70, 0x6b, 0x20, 0x42, 0x75, 0x69, 0x6c, 0x64, 0x65, 0x72, 0x31, 0x20,
-        0x30, 0x1e, 0x06, 0x03, 0x55, 0x04, 0x03, 0x0c, 0x17, 0x41, 0x70, 0x6b, 0x20, 0x42, 0x75,
-        0x69, 0x6c, 0x64, 0x65, 0x72, 0x20, 0x43, 0x6f, 0x6e, 0x66, 0x6f, 0x72, 0x6d, 0x61, 0x6e,
-        0x63, 0x65, 0x30, 0x82, 0x01, 0x22, 0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7,
-        0x0d, 0x01, 0x01, 0x01, 0x05, 0x00, 0x03, 0x82, 0x01, 0x0f, 0x00, 0x30, 0x82, 0x01, 0x0a,
-        0x02, 0x82, 0x01, 0x01, 0x00, 0xef, 0xdf, 0xa6, 0xa4, 0xf9, 0xa1, 0xd7, 0x35, 0x27, 0x8c,
-        0x88, 0xdd, 0x7d, 0x3e, 0xf3, 0x73, 0x27, 0x90, 0xd8, 0x8c, 0xb7, 0xec, 0xe6, 0x47, 0xf2,
-        0xd2, 0xa8, 0x35, 0x5b, 0xc2, 0x7b, 0x5e, 0xc1, 0x9e, 0xdb, 0x16, 0x14, 0x8e, 0x66, 0xcd,
-        0x1b, 0x24, 0xc5, 0x08, 0xed, 0x91, 0x20, 0xba, 0x03, 0xf9, 0x94, 0xd9, 0xbc, 0xa0, 0x64,
-        0xca, 0x97, 0xd2, 0x8d, 0xb5, 0x6b, 0x05, 0x30, 0x6a, 0xf1, 0x03, 0x6c, 0x19, 0x61, 0x5f,
-        0x76, 0x3e, 0x37, 0x42, 0xd5, 0xd2, 0xbc, 0xe1, 0xa4, 0x51, 0x69, 0xcb, 0xe3, 0x1e, 0x85,
-        0x4a, 0xb8, 0x2b, 0x71, 0x4b, 0x91, 0x8f, 0x1c, 0xc7, 0xc3, 0x19, 0x15, 0x22, 0x26, 0x2a,
-        0x4b, 0xe4, 0x84, 0xdc, 0x0f, 0x4c, 0x82, 0xa0, 0xf5, 0x78, 0x9c, 0x49, 0x02, 0x8d, 0x56,
-        0x1a, 0xb2, 0xdb, 0xdf, 0x1a, 0x56, 0xf2, 0x08, 0xa9, 0x3c, 0x69, 0x32, 0x48, 0xb6, 0x6c,
-        0xc5, 0x4a, 0x0b, 0x5e, 0x9b, 0x23, 0x80, 0x6c, 0xbf, 0xce, 0xd3, 0xfa, 0x1b, 0xe6, 0xc0,
-        0xb3, 0xdb, 0x36, 0x84, 0xb2, 0x08, 0xb7, 0xff, 0x2f, 0xee, 0x65, 0xc4, 0x26, 0x0a, 0x70,
-        0xfd, 0xe6, 0x28, 0x93, 0x97, 0xa8, 0xb9, 0x8d, 0x9a, 0x40, 0x1c, 0xcb, 0xe6, 0x9b, 0x55,
-        0x59, 0x47, 0x37, 0x1f, 0x0f, 0x4f, 0x4b, 0xcc, 0xb7, 0x45, 0x03, 0xdb, 0x6c, 0xb5, 0xf8,
-        0xda, 0xe8, 0xaa, 0x90, 0x78, 0x0e, 0xc3, 0x4d, 0x6f, 0xf9, 0x12, 0xf7, 0xac, 0x26, 0x0d,
-        0x49, 0x96, 0x02, 0x31, 0x36, 0x3c, 0xf9, 0xbb, 0xb0, 0xdc, 0x1d, 0x0e, 0xe1, 0xf0, 0x8a,
-        0x55, 0xec, 0x7b, 0xac, 0x3f, 0x7a, 0x45, 0x44, 0xf9, 0x87, 0xae, 0x16, 0xec, 0x3b, 0x04,
-        0xa2, 0x75, 0xc9, 0x69, 0xcf, 0x86, 0xee, 0x68, 0x72, 0xa5, 0xdf, 0xed, 0x5f, 0x95, 0x66,
-        0x6b, 0x78, 0x79, 0xfc, 0x99, 0xf3, 0x02, 0x03, 0x01, 0x00, 0x01, 0xa3, 0x53, 0x30, 0x51,
-        0x30, 0x1d, 0x06, 0x03, 0x55, 0x1d, 0x0e, 0x04, 0x16, 0x04, 0x14, 0xf2, 0x92, 0x4b, 0xaf,
-        0x3e, 0xa2, 0x68, 0xa8, 0x4b, 0x8b, 0x87, 0x7b, 0xb1, 0x2f, 0xe6, 0x2f, 0xdc, 0x5e, 0x79,
-        0xdc, 0x30, 0x1f, 0x06, 0x03, 0x55, 0x1d, 0x23, 0x04, 0x18, 0x30, 0x16, 0x80, 0x14, 0xf2,
-        0x92, 0x4b, 0xaf, 0x3e, 0xa2, 0x68, 0xa8, 0x4b, 0x8b, 0x87, 0x7b, 0xb1, 0x2f, 0xe6, 0x2f,
-        0xdc, 0x5e, 0x79, 0xdc, 0x30, 0x0f, 0x06, 0x03, 0x55, 0x1d, 0x13, 0x01, 0x01, 0xff, 0x04,
-        0x05, 0x30, 0x03, 0x01, 0x01, 0xff, 0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7,
-        0x0d, 0x01, 0x01, 0x0c, 0x05, 0x00, 0x03, 0x82, 0x01, 0x01, 0x00, 0x84, 0x6e, 0xac, 0x4e,
-        0xfc, 0xad, 0x63, 0x26, 0x82, 0xa0, 0x37, 0x4b, 0x77, 0xb0, 0x6f, 0xc3, 0xf3, 0x05, 0x70,
-        0x77, 0xf3, 0xdc, 0xa2, 0x24, 0xd5, 0x90, 0x1c, 0x8b, 0x66, 0xda, 0xe0, 0xb2, 0xc6, 0x29,
-        0x02, 0x6d, 0xd8, 0xad, 0x31, 0x77, 0xe4, 0xe3, 0xfa, 0xcc, 0xb8, 0x0a, 0xc9, 0xe4, 0x12,
-        0xb9, 0x2d, 0xb5, 0xf3, 0x32, 0x1f, 0x88, 0x2e, 0x52, 0x16, 0x23, 0xfc, 0x8d, 0x77, 0xfc,
-        0xbd, 0xa1, 0x3d, 0x67, 0x71, 0x85, 0xeb, 0x7e, 0x2e, 0x75, 0x81, 0x5d, 0xf1, 0xb6, 0xfb,
-        0x1e, 0x8a, 0xd2, 0x47, 0xc2, 0x9a, 0x7d, 0xb6, 0xd5, 0x01, 0x07, 0x2a, 0x4b, 0xc7, 0x88,
-        0xc0, 0x49, 0x95, 0xf2, 0xd1, 0xcc, 0x46, 0x21, 0x2f, 0xbe, 0x82, 0xec, 0x4f, 0xc5, 0x11,
-        0xa6, 0xca, 0x44, 0xf2, 0xe3, 0x47, 0x69, 0xe7, 0x10, 0x25, 0x28, 0xc6, 0xf8, 0xd1, 0x8f,
-        0x71, 0x07, 0x27, 0x48, 0x25, 0xd7, 0x7f, 0x28, 0x9e, 0x7d, 0x44, 0xae, 0xd8, 0x53, 0x73,
-        0x9b, 0x1e, 0x89, 0x6a, 0xf6, 0x4e, 0x65, 0x29, 0xe6, 0x16, 0xa4, 0xc5, 0x07, 0xa1, 0x8d,
-        0xda, 0x50, 0x01, 0x9d, 0xf2, 0xcc, 0x98, 0x6a, 0x36, 0xeb, 0x24, 0xed, 0x30, 0xbb, 0x20,
-        0x05, 0x46, 0x33, 0x0c, 0xbe, 0xf7, 0x72, 0xaf, 0x23, 0x08, 0x90, 0xb6, 0x1b, 0x9d, 0x5f,
-        0x5f, 0x56, 0xe7, 0xeb, 0x8f, 0xb0, 0x56, 0x52, 0xc9, 0x60, 0x31, 0x41, 0x94, 0xc6, 0xd7,
-        0x0c, 0xd2, 0x59, 0xcd, 0x92, 0x8d, 0x91, 0xec, 0x2a, 0x39, 0xfb, 0xbd, 0xc6, 0xf0, 0x75,
-        0x33, 0x7a, 0xc0, 0x1d, 0x98, 0x5f, 0x39, 0x1c, 0x71, 0x12, 0x73, 0x29, 0x5f, 0xbf, 0xa2,
-        0x2b, 0xeb, 0xbe, 0x9f, 0x83, 0x4a, 0x0a, 0x54, 0xd6, 0x52, 0x85, 0xe8, 0x8c, 0x3b, 0xb2,
-        0xad, 0x81, 0x64, 0xd9, 0xcd, 0xfc, 0xcb, 0x20, 0xf8, 0x1f, 0x32, 0xe9,
+        0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0c, 0x05, 0x00, 0x30, 0x47, 0x31, 0x0b, 0x30, 0x09, 0x06,
+        0x03, 0x55, 0x04, 0x06, 0x13, 0x02, 0x54, 0x52, 0x31, 0x15, 0x30, 0x13, 0x06, 0x03, 0x55,
+        0x04, 0x0a, 0x0c, 0x0c, 0x43, 0x6f, 0x64, 0x65, 0x20, 0x42, 0x75, 0x69, 0x6c, 0x64, 0x65,
+        0x72, 0x31, 0x21, 0x30, 0x1f, 0x06, 0x03, 0x55, 0x04, 0x03, 0x0c, 0x18, 0x43, 0x6f, 0x64,
+        0x65, 0x20, 0x42, 0x75, 0x69, 0x6c, 0x64, 0x65, 0x72, 0x20, 0x43, 0x6f, 0x6e, 0x66, 0x6f,
+        0x72, 0x6d, 0x61, 0x6e, 0x63, 0x65, 0x30, 0x1e, 0x17, 0x0d, 0x32, 0x36, 0x31, 0x31, 0x31,
+        0x32, 0x31, 0x30, 0x35, 0x39, 0x35, 0x35, 0x5a, 0x17, 0x0d, 0x32, 0x36, 0x31, 0x32, 0x31,
+        0x32, 0x31, 0x30, 0x35, 0x39, 0x35, 0x35, 0x5a, 0x30, 0x47, 0x31, 0x0b, 0x30, 0x09, 0x06,
+        0x03, 0x55, 0x04, 0x06, 0x13, 0x02, 0x54, 0x52, 0x31, 0x15, 0x30, 0x13, 0x06, 0x03, 0x55,
+        0x04, 0x0a, 0x0c, 0x0c, 0x43, 0x6f, 0x64, 0x65, 0x20, 0x42, 0x75, 0x69, 0x6c, 0x64, 0x65,
+        0x72, 0x31, 0x21, 0x30, 0x1f, 0x06, 0x03, 0x55, 0x04, 0x03, 0x0c, 0x18, 0x43, 0x6f, 0x64,
+        0x65, 0x20, 0x42, 0x75, 0x69, 0x6c, 0x64, 0x65, 0x72, 0x20, 0x43, 0x6f, 0x6e, 0x66, 0x6f,
+        0x72, 0x6d, 0x61, 0x6e, 0x63, 0x65, 0x30, 0x82, 0x01, 0x22, 0x30, 0x0d, 0x06, 0x09, 0x2a,
+        0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00, 0x03, 0x82, 0x01, 0x0f, 0x00,
+        0x30, 0x82, 0x01, 0x0a, 0x02, 0x82, 0x01, 0x01, 0x00, 0xc9, 0xe7, 0xcf, 0xa3, 0x3c, 0x94,
+        0x4a, 0x3b, 0xc5, 0x48, 0x70, 0xcf, 0xe4, 0x56, 0xdf, 0xe5, 0x36, 0x0d, 0xef, 0xde, 0x7d,
+        0xb1, 0xbf, 0x31, 0x8a, 0x81, 0x7a, 0x1d, 0x8e, 0x4c, 0x3d, 0xe3, 0x51, 0xd9, 0x40, 0xd7,
+        0x90, 0x16, 0xd2, 0x7a, 0xfe, 0xff, 0x1a, 0xb9, 0x8c, 0x68, 0x1f, 0x03, 0xa5, 0xb0, 0xb7,
+        0x67, 0x35, 0x97, 0x68, 0x8a, 0x0b, 0x5e, 0x6e, 0x36, 0x56, 0xb0, 0xfe, 0x24, 0xaa, 0xe4,
+        0x20, 0x4e, 0xe3, 0x1b, 0xcc, 0xf5, 0x67, 0x69, 0xb5, 0x84, 0x86, 0xe3, 0x76, 0xf6, 0xc1,
+        0x3f, 0x4c, 0xd1, 0xb4, 0x74, 0xfc, 0x3d, 0x3c, 0xc4, 0xe7, 0x1a, 0xd7, 0x8b, 0xbf, 0x56,
+        0x74, 0xf2, 0xa1, 0x8d, 0x3f, 0x6a, 0x52, 0xde, 0xa3, 0x7e, 0x62, 0x63, 0xc7, 0x48, 0x21,
+        0xb9, 0x03, 0x1d, 0xee, 0xdf, 0x26, 0x27, 0x5e, 0x61, 0x7e, 0x19, 0x0f, 0x5b, 0x55, 0x45,
+        0x6d, 0xa6, 0x9e, 0xcd, 0x60, 0x23, 0x58, 0x3f, 0xf8, 0x52, 0x46, 0xfb, 0xb3, 0xf7, 0xed,
+        0x00, 0xa2, 0x48, 0x80, 0x11, 0x97, 0x41, 0x96, 0x5c, 0xe3, 0xae, 0xb1, 0x27, 0x08, 0xa9,
+        0x3d, 0x6d, 0x44, 0x4b, 0x08, 0xc6, 0xd3, 0x27, 0x9d, 0x9d, 0xea, 0x79, 0x27, 0x6b, 0xb9,
+        0x01, 0x9c, 0x24, 0x72, 0x46, 0xbf, 0xd8, 0xd8, 0x1d, 0x23, 0x93, 0x50, 0x62, 0xa0, 0xa3,
+        0xb9, 0x8f, 0xb1, 0xc0, 0x36, 0xe9, 0xd8, 0xa6, 0xbb, 0xa8, 0xf0, 0xcb, 0x47, 0x4c, 0x3b,
+        0xad, 0x19, 0x97, 0x86, 0xc0, 0xb0, 0x43, 0xa7, 0x72, 0x49, 0x57, 0xfc, 0xa8, 0x3e, 0x8a,
+        0xb9, 0xae, 0x93, 0xa8, 0x50, 0xf9, 0x3c, 0x95, 0x4a, 0xc1, 0x1d, 0xc1, 0xe3, 0x6c, 0xfc,
+        0xd6, 0xe5, 0x9b, 0x2f, 0xb9, 0xf8, 0x9a, 0xc8, 0x65, 0x6a, 0x23, 0xb7, 0x0c, 0x44, 0x9e,
+        0xf3, 0xe3, 0x3a, 0xf8, 0x2a, 0x53, 0x23, 0xe6, 0xe7, 0x19, 0x02, 0x03, 0x01, 0x00, 0x01,
+        0xa3, 0x53, 0x30, 0x51, 0x30, 0x1d, 0x06, 0x03, 0x55, 0x1d, 0x0e, 0x04, 0x16, 0x04, 0x14,
+        0xc9, 0x5f, 0x7d, 0x78, 0x93, 0xd4, 0xb0, 0x76, 0x91, 0x32, 0x30, 0x35, 0xd6, 0xda, 0x3c,
+        0x93, 0x28, 0x0d, 0x2d, 0x1c, 0x30, 0x1f, 0x06, 0x03, 0x55, 0x1d, 0x23, 0x04, 0x18, 0x30,
+        0x16, 0x80, 0x14, 0xc9, 0x5f, 0x7d, 0x78, 0x93, 0xd4, 0xb0, 0x76, 0x91, 0x32, 0x30, 0x35,
+        0xd6, 0xda, 0x3c, 0x93, 0x28, 0x0d, 0x2d, 0x1c, 0x30, 0x0f, 0x06, 0x03, 0x55, 0x1d, 0x13,
+        0x01, 0x01, 0xff, 0x04, 0x05, 0x30, 0x03, 0x01, 0x01, 0xff, 0x30, 0x0d, 0x06, 0x09, 0x2a,
+        0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0c, 0x05, 0x00, 0x03, 0x82, 0x01, 0x01, 0x00,
+        0x3c, 0x68, 0xf2, 0xa3, 0x06, 0x08, 0x0b, 0xc7, 0x10, 0x0a, 0x14, 0xcc, 0x7b, 0x7d, 0xae,
+        0x9c, 0x94, 0x26, 0xfd, 0xca, 0x60, 0x9a, 0x31, 0x69, 0xc7, 0x29, 0xb9, 0x89, 0xce, 0xc2,
+        0x3b, 0x72, 0xa8, 0x19, 0xa2, 0xac, 0x49, 0x36, 0xc8, 0xec, 0x58, 0x6e, 0xc2, 0x30, 0x9b,
+        0x44, 0x19, 0x45, 0x09, 0xd2, 0x7e, 0xc1, 0x6e, 0x66, 0xe2, 0x21, 0x80, 0x4f, 0x8d, 0xdc,
+        0x28, 0xa7, 0x9f, 0x7c, 0xd0, 0xd7, 0x8e, 0x0e, 0xe3, 0xf1, 0x4b, 0x9b, 0x14, 0xd5, 0xcc,
+        0xa2, 0xe9, 0xc4, 0x2d, 0xa9, 0x1c, 0x08, 0x40, 0x7e, 0xea, 0x64, 0x53, 0x50, 0xb8, 0xdf,
+        0x3a, 0x4a, 0xf3, 0x50, 0xce, 0x55, 0xef, 0x4e, 0x00, 0xe6, 0xf4, 0x76, 0x3a, 0x24, 0xa2,
+        0x6c, 0x8e, 0xb9, 0x48, 0x79, 0xd4, 0xbc, 0x22, 0x83, 0x1a, 0xfa, 0xed, 0x10, 0x77, 0x2a,
+        0xac, 0xf6, 0xf7, 0x5b, 0x33, 0xaf, 0x7e, 0xd1, 0x9c, 0xa6, 0x13, 0x08, 0x59, 0x4f, 0x27,
+        0xd8, 0x86, 0xaa, 0x76, 0x03, 0x50, 0xc7, 0x33, 0xa3, 0xa6, 0x90, 0xe0, 0xa2, 0xcf, 0x9c,
+        0x25, 0x0e, 0x6c, 0x98, 0x2b, 0xde, 0x9c, 0x0a, 0xdd, 0xf2, 0xd6, 0xd8, 0x02, 0x31, 0x04,
+        0xfc, 0x48, 0x87, 0x96, 0x78, 0xf5, 0xb0, 0x6c, 0xae, 0x6e, 0x60, 0x5c, 0x16, 0x31, 0x37,
+        0xa6, 0xd8, 0x9a, 0x7e, 0x3d, 0x9b, 0xfb, 0xed, 0x90, 0xa4, 0x10, 0xb5, 0xad, 0x5e, 0xa2,
+        0xc0, 0x2c, 0xfd, 0x3c, 0x84, 0xc4, 0xe9, 0xc6, 0xb9, 0x77, 0x6b, 0xcb, 0xea, 0x42, 0x4f,
+        0x9b, 0x3d, 0x66, 0x9f, 0x29, 0x1d, 0xde, 0xcd, 0x46, 0x15, 0xc4, 0x92, 0x0c, 0xbb, 0xba,
+        0xd2, 0xd5, 0x1f, 0x8a, 0x08, 0xf4, 0x92, 0x11, 0x5b, 0x61, 0x1f, 0x3d, 0x60, 0xfa, 0xbd,
+        0x04, 0x1f, 0x34, 0x75, 0x8c, 0x22, 0x51, 0x50, 0x78, 0x1e, 0x70, 0x8c, 0x8c, 0x91, 0x73,
+        0x85,
     ];
 
     #[test]
@@ -9308,7 +9309,7 @@ public final class MainActivity extends Activity {
 
         assert_eq!(
             certificate.subject,
-            "C=TR, O=Apk Builder, CN=Apk Builder Conformance"
+            "C=TR, O=Code Builder, CN=Code Builder Conformance"
         );
         assert_eq!(certificate.issuer, certificate.subject, "it is self-signed");
         assert_eq!(certificate.serial, "5D97B82E9226CBB1");
@@ -9318,11 +9319,11 @@ public final class MainActivity extends Activity {
 
         assert_eq!(
             certificate.fingerprint.to_hex(),
-            "978bfd368566d350f6c9c94abcfed03757615cfc5ecae33e0ebc604c0dc2673c"
+            "43405458c2f8bd44b469859c1db9972d397cf990d5543e42fc28615c08c765b6"
         );
         assert!(certificate
             .fingerprint_display()
-            .starts_with("97:8B:FD:36:85:66:D3:50"));
+            .starts_with("43:40:54:58:C2:F8:BD:44"));
 
         assert!(certificate.not_before.ends_with("UTC"));
         assert!(certificate.not_after > certificate.not_before);
@@ -9395,8 +9396,8 @@ public final class MainActivity extends Activity {
         let key = crate::rsa::generate(2048).expect("a key");
         let mine = crate::certificate::self_signed(
             &key,
-            "Apk Builder Extensions",
-            "Apk Builder",
+            "Code Builder Extensions",
+            "Code Builder",
             "TR",
             crate::certificate::moment_from_epoch(1_700_000_000),
             crate::certificate::moment_from_epoch(2_000_000_000),
@@ -9409,7 +9410,7 @@ public final class MainActivity extends Activity {
         let read = crate::x509::Certificate::parse(&mine).expect("it parses");
         assert_eq!(
             read.subject,
-            "C=TR, O=Apk Builder, CN=Apk Builder Extensions"
+            "C=TR, O=Code Builder, CN=Code Builder Extensions"
         );
         assert_eq!(read.issuer, read.subject);
         assert_eq!(read.public_key_bits, Some(2048));
@@ -9571,8 +9572,8 @@ public final class MainActivity extends Activity {
         }
 
         assert!(
-            std::env::var("APK_BUILDER_REQUIRE_APKSIGNER").is_err(),
-            "APK_BUILDER_REQUIRE_APKSIGNER is set but no apksigner was found, so the \
+            std::env::var("CODE_BUILDER_REQUIRE_APKSIGNER").is_err(),
+            "CODE_BUILDER_REQUIRE_APKSIGNER is set but no apksigner was found, so the \
              signing conformance tests would have skipped silently"
         );
         None
@@ -9615,7 +9616,7 @@ public final class MainActivity extends Activity {
                 "-days",
                 "3650",
                 "-subj",
-                "/CN=Apk Builder",
+                "/CN=Code Builder",
                 "-keyout",
                 key.to_str().unwrap(),
                 "-out",
@@ -9650,12 +9651,12 @@ public final class MainActivity extends Activity {
             let held = unsafe { std::ffi::CStr::from_ptr(ptr) }
                 .to_string_lossy()
                 .into_owned();
-            unsafe { crate::ffi::apk_builder_string_free(ptr) };
+            unsafe { crate::ffi::code_builder_string_free(ptr) };
             held
         };
         let c = |said: &str| std::ffi::CString::new(said).unwrap();
         let prepared = text(unsafe {
-            crate::ffi::apk_builder_build_unsigned(
+            crate::ffi::code_builder_build_unsigned(
                 c(&root).as_ptr(),
                 c(raw.to_str().unwrap()).as_ptr(),
                 c(&certificate_hex).as_ptr(),
@@ -9711,7 +9712,7 @@ public final class MainActivity extends Activity {
             .and_then(crate::json::Json::integer)
             .unwrap() as u32;
         let sealed = text(unsafe {
-            crate::ffi::apk_builder_seal_package(
+            crate::ffi::code_builder_seal_package(
                 c(raw.to_str().unwrap()).as_ptr(),
                 c(apk.to_str().unwrap()).as_ptr(),
                 c(&certificate_hex).as_ptr(),
@@ -9777,7 +9778,7 @@ public final class MainActivity extends Activity {
                 "-days",
                 "3650",
                 "-subj",
-                "/CN=Apk Builder Device/O=Apk Builder/C=TR",
+                "/CN=Code Builder Device/O=Code Builder/C=TR",
                 "-keyout",
                 key.to_str().unwrap(),
                 "-out",
@@ -9940,7 +9941,7 @@ public final class MainActivity extends Activity {
                 out.status.success(),
                 "apksigner refused a package signed by a key this build never saw:\n{said}"
             );
-            assert!(said.contains("CN=Apk Builder Device"), "{said}");
+            assert!(said.contains("CN=Code Builder Device"), "{said}");
             checked = "apksigner verified it";
         }
 
@@ -9967,7 +9968,7 @@ public final class MainActivity extends Activity {
             .unwrap();
         builder.add("classes.dex", vec![0x2a; 3_000]).unwrap();
         builder
-            .add("lib/arm64-v8a/libapk_builder.so", vec![0x7f; 2_000])
+            .add("lib/arm64-v8a/libcode_builder.so", vec![0x7f; 2_000])
             .unwrap();
         std::fs::write(&apk, builder.finish().unwrap()).unwrap();
 
@@ -9989,7 +9990,7 @@ public final class MainActivity extends Activity {
                 "-validity",
                 "30",
                 "-dname",
-                "CN=Apk Builder Test, O=Apk Builder, C=TR",
+                "CN=Code Builder Test, O=Code Builder, C=TR",
             ])
             .output()
             .ok()?;
@@ -10073,7 +10074,7 @@ public final class MainActivity extends Activity {
         let certificate = &report.signers[0].certificates[0];
         assert_eq!(
             certificate.subject,
-            "C=TR, O=Apk Builder, CN=Apk Builder Test"
+            "C=TR, O=Code Builder, CN=Code Builder Test"
         );
         assert_eq!(certificate.public_key_bits, Some(2048));
 
@@ -10112,10 +10113,10 @@ public final class MainActivity extends Activity {
     }
 
     fn package_this_build_produced() -> Option<Vec<u8>> {
-        if let Ok(named) = std::env::var("APK_BUILDER_PACKAGE_UNDER_TEST") {
+        if let Ok(named) = std::env::var("CODE_BUILDER_PACKAGE_UNDER_TEST") {
             if !named.is_empty() {
                 let bytes = std::fs::read(&named)
-                    .unwrap_or_else(|why| panic!("APK_BUILDER_PACKAGE_UNDER_TEST={named}: {why}"));
+                    .unwrap_or_else(|why| panic!("CODE_BUILDER_PACKAGE_UNDER_TEST={named}: {why}"));
                 return Some(bytes);
             }
         }
@@ -10129,7 +10130,7 @@ public final class MainActivity extends Activity {
                 "signing conformance: no built package here, so a real Android \
                  Gradle Plugin package was not read. Build one with \
                  `./gradlew :Builder:assembleRelease` or set \
-                 APK_BUILDER_PACKAGE_UNDER_TEST."
+                 CODE_BUILDER_PACKAGE_UNDER_TEST."
             );
             return;
         };
@@ -10547,11 +10548,11 @@ public final class MainActivity extends Activity {
             let held = unsafe { std::ffi::CStr::from_ptr(ptr) }
                 .to_string_lossy()
                 .into_owned();
-            unsafe { crate::ffi::apk_builder_string_free(ptr) };
+            unsafe { crate::ffi::code_builder_string_free(ptr) };
             held
         };
 
-        let clear = read(unsafe { crate::ffi::apk_builder_check_project(root_c.as_ptr()) });
+        let clear = read(unsafe { crate::ffi::code_builder_check_project(root_c.as_ptr()) });
         assert!(is_structurally_valid(&clear), "{clear}");
         assert!(clear.contains("\"clear\":true"), "{clear}");
         assert!(clear.contains("\"package\":\"com.tr.yt\""), "{clear}");
@@ -10563,7 +10564,7 @@ public final class MainActivity extends Activity {
             .expect("the scaffold writes Java");
         crate::workspace::write_text(&root, &source.path, "this is not Java at all\n").unwrap();
 
-        let refused = read(unsafe { crate::ffi::apk_builder_check_project(root_c.as_ptr()) });
+        let refused = read(unsafe { crate::ffi::code_builder_check_project(root_c.as_ptr()) });
         assert!(is_structurally_valid(&refused), "{refused}");
         assert!(refused.contains("\"clear\":false"), "{refused}");
         assert!(refused.contains("\"location\""), "{refused}");
@@ -10714,7 +10715,7 @@ public final class MainActivity extends Activity {
         let root_c = std::ffi::CString::new(root.clone()).unwrap();
         let needle = std::ffi::CString::new("needle").unwrap();
         let answer = unsafe {
-            let handed = crate::ffi::apk_builder_search_project(
+            let handed = crate::ffi::code_builder_search_project(
                 root_c.as_ptr(),
                 needle.as_ptr(),
                 false,
@@ -10724,7 +10725,7 @@ public final class MainActivity extends Activity {
             let held = std::ffi::CStr::from_ptr(handed)
                 .to_string_lossy()
                 .into_owned();
-            crate::ffi::apk_builder_string_free(handed);
+            crate::ffi::code_builder_string_free(handed);
             held
         };
 
@@ -10741,7 +10742,7 @@ public final class MainActivity extends Activity {
     #[test]
     fn the_editor_colours_every_word_the_compiler_reserves() {
         let editor =
-            std::fs::read_to_string("Builder/Source/Main/Kotlin/com/apk/builder/Builder.kt")
+            std::fs::read_to_string("Builder/Source/Main/Kotlin/com/code/builder/Builder.kt")
                 .expect("the interface's source must be here");
 
         let listed = |name: &str| -> Vec<String> {
@@ -10982,7 +10983,7 @@ public final class MainActivity extends Activity {
     fn type_descriptors_become_the_names_a_person_writes() {
         let cases = [
             ("Ljava/lang/String;", "java.lang.String"),
-            ("Lcom/apk/builder/Builder;", "com.apk.builder.Builder"),
+            ("Lcom/code/builder/Builder;", "com.code.builder.Builder"),
             ("V", "void"),
             ("I", "int"),
             ("J", "long"),
@@ -11458,8 +11459,8 @@ public class Walk {
 
     fn dex_conformance_may_skip(why: &str) {
         assert!(
-            std::env::var("APK_BUILDER_REQUIRE_DEX_CONFORMANCE").is_err(),
-            "APK_BUILDER_REQUIRE_DEX_CONFORMANCE is set but the DEX conformance test \
+            std::env::var("CODE_BUILDER_REQUIRE_DEX_CONFORMANCE").is_err(),
+            "CODE_BUILDER_REQUIRE_DEX_CONFORMANCE is set but the DEX conformance test \
              would have skipped: {why}"
         );
     }
@@ -11677,7 +11678,7 @@ public class Walk {
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.probe">
     <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="36" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <application android:label="Apk Builder" android:allowBackup="false" android:supportsRtl="true" android:extractNativeLibs="false" android:theme="@0x7f060000">
+    <application android:label="Code Builder" android:allowBackup="false" android:supportsRtl="true" android:extractNativeLibs="false" android:theme="@0x7f060000">
         <activity android:name="com.example.probe.Main" android:exported="true" />
     </application>
 </manifest>"#;
@@ -11876,8 +11877,8 @@ public class Walk {
     fn a_signature_this_build_makes_is_accepted_by_an_independent_verifier() {
         let Some(tool) = openssl() else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_RSA_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_RSA_CONFORMANCE is set but openssl is not available"
+                std::env::var("CODE_BUILDER_REQUIRE_RSA_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_RSA_CONFORMANCE is set but openssl is not available"
             );
             eprintln!("rsa conformance: openssl is not available here");
             return;
@@ -11919,7 +11920,7 @@ public class Walk {
             assert_eq!(wrapped.modulus(), key.modulus());
             assert_eq!(wrapped.public_exponent(), key.public_exponent());
 
-            let message = b"Apk_Builder signs this with arithmetic it wrote itself.";
+            let message = b"Code_Builder signs this with arithmetic it wrote itself.";
             let signature = crate::rsa::sign(&key, algorithm, message).expect("signing must work");
             assert_eq!(signature.len(), key.modulus_bytes());
 
@@ -12065,10 +12066,10 @@ public class Walk {
         }
     }
 
-    const APK_BUILDER_BUILT_MANIFEST: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+    const CODE_BUILDER_BUILT_MANIFEST: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.selfbuilt" android:versionCode="1" android:versionName="1.0">
     <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="36" />
-    <application android:label="Apk Builder Self Built" android:hasCode="false" android:allowBackup="false" android:extractNativeLibs="false" />
+    <application android:label="Code Builder Self Built" android:hasCode="false" android:allowBackup="false" android:extractNativeLibs="false" />
 </manifest>"#;
 
     fn certificate_and_key(directory: &std::path::Path) -> Option<(Vec<u8>, Vec<u8>)> {
@@ -12092,7 +12093,7 @@ public class Walk {
                 "-outform",
                 "DER",
                 "-subj",
-                "/CN=Apk Builder Self Built/O=Apk Builder/C=TR",
+                "/CN=Code Builder Self Built/O=Code Builder/C=TR",
             ])
             .output()
             .ok()?;
@@ -12123,24 +12124,24 @@ public class Walk {
     }
 
     #[test]
-    fn apk_builder_builds_and_signs_a_package_that_apksigner_accepts() {
+    fn code_builder_builds_and_signs_a_package_that_apksigner_accepts() {
         let (Some(apksigner), Some(_)) = (find_apksigner(), openssl()) else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_SELF_BUILT_APK").is_err(),
-                "APK_BUILDER_REQUIRE_SELF_BUILT_APK is set but apksigner or openssl is missing"
+                std::env::var("CODE_BUILDER_REQUIRE_SELF_BUILT_APK").is_err(),
+                "CODE_BUILDER_REQUIRE_SELF_BUILT_APK is set but apksigner or openssl is missing"
             );
-            eprintln!("apk builder: apksigner or openssl is not available here");
+            eprintln!("code builder: apksigner or openssl is not available here");
             return;
         };
 
         let directory = temp_directory("builder-apk");
         let Some((certificate, key_bytes)) = certificate_and_key(&directory) else {
-            eprintln!("apk builder: openssl could not make a certificate");
+            eprintln!("code builder: openssl could not make a certificate");
             return;
         };
         let key = crate::rsa::parse_private_key(&key_bytes).expect("the key must parse");
 
-        let (root, sink) = parse_xml(APK_BUILDER_BUILT_MANIFEST);
+        let (root, sink) = parse_xml(CODE_BUILDER_BUILT_MANIFEST);
         assert!(!sink.has_blocking(), "{:?}", sink.entries());
         let manifest = axml::encode(&root.expect("the manifest must parse"))
             .expect("the manifest must encode");
@@ -12148,7 +12149,7 @@ public class Walk {
         let mut builder = ArchiveBuilder::for_android();
         builder.add("AndroidManifest.xml", manifest).unwrap();
         builder
-            .add_aligned("lib/arm64-v8a/libapk_builder.so", vec![0x7f; 4_096], 16_384)
+            .add_aligned("lib/arm64-v8a/libcode_builder.so", vec![0x7f; 4_096], 16_384)
             .unwrap();
         let unsigned = builder.finish().unwrap();
 
@@ -12181,13 +12182,13 @@ public class Walk {
         );
         assert!(
             verified.status.success(),
-            "apksigner rejected a package Apk Builder built and signed:\n{report}"
+            "apksigner rejected a package Code Builder built and signed:\n{report}"
         );
         assert!(
             report.contains("Verified using v2 scheme (APK Signature Scheme v2): true"),
             "the v2 scheme was not what verified it:\n{report}"
         );
-        assert!(report.contains("CN=Apk Builder Self Built"), "{report}");
+        assert!(report.contains("CN=Code Builder Self Built"), "{report}");
 
         let mut own_sink = Sink::new();
         let archive = archive::read(&signed, &mut own_sink).expect("the package must read");
@@ -12202,12 +12203,12 @@ public class Walk {
         assert!(own.digests_verified > 0, "{:?}", own_sink.entries());
         assert_eq!(
             own.signers[0].certificates[0].subject,
-            "CN=Apk Builder Self Built, O=Apk Builder, C=TR"
+            "CN=Code Builder Self Built, O=Code Builder, C=TR"
         );
 
         std::fs::remove_dir_all(&directory).ok();
         eprintln!(
-            "apk builder: {} bytes built and signed with nothing but this tree, and apksigner verified it",
+            "code builder: {} bytes built and signed with nothing but this tree, and apksigner verified it",
             signed.len()
         );
     }
@@ -12223,7 +12224,7 @@ public class Walk {
         };
         let key = crate::rsa::parse_private_key(&key_bytes).unwrap();
 
-        let (root, _) = parse_xml(APK_BUILDER_BUILT_MANIFEST);
+        let (root, _) = parse_xml(CODE_BUILDER_BUILT_MANIFEST);
         let manifest = axml::encode(&root.unwrap()).unwrap();
         let mut builder = ArchiveBuilder::for_android();
         builder.add("AndroidManifest.xml", manifest).unwrap();
@@ -12349,7 +12350,7 @@ public class Walk {
     const SAFE_PROJECT_MANIFEST: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.made" android:versionCode="1" android:versionName="1.0">
     <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="36" />
-    <application android:label="Made By Apk Builder" android:hasCode="false" android:allowBackup="false" android:extractNativeLibs="false" />
+    <application android:label="Made By Code Builder" android:hasCode="false" android:allowBackup="false" android:extractNativeLibs="false" />
 </manifest>"#;
 
     fn sample_project() -> crate::builder::Project {
@@ -12357,7 +12358,7 @@ public class Walk {
             manifest: SAFE_PROJECT_MANIFEST.to_string(),
             files: vec![
                 (
-                    "lib/arm64-v8a/libapk_builder.so".to_string(),
+                    "lib/arm64-v8a/libcode_builder.so".to_string(),
                     vec![0x7f; 2_048],
                 ),
                 ("assets/notes.txt".to_string(), b"made by builder".to_vec()),
@@ -12388,8 +12389,8 @@ public class Walk {
         let _turn = crate::progress::one_at_a_time();
         let Some(apksigner) = find_apksigner() else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_SELF_BUILT_APK").is_err(),
-                "APK_BUILDER_REQUIRE_SELF_BUILT_APK is set but apksigner is missing"
+                std::env::var("CODE_BUILDER_REQUIRE_SELF_BUILT_APK").is_err(),
+                "CODE_BUILDER_REQUIRE_SELF_BUILT_APK is set but apksigner is missing"
             );
             eprintln!("build engine: apksigner is not available here");
             return;
@@ -12397,7 +12398,7 @@ public class Walk {
 
         let key = crate::rsa::generate(2048).expect("the engine must be able to make a key");
         let mut sink = Sink::new();
-        let mut project = crate::builder::starter("com.example.made", "Made By Apk Builder");
+        let mut project = crate::builder::starter("com.example.made", "Made By Code Builder");
         project.files = sample_project().files;
         let outcome = crate::builder::build(&project, &key, 1_787_000_000, &mut sink)
             .expect("a compliant project must build");
@@ -12448,7 +12449,7 @@ public class Walk {
             report.contains("Verified using v3 scheme (APK Signature Scheme v3): true"),
             "{report}"
         );
-        assert!(report.contains("CN=Apk_Builder"), "{report}");
+        assert!(report.contains("CN=Code_Builder"), "{report}");
 
         let older = std::process::Command::new(&apksigner)
             .args([
@@ -12514,7 +12515,7 @@ public class Walk {
         let request = crate::keystore::Request {
             alias: "release-2026".to_string(),
             common_name: "Eaquel".to_string(),
-            organisation: "Apk Builder".to_string(),
+            organisation: "Code Builder".to_string(),
             country: "TR".to_string(),
             validity_days: 9_125,
             bits: 2048,
@@ -12525,7 +12526,7 @@ public class Walk {
             .expect("a developer must be able to make their own key");
         assert_eq!(made.alias, "release-2026");
         assert!(made.subject.contains("CN=Eaquel"), "{}", made.subject);
-        assert!(made.subject.contains("O=Apk Builder"), "{}", made.subject);
+        assert!(made.subject.contains("O=Code Builder"), "{}", made.subject);
         assert!(made.subject.contains("C=TR"), "{}", made.subject);
         assert_eq!(made.bits, Some(2048));
         assert_eq!(made.issued, "2026-08-16 20:53:20 UTC");
@@ -12655,7 +12656,7 @@ public class Walk {
         let request = crate::keystore::Request {
             alias: "older".to_string(),
             common_name: "Older".to_string(),
-            organisation: "Apk Builder".to_string(),
+            organisation: "Code Builder".to_string(),
             country: "TR".to_string(),
             validity_days: 400,
             bits: 2048,
@@ -12730,7 +12731,7 @@ public class Walk {
         let mine = crate::keystore::Request {
             alias: "mine".to_string(),
             common_name: "Mine".to_string(),
-            organisation: "Apk Builder".to_string(),
+            organisation: "Code Builder".to_string(),
             country: "TR".to_string(),
             validity_days: 400,
             bits: 2048,
@@ -12830,7 +12831,7 @@ public class Walk {
         let sound = crate::keystore::Request {
             alias: "ok".to_string(),
             common_name: "Name".to_string(),
-            organisation: "Apk Builder".to_string(),
+            organisation: "Code Builder".to_string(),
             country: "TR".to_string(),
             validity_days: 9_125,
             bits: 2048,
@@ -12899,7 +12900,7 @@ public class Walk {
         let request = crate::keystore::Request {
             alias: "short".to_string(),
             common_name: "Name".to_string(),
-            organisation: "Apk Builder".to_string(),
+            organisation: "Code Builder".to_string(),
             country: "TR".to_string(),
             validity_days: 400,
             bits: 2048,
@@ -12916,8 +12917,8 @@ public class Walk {
     fn the_developers_own_key_signs_the_package_and_apksigner_reads_their_name() {
         let Some(apksigner) = find_apksigner() else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_SELF_BUILT_APK").is_err(),
-                "APK_BUILDER_REQUIRE_SELF_BUILT_APK is set but apksigner is missing"
+                std::env::var("CODE_BUILDER_REQUIRE_SELF_BUILT_APK").is_err(),
+                "CODE_BUILDER_REQUIRE_SELF_BUILT_APK is set but apksigner is missing"
             );
             eprintln!("developer key: apksigner is not available here");
             return;
@@ -12929,7 +12930,7 @@ public class Walk {
         let request = crate::keystore::Request {
             alias: "eaquel-release".to_string(),
             common_name: "Eaquel Release".to_string(),
-            organisation: "Apk Builder".to_string(),
+            organisation: "Code Builder".to_string(),
             country: "TR".to_string(),
             validity_days: 10_950,
             bits: 2048,
@@ -12938,7 +12939,7 @@ public class Walk {
         let opened = crate::keystore::unlock(&made.path, password).unwrap();
 
         let mut sink = Sink::new();
-        let project = crate::builder::starter("com.tr.yt", "Apk Builder");
+        let project = crate::builder::starter("com.tr.yt", "Code Builder");
         let outcome =
             crate::builder::assemble(&project, &opened.key, &opened.certificate, &mut sink)
                 .expect("the developer's key must sign the package");
@@ -12975,7 +12976,7 @@ public class Walk {
             "{report}"
         );
         assert!(report.contains("CN=Eaquel Release"), "{report}");
-        assert!(report.contains("O=Apk Builder"), "{report}");
+        assert!(report.contains("O=Code Builder"), "{report}");
         assert!(
             report
                 .to_lowercase()
@@ -13317,8 +13318,8 @@ public class Walk {
 
         let Some((fields, descriptors)) = dexdump(&bytes) else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_DEX_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_DEX_CONFORMANCE is set but dexdump is missing"
+                std::env::var("CODE_BUILDER_REQUIRE_DEX_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_DEX_CONFORMANCE is set but dexdump is missing"
             );
             eprintln!("dexwrite conformance: dexdump is not available here");
             return;
@@ -13353,8 +13354,8 @@ public class Walk {
 
         let Some((fields, descriptors)) = dexdump(&bytes) else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_DEX_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_DEX_CONFORMANCE is set but dexdump is missing"
+                std::env::var("CODE_BUILDER_REQUIRE_DEX_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_DEX_CONFORMANCE is set but dexdump is missing"
             );
             eprintln!("dexwrite conformance: dexdump is not available here");
             return;
@@ -13409,7 +13410,7 @@ public class Walk {
             let raw = f();
             assert!(!raw.is_null(), "the bridge must always report");
             let text = std::ffi::CStr::from_ptr(raw).to_str().unwrap().to_string();
-            crate::ffi::apk_builder_string_free(raw);
+            crate::ffi::code_builder_string_free(raw);
             text
         }
     }
@@ -13898,7 +13899,7 @@ public final class App extends Activity {
 
     fn the_builder_as_host(debugger: bool, seal: bool) -> crate::debugger::Host {
         crate::debugger::read_host(&format!(
-            "{{\"package\":\"com.apk.builder\",\"certificate\":\"{BUILDER_CERTIFICATE}\",\"debugger\":{debugger},\"seal\":{seal}}}"
+            "{{\"package\":\"com.code.builder\",\"certificate\":\"{BUILDER_CERTIFICATE}\",\"debugger\":{debugger},\"seal\":{seal}}}"
         ))
         .expect("the host reads")
     }
@@ -13963,7 +13964,7 @@ public final class App extends Activity {
     }
 
     #[test]
-    fn what_this_builds_carries_the_debugger_apk_builder_reads() {
+    fn what_this_builds_carries_the_debugger_code_builder_reads() {
         let _turn = crate::progress::one_at_a_time();
         let (directory, root, key, certificate, made_by) = a_signed_project("builder-debugger");
         let host = the_builder_as_host(true, true);
@@ -13986,7 +13987,7 @@ public final class App extends Activity {
             "a debug build keeps everything"
         );
         assert_eq!(plan.profile, "debug");
-        assert_eq!(plan.host, "com.apk.builder");
+        assert_eq!(plan.host, "com.code.builder");
         assert_eq!(plan.certificate, host.certificate);
         assert_eq!(
             project.sealed.as_deref(),
@@ -14005,7 +14006,7 @@ public final class App extends Activity {
             project
                 .code
                 .iter()
-                .any(|one| one.descriptor == "Lcom/apk/builder/debug/BuildFacts;"),
+                .any(|one| one.descriptor == "Lcom/code/builder/debug/BuildFacts;"),
             "what the build decided is carried in a class"
         );
         let mut refused = Vec::new();
@@ -14029,12 +14030,12 @@ public final class App extends Activity {
 
         let dex = dex_files_of(&outcome.package);
         for kept in [
-            "Lcom/apk/builder/debug/ComponentFactory;",
-            "Lcom/apk/builder/debug/DebugProvider;",
-            "Lcom/apk/builder/debug/Presence;",
-            "Lcom/apk/builder/debug/Journal;",
-            "Lcom/apk/builder/debug/Watchdog;",
-            "Lcom/apk/builder/debug/Tombstone;",
+            "Lcom/code/builder/debug/ComponentFactory;",
+            "Lcom/code/builder/debug/DebugProvider;",
+            "Lcom/code/builder/debug/Presence;",
+            "Lcom/code/builder/debug/Journal;",
+            "Lcom/code/builder/debug/Watchdog;",
+            "Lcom/code/builder/debug/Tombstone;",
         ] {
             assert!(carries(&dex, kept), "the shrinker kept {kept}");
         }
@@ -14046,8 +14047,8 @@ public final class App extends Activity {
             .filter_map(|one| one.attribute("name"))
             .collect::<Vec<_>>();
         assert!(
-            queries.contains(&"com.apk.builder"),
-            "the app can see Apk Builder, so it can check who asks: {queries:?}"
+            queries.contains(&"com.code.builder"),
+            "the app can see Code Builder, so it can check who asks: {queries:?}"
         );
         let application = read
             .children_named("application")
@@ -14167,7 +14168,7 @@ public final class App extends Activity {
             crate::builder::project_for(root_text, Some(&made_by), Some(&neither)).expect("reads");
         assert!(
             project.debugger.is_none(),
-            "the debugger stays out when Apk Builder says so"
+            "the debugger stays out when Code Builder says so"
         );
         assert!(project.sealed.is_none(), "so does the seal");
         assert!(
@@ -14295,13 +14296,13 @@ public final class App extends Activity {
     }
 
     #[test]
-    fn the_host_apk_builder_names_is_read_with_care() {
+    fn the_host_code_builder_names_is_read_with_care() {
         let refused = crate::debugger::read_host("not json").unwrap_err();
         assert_eq!(refused.code, "EU001");
         let refused = crate::debugger::read_host(r#"{"package": "builder"}"#).unwrap_err();
         assert_eq!(refused.code, "EU002");
         let refused =
-            crate::debugger::read_host(r#"{"package": "com.apk.builder", "certificate": "ab:cd"}"#)
+            crate::debugger::read_host(r#"{"package": "com.code.builder", "certificate": "ab:cd"}"#)
                 .unwrap_err();
         assert_eq!(refused.code, "EU003");
 
@@ -14329,7 +14330,7 @@ public final class App extends Activity {
                 .map(|one| one.strings())
                 .unwrap_or_default()
                 .contains(&"crashes".to_string()),
-            "Apk Builder can show what is collected"
+            "Code Builder can show what is collected"
         );
     }
 
@@ -14748,7 +14749,7 @@ public final class App extends Activity {
         let root_c = std::ffi::CString::new(root.to_str().unwrap()).unwrap();
         let spec_c = std::ffi::CString::new(spec).unwrap();
         let report = call_ffi(|| unsafe {
-            crate::ffi::apk_builder_create_project(root_c.as_ptr(), spec_c.as_ptr())
+            crate::ffi::code_builder_create_project(root_c.as_ptr(), spec_c.as_ptr())
         });
         assert!(is_structurally_valid(&report), "{report}");
         assert!(report.contains("\"created\":true"), "{report}");
@@ -14890,8 +14891,8 @@ public final class App extends Activity {
     fn zip64_reads_what_an_independent_tool_writes() {
         if !python_zip_available() {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_ZIP64_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_ZIP64_CONFORMANCE is set but no independent tool is here"
+                std::env::var("CODE_BUILDER_REQUIRE_ZIP64_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_ZIP64_CONFORMANCE is set but no independent tool is here"
             );
             eprintln!("zip64: no independent archiver is available here");
             return;
@@ -14934,8 +14935,8 @@ public final class App extends Activity {
     fn what_this_writes_beyond_the_counter_an_independent_tool_reads() {
         if !python_zip_available() {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_ZIP64_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_ZIP64_CONFORMANCE is set but no independent tool is here"
+                std::env::var("CODE_BUILDER_REQUIRE_ZIP64_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_ZIP64_CONFORMANCE is set but no independent tool is here"
             );
             eprintln!("zip64: no independent archiver is available here");
             return;
@@ -15086,8 +15087,8 @@ public final class App extends Activity {
             }
         } else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_INFLATE_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_INFLATE_CONFORMANCE is set but no independent reader is here"
+                std::env::var("CODE_BUILDER_REQUIRE_INFLATE_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_INFLATE_CONFORMANCE is set but no independent reader is here"
             );
         }
 
@@ -15223,7 +15224,7 @@ public final class App extends Activity {
         let commit_id = git::identify(git::Kind::Commit, &commit);
         assert_eq!(git::tree_of(&pack, &commit_id), Ok(tree_id));
 
-        let into = std::env::temp_dir().join("apk_builder_git_two_deltas");
+        let into = std::env::temp_dir().join("code_builder_git_two_deltas");
         let _ = std::fs::remove_dir_all(&into);
         let written = git::checkout(&pack, &commit_id, &into).expect("the tree is written");
         assert_eq!(written.files, 2);
@@ -15264,7 +15265,7 @@ public final class App extends Activity {
             body.extend_from_slice(&crate::deflate::zlib(&tree));
 
             let pack = git::unpack(&pack_around(2, body)).expect("the pack resolves");
-            let into = std::env::temp_dir().join("apk_builder_git_escape");
+            let into = std::env::temp_dir().join("code_builder_git_escape");
             let _ = std::fs::remove_dir_all(&into);
             assert!(
                 git::checkout(&pack, &tree_id, &into).is_err(),
@@ -15278,14 +15279,14 @@ public final class App extends Activity {
     fn git_reads_what_the_reference_implementation_packs() {
         if !git_available() {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_GIT_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_GIT_CONFORMANCE is set but no reference git is here"
+                std::env::var("CODE_BUILDER_REQUIRE_GIT_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_GIT_CONFORMANCE is set but no reference git is here"
             );
             eprintln!("git: no reference implementation is available here");
             return;
         }
 
-        let work = std::env::temp_dir().join("apk_builder_git_conformance");
+        let work = std::env::temp_dir().join("code_builder_git_conformance");
         let _ = std::fs::remove_dir_all(&work);
         std::fs::create_dir_all(work.join("deep/deeper")).expect("the work tree is made");
 
@@ -15361,7 +15362,7 @@ public final class App extends Activity {
             "the pack holds objects git does not list"
         );
 
-        let into = std::env::temp_dir().join("apk_builder_git_conformance_out");
+        let into = std::env::temp_dir().join("code_builder_git_conformance_out");
         let _ = std::fs::remove_dir_all(&into);
         let named = git::of_hex(&head).expect("HEAD is hex");
         let written = git::checkout(&pack, &named, &into).expect("the tree is written");
@@ -15387,8 +15388,8 @@ public final class App extends Activity {
     fn inflate_reads_what_an_independent_compressor_wrote() {
         if !python_available() {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_INFLATE_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_INFLATE_CONFORMANCE is set but no independent compressor is here"
+                std::env::var("CODE_BUILDER_REQUIRE_INFLATE_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_INFLATE_CONFORMANCE is set but no independent compressor is here"
             );
             eprintln!("inflate: no independent compressor is available here");
             return;
@@ -15520,8 +15521,8 @@ public final class App extends Activity {
 
         if files.is_empty() {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_IMAGE_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_IMAGE_CONFORMANCE is set but no PNG files were found, so the \
+                std::env::var("CODE_BUILDER_REQUIRE_IMAGE_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_IMAGE_CONFORMANCE is set but no PNG files were found, so the \
                  image reader was never shown one written by another tool"
             );
             eprintln!("image conformance: no PNG files are available here");
@@ -15582,8 +15583,8 @@ public final class App extends Activity {
         }
         if files.is_empty() {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_IMAGE_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_IMAGE_CONFORMANCE is set but no PNG files were found"
+                std::env::var("CODE_BUILDER_REQUIRE_IMAGE_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_IMAGE_CONFORMANCE is set but no PNG files were found"
             );
             eprintln!("codec: no PNG files are available here");
             return;
@@ -17522,7 +17523,7 @@ dependencies {
     }
 
     fn find_bundletool() -> Option<Vec<String>> {
-        if let Ok(command) = std::env::var("APK_BUILDER_BUNDLETOOL") {
+        if let Ok(command) = std::env::var("CODE_BUILDER_BUNDLETOOL") {
             let parts: Vec<String> = command
                 .split_whitespace()
                 .map(|part| part.to_string())
@@ -17577,8 +17578,8 @@ dependencies {
     fn the_bundle_writer_produces_a_bundle_bundletool_accepts() {
         let Some(bundletool) = find_bundletool() else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_BUNDLETOOL").is_err(),
-                "APK_BUILDER_REQUIRE_BUNDLETOOL is set but bundletool was not found, so the bundle \
+                std::env::var("CODE_BUILDER_REQUIRE_BUNDLETOOL").is_err(),
+                "CODE_BUILDER_REQUIRE_BUNDLETOOL is set but bundletool was not found, so the bundle \
                  this build writes was never handed to the tool that judges one"
             );
             eprintln!("bundle conformance: bundletool is not available here");
@@ -17586,8 +17587,8 @@ dependencies {
         };
         let Some(aapt2) = find_build_tool("aapt2") else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_BUNDLETOOL").is_err(),
-                "APK_BUILDER_REQUIRE_BUNDLETOOL is set but aapt2 is missing, and bundletool needs it"
+                std::env::var("CODE_BUILDER_REQUIRE_BUNDLETOOL").is_err(),
+                "CODE_BUILDER_REQUIRE_BUNDLETOOL is set but aapt2 is missing, and bundletool needs it"
             );
             eprintln!("bundle conformance: aapt2 is not available here");
             return;
@@ -17621,7 +17622,7 @@ dependencies {
         project.icon = picture.as_ref().map(|path| std::fs::read(path).unwrap());
         project.files = vec![
             (
-                "lib/arm64-v8a/libapk_builder_core.so".to_string(),
+                "lib/arm64-v8a/libcode_builder_core.so".to_string(),
                 b"\x7fELF not a real object, only a path to place".to_vec(),
             ),
             (
@@ -17663,7 +17664,7 @@ dependencies {
                 "-validity",
                 "3650",
                 "-dname",
-                "CN=Apk Builder",
+                "CN=Code Builder",
             ])
             .output()
             .expect("keytool must run");
@@ -17762,7 +17763,7 @@ dependencies {
             .unwrap();
         let names = String::from_utf8_lossy(&listed.stdout).to_string();
         assert!(
-            names.contains("lib/arm64-v8a/libapk_builder_core.so"),
+            names.contains("lib/arm64-v8a/libcode_builder_core.so"),
             "{names}"
         );
         assert!(names.contains("notes.txt"), "{names}");
@@ -17923,7 +17924,7 @@ dependencies {
         assert!(table.read_values(
             concat!(
                 "<resources>",
-                "<string name=\"app_name\">Apk Builder Made</string>",
+                "<string name=\"app_name\">Code Builder Made</string>",
                 "<string name=\"greeting\">Hello</string>",
                 "<color name=\"accent\">#ff6cb6ff</color>",
                 "<dimen name=\"gap\">12dp</dimen>",
@@ -17964,8 +17965,8 @@ dependencies {
 
         let Some(aapt2) = find_build_tool("aapt2") else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_AXML_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_AXML_CONFORMANCE is set but aapt2 is missing, so the resource \
+                std::env::var("CODE_BUILDER_REQUIRE_AXML_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_AXML_CONFORMANCE is set but aapt2 is missing, so the resource \
                  table this build wrote was never read by anything but itself"
             );
             eprintln!("resource table: aapt2 is not available here");
@@ -18032,7 +18033,7 @@ dependencies {
             "resource 0x7f050000 mipmap/ic_launcher",
             "resource 0x7f060000 string/app_name",
             "resource 0x7f060001 string/greeting",
-            "Apk Builder Made",
+            "Code Builder Made",
             "Hello",
             "res/mipmap/ic_launcher.png",
             "res/mipmap-xxhdpi/ic_launcher.png",
@@ -18106,8 +18107,8 @@ dependencies {
 
         let Some(aapt2) = find_build_tool("aapt2") else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_AXML_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_AXML_CONFORMANCE is set but aapt2 is missing"
+                std::env::var("CODE_BUILDER_REQUIRE_AXML_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_AXML_CONFORMANCE is set but aapt2 is missing"
             );
             eprintln!("locales: aapt2 is not available here");
             std::fs::remove_dir_all(&directory).ok();
@@ -18220,8 +18221,8 @@ dependencies {
 
         let Some(aapt2) = find_build_tool("aapt2") else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_AXML_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_AXML_CONFORMANCE is set but aapt2 is missing"
+                std::env::var("CODE_BUILDER_REQUIRE_AXML_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_AXML_CONFORMANCE is set but aapt2 is missing"
             );
             eprintln!("icon: aapt2 is not available here");
             std::fs::remove_dir_all(&directory).ok();
@@ -18346,7 +18347,7 @@ dependencies {
         project.icon = picture.as_ref().map(|path| std::fs::read(path).unwrap());
         project.files = vec![
             (
-                "lib/arm64-v8a/libapk_builder.so".to_string(),
+                "lib/arm64-v8a/libcode_builder.so".to_string(),
                 b"\x7fELF".iter().copied().cycle().take(64_000).collect(),
             ),
             (
@@ -18374,7 +18375,7 @@ dependencies {
         }
 
         let library = archive
-            .entry("lib/arm64-v8a/libapk_builder.so")
+            .entry("lib/arm64-v8a/libcode_builder.so")
             .expect("the library must be there");
         assert_eq!(
             library.compression,
@@ -18566,8 +18567,8 @@ dependencies {
 
         if candidates.is_empty() {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_SELF_POLICY").is_err(),
-                "APK_BUILDER_REQUIRE_SELF_POLICY is set but no merged manifest was found, so this \
+                std::env::var("CODE_BUILDER_REQUIRE_SELF_POLICY").is_err(),
+                "CODE_BUILDER_REQUIRE_SELF_POLICY is set but no merged manifest was found, so this \
                  application was never held to the policy it enforces on what it builds"
             );
             eprintln!("self policy: no merged manifest has been produced here");
@@ -18697,8 +18698,8 @@ dependencies {
 
         let Some(aapt2) = find_build_tool("aapt2") else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_AXML_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_AXML_CONFORMANCE is set but aapt2 is missing"
+                std::env::var("CODE_BUILDER_REQUIRE_AXML_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_AXML_CONFORMANCE is set but aapt2 is missing"
             );
             eprintln!("version: aapt2 is not available here");
             return;
@@ -19046,7 +19047,7 @@ dependencies {
         let key_c = std::ffi::CString::new(key.to_str().unwrap()).unwrap();
 
         let report = call_ffi(|| unsafe {
-            crate::ffi::apk_builder_build_project(
+            crate::ffi::code_builder_build_project(
                 root_c.as_ptr(),
                 out_c.as_ptr(),
                 key_c.as_ptr(),
@@ -19078,14 +19079,14 @@ dependencies {
 
         let keys_c = std::ffi::CString::new(keys.to_str().unwrap()).unwrap();
         let spec_c = std::ffi::CString::new(
-            "alias=studio;commonName=Studio Name;organisation=Apk Builder;country=TR;\
+            "alias=studio;commonName=Studio Name;organisation=Code Builder;country=TR;\
              validityDays=10950;bits=2048",
         )
         .unwrap();
         let password_c = std::ffi::CString::new("a password worth having").unwrap();
 
         let made = call_ffi(|| unsafe {
-            crate::ffi::apk_builder_create_key(
+            crate::ffi::code_builder_create_key(
                 keys_c.as_ptr(),
                 spec_c.as_ptr(),
                 password_c.as_ptr(),
@@ -19095,20 +19096,20 @@ dependencies {
         assert!(made.contains("\"created\":true"), "{made}");
         assert!(made.contains("CN=Studio Name"), "{made}");
 
-        let listed = call_ffi(|| unsafe { crate::ffi::apk_builder_list_keys(keys_c.as_ptr()) });
+        let listed = call_ffi(|| unsafe { crate::ffi::code_builder_list_keys(keys_c.as_ptr()) });
         assert!(is_structurally_valid(&listed), "{listed}");
         assert!(listed.contains("\"alias\":\"studio\""), "{listed}");
 
         let path = crate::keystore::path_for(keys.to_str().unwrap(), "studio");
         let path_c = std::ffi::CString::new(path.clone()).unwrap();
         let opened = call_ffi(|| unsafe {
-            crate::ffi::apk_builder_check_key(path_c.as_ptr(), password_c.as_ptr())
+            crate::ffi::code_builder_check_key(path_c.as_ptr(), password_c.as_ptr())
         });
         assert!(opened.contains("\"opened\":true"), "{opened}");
 
         let wrong_c = std::ffi::CString::new("not the password").unwrap();
         let refused = call_ffi(|| unsafe {
-            crate::ffi::apk_builder_check_key(path_c.as_ptr(), wrong_c.as_ptr())
+            crate::ffi::code_builder_check_key(path_c.as_ptr(), wrong_c.as_ptr())
         });
         assert!(refused.contains("\"opened\":false"), "{refused}");
         assert!(refused.contains("EY021"), "{refused}");
@@ -19121,7 +19122,7 @@ dependencies {
         let root_c = std::ffi::CString::new(root.to_str().unwrap()).unwrap();
         let out_c = std::ffi::CString::new(output.to_str().unwrap()).unwrap();
         let built = call_ffi(|| unsafe {
-            crate::ffi::apk_builder_build_project(
+            crate::ffi::code_builder_build_project(
                 root_c.as_ptr(),
                 out_c.as_ptr(),
                 path_c.as_ptr(),
@@ -19152,7 +19153,7 @@ dependencies {
             .subject
             .contains("CN=Studio Name"));
 
-        let removed = call_ffi(|| unsafe { crate::ffi::apk_builder_delete_key(path_c.as_ptr()) });
+        let removed = call_ffi(|| unsafe { crate::ffi::code_builder_delete_key(path_c.as_ptr()) });
         assert!(removed.contains("\"removed\":true"), "{removed}");
         assert!(crate::keystore::list(keys.to_str().unwrap()).is_empty());
 
@@ -19428,7 +19429,7 @@ dependencies {
         let path_c = std::ffi::CString::new(path.clone()).unwrap();
 
         let refused = call_ffi(|| unsafe {
-            crate::ffi::apk_builder_build_all(
+            crate::ffi::code_builder_build_all(
                 root_c.as_ptr(),
                 package_c.as_ptr(),
                 bundle_c.as_ptr(),
@@ -19461,7 +19462,7 @@ dependencies {
         crate::scaffold::create(root.to_str().unwrap(), &crate::scaffold::Spec::default()).unwrap();
 
         let keys_c = std::ffi::CString::new(keys.to_str().unwrap()).unwrap();
-        let first = call_ffi(|| unsafe { crate::ffi::apk_builder_default_key(keys_c.as_ptr()) });
+        let first = call_ffi(|| unsafe { crate::ffi::code_builder_default_key(keys_c.as_ptr()) });
         assert!(is_structurally_valid(&first), "{first}");
         assert!(first.contains("\"ready\":true"), "{first}");
         assert!(first.contains("\"created\":true"), "{first}");
@@ -19486,7 +19487,7 @@ dependencies {
             "an answer must never echo a password: {first}"
         );
 
-        let again = call_ffi(|| unsafe { crate::ffi::apk_builder_default_key(keys_c.as_ptr()) });
+        let again = call_ffi(|| unsafe { crate::ffi::code_builder_default_key(keys_c.as_ptr()) });
         assert!(again.contains("\"ready\":true"), "{again}");
         assert!(
             again.contains("\"created\":false"),
@@ -19507,7 +19508,7 @@ dependencies {
         let password_c = std::ffi::CString::new(crate::keystore::DEFAULT_PASSWORD).unwrap();
 
         let built = call_ffi(|| unsafe {
-            crate::ffi::apk_builder_build_all(
+            crate::ffi::code_builder_build_all(
                 root_c.as_ptr(),
                 package_c.as_ptr(),
                 bundle_c.as_ptr(),
@@ -19610,7 +19611,7 @@ dependencies {
         let out_c = std::ffi::CString::new(output.to_str().unwrap()).unwrap();
         let key_c = std::ffi::CString::new(key.to_str().unwrap()).unwrap();
         call_ffi(|| unsafe {
-            crate::ffi::apk_builder_build_project(
+            crate::ffi::code_builder_build_project(
                 root_c.as_ptr(),
                 out_c.as_ptr(),
                 key_c.as_ptr(),
@@ -19634,7 +19635,7 @@ dependencies {
         let path_c = std::ffi::CString::new(output.to_str().unwrap()).unwrap();
         let good = std::ffi::CString::new(fingerprint.clone()).unwrap();
         let report = call_ffi(|| unsafe {
-            crate::ffi::apk_builder_verify_self(path_c.as_ptr(), good.as_ptr())
+            crate::ffi::code_builder_verify_self(path_c.as_ptr(), good.as_ptr())
         });
         assert!(report.contains("\"standing\":\"TRUSTED\""), "{report}");
         assert!(
@@ -19644,7 +19645,7 @@ dependencies {
 
         let other = std::ffi::CString::new("0".repeat(64)).unwrap();
         let report = call_ffi(|| unsafe {
-            crate::ffi::apk_builder_verify_self(path_c.as_ptr(), other.as_ptr())
+            crate::ffi::code_builder_verify_self(path_c.as_ptr(), other.as_ptr())
         });
         assert!(report.contains("\"standing\":\"TAMPERED\""), "{report}");
         assert!(report.contains("signed by a different key"), "{report}");
@@ -19656,7 +19657,7 @@ dependencies {
         std::fs::write(&damaged_path, &damaged).unwrap();
         let damaged_c = std::ffi::CString::new(damaged_path.to_str().unwrap()).unwrap();
         let report = call_ffi(|| unsafe {
-            crate::ffi::apk_builder_verify_self(damaged_c.as_ptr(), good.as_ptr())
+            crate::ffi::code_builder_verify_self(damaged_c.as_ptr(), good.as_ptr())
         });
         assert!(report.contains("\"standing\":\"TAMPERED\""), "{report}");
 
@@ -21032,14 +21033,14 @@ dependencies {
             let held = unsafe { std::ffi::CStr::from_ptr(ptr) }
                 .to_string_lossy()
                 .into_owned();
-            unsafe { crate::ffi::apk_builder_string_free(ptr) };
+            unsafe { crate::ffi::code_builder_string_free(ptr) };
             held
         };
         let root_c = std::ffi::CString::new(root.clone()).unwrap();
 
         let needle = std::ffi::CString::new("Ledger").unwrap();
         let answer =
-            read(unsafe { crate::ffi::apk_builder_symbols(root_c.as_ptr(), needle.as_ptr()) });
+            read(unsafe { crate::ffi::code_builder_symbols(root_c.as_ptr(), needle.as_ptr()) });
         assert!(is_structurally_valid(&answer), "{answer}");
         assert!(answer.contains("\"found\":true"), "{answer}");
         assert!(
@@ -21051,14 +21052,14 @@ dependencies {
 
         let named = std::ffi::CString::new("com.tr.yt.Ledger").unwrap();
         let where_it_is =
-            read(unsafe { crate::ffi::apk_builder_where_written(root_c.as_ptr(), named.as_ptr()) });
+            read(unsafe { crate::ffi::code_builder_where_written(root_c.as_ptr(), named.as_ptr()) });
         assert!(is_structurally_valid(&where_it_is), "{where_it_is}");
         assert!(where_it_is.contains("\"written\":true"), "{where_it_is}");
         assert!(where_it_is.contains("\"line\":3"), "{where_it_is}");
 
         let platform = std::ffi::CString::new("android.widget.TextView").unwrap();
         let nowhere = read(unsafe {
-            crate::ffi::apk_builder_where_written(root_c.as_ptr(), platform.as_ptr())
+            crate::ffi::code_builder_where_written(root_c.as_ptr(), platform.as_ptr())
         });
         assert!(nowhere.contains("\"written\":false"), "{nowhere}");
 
@@ -21367,8 +21368,8 @@ dependencies {
     fn the_resources_a_real_application_ships_come_out_as_aapt2_makes_them() {
         let (Some(aapt2), Some(jar)) = (find_build_tool("aapt2"), android_jar()) else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_AXML_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_AXML_CONFORMANCE is set but aapt2 or android.jar is missing"
+                std::env::var("CODE_BUILDER_REQUIRE_AXML_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_AXML_CONFORMANCE is set but aapt2 or android.jar is missing"
             );
             eprintln!("resources: aapt2 or android.jar is not available here");
             return;
@@ -22168,8 +22169,8 @@ dependencies {
         let key = crate::rsa::generate(2048).expect("a key");
         let certificate = crate::certificate::self_signed(
             &key,
-            "Apk Builder Inspect",
-            "Apk Builder",
+            "Code Builder Inspect",
+            "Code Builder",
             "TR",
             crate::certificate::moment_from_epoch(1_700_000_000),
             crate::certificate::moment_from_epoch(2_000_000_000),
@@ -22228,7 +22229,7 @@ dependencies {
             found
                 .signed_by
                 .iter()
-                .any(|held| held.contains("Apk Builder Inspect")),
+                .any(|held| held.contains("Code Builder Inspect")),
             "signed by {:?}",
             found.signed_by
         );
@@ -22279,7 +22280,7 @@ dependencies {
              package=\"com.tr.yt\" android:versionCode=\"7\" android:versionName=\"1.2.3\">\n\
              \x20 <uses-sdk android:minSdkVersion=\"30\" android:targetSdkVersion=\"36\"/>\n\
              \x20 <uses-permission android:name=\"android.permission.INTERNET\"/>\n\
-             \x20 <application android:label=\"Apk Builder\" android:debuggable=\"false\" \
+             \x20 <application android:label=\"Code Builder\" android:debuggable=\"false\" \
              android:hardwareAccelerated=\"true\">\n\
              \x20   <activity android:name=\".Main\" android:exported=\"true\"/>\n\
              \x20 </application>\n\
@@ -22318,7 +22319,7 @@ dependencies {
             .children_named("application")
             .next()
             .expect("an application");
-        assert_eq!(application.attribute("label"), Some("Apk Builder"));
+        assert_eq!(application.attribute("label"), Some("Code Builder"));
 
         assert_eq!(application.attribute("debuggable"), Some("false"));
         assert_eq!(application.attribute("hardwareAccelerated"), Some("true"));
@@ -22363,7 +22364,7 @@ dependencies {
     #[test]
     fn the_binary_xml_reader_survives_arbitrary_input() {
         let source = "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" \
-             package=\"com.tr.yt\"><application android:label=\"Apk Builder\"/></manifest>";
+             package=\"com.tr.yt\"><application android:label=\"Code Builder\"/></manifest>";
         let mut sink = Sink::new();
         let parsed =
             crate::xml::parse(source, "AndroidManifest.xml", &mut sink).expect("it must parse");
@@ -22389,8 +22390,8 @@ dependencies {
     fn what_aapt2_wrote_reads_back_the_same_as_what_this_wrote() {
         let (Some(aapt2), Some(jar)) = (find_build_tool("aapt2"), android_jar()) else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_AXML_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_AXML_CONFORMANCE is set but aapt2 or android.jar is missing"
+                std::env::var("CODE_BUILDER_REQUIRE_AXML_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_AXML_CONFORMANCE is set but aapt2 or android.jar is missing"
             );
             eprintln!("binary xml: aapt2 or android.jar is not available here");
             return;
@@ -22402,7 +22403,7 @@ dependencies {
              \x20   android:versionCode=\"7\"\n\
              \x20   android:versionName=\"1.2.3\">\n\
              \x20 <uses-sdk android:minSdkVersion=\"30\" android:targetSdkVersion=\"36\"/>\n\
-             \x20 <application android:label=\"Apk Builder\" android:hardwareAccelerated=\"true\">\n\
+             \x20 <application android:label=\"Code Builder\" android:hardwareAccelerated=\"true\">\n\
              \x20   <activity android:name=\".Main\" android:exported=\"true\"/>\n\
              \x20 </application>\n\
              </manifest>\n";
@@ -22451,7 +22452,7 @@ dependencies {
             .children_named("application")
             .next()
             .expect("an application");
-        assert_eq!(application.attribute("label"), Some("Apk Builder"));
+        assert_eq!(application.attribute("label"), Some("Code Builder"));
         assert_eq!(application.attribute("hardwareAccelerated"), Some("true"));
         let activity = application
             .children_named("activity")
@@ -22529,8 +22530,8 @@ dependencies {
 
         let Some(aapt2) = find_build_tool("aapt2") else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_AXML_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_AXML_CONFORMANCE is set but aapt2 is missing, so the \
+                std::env::var("CODE_BUILDER_REQUIRE_AXML_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_AXML_CONFORMANCE is set but aapt2 is missing, so the \
                  manifest this build writes was never checked against it"
             );
             eprintln!("axml conformance: aapt2 is not available here");
@@ -22572,7 +22573,7 @@ dependencies {
             "E: uses-permission",
             "android:name(0x01010003)=\"android.permission.INTERNET\"",
             "E: application",
-            "android:label(0x01010001)=\"Apk Builder\"",
+            "android:label(0x01010001)=\"Code Builder\"",
             "android:allowBackup(0x01010280)=false",
             "android:supportsRtl(0x010103af)=true",
             "android:extractNativeLibs(0x010104ea)=false",
@@ -22698,8 +22699,8 @@ dependencies {
             ("-1", Value::Decimal(-1)),
             ("0x20000", Value::Hex(0x20000)),
             ("@0x7f060000", Value::Reference(0x7f06_0000)),
-            ("Apk Builder", Value::Text),
-            ("com.apk.builder.Main", Value::Text),
+            ("Code Builder", Value::Text),
+            ("com.code.builder.Main", Value::Text),
             ("1.0.0", Value::Text),
         ];
         for (raw, expected) in cases {
@@ -22769,8 +22770,8 @@ dependencies {
     #[test]
     fn internal_names_become_the_names_a_person_writes() {
         assert_eq!(
-            jvm::internal_name_to_source("com/apk/builder/Builder"),
-            "com.apk.builder.Builder"
+            jvm::internal_name_to_source("com/code/builder/Builder"),
+            "com.code.builder.Builder"
         );
         assert_eq!(
             jvm::internal_name_to_source("java/lang/Object"),
@@ -22915,8 +22916,8 @@ dependencies {
         let classes = classes_this_build_produced();
         if classes.is_empty() {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_CLASS_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_CLASS_CONFORMANCE is set but no class files were found"
+                std::env::var("CODE_BUILDER_REQUIRE_CLASS_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_CLASS_CONFORMANCE is set but no class files were found"
             );
             eprintln!(
                 "class conformance: nothing compiled here, so nothing was read. \
@@ -22936,8 +22937,8 @@ dependencies {
 
             let Some(facts) = javap(path) else {
                 assert!(
-                    std::env::var("APK_BUILDER_REQUIRE_CLASS_CONFORMANCE").is_err(),
-                    "APK_BUILDER_REQUIRE_CLASS_CONFORMANCE is set but javap is not available"
+                    std::env::var("CODE_BUILDER_REQUIRE_CLASS_CONFORMANCE").is_err(),
+                    "CODE_BUILDER_REQUIRE_CLASS_CONFORMANCE is set but javap is not available"
                 );
                 eprintln!("class conformance: javap is not available here");
                 return;
@@ -23247,7 +23248,7 @@ dependencies {
                 ..cache_inputs(&source, &dependencies)
             },
             CacheInputs {
-                relevant_environment: &[("APK_BUILDER_X", "1")],
+                relevant_environment: &[("CODE_BUILDER_X", "1")],
                 ..cache_inputs(&source, &dependencies)
             },
             CacheInputs {
@@ -25165,8 +25166,8 @@ Viewbinding   = false
 
         if !python_available() {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_POW_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_POW_CONFORMANCE is set but no independent arithmetic is here"
+                std::env::var("CODE_BUILDER_REQUIRE_POW_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_POW_CONFORMANCE is set but no independent arithmetic is here"
             );
             eprintln!("bignum: no independent arithmetic is available here");
             return;
@@ -25368,8 +25369,8 @@ Viewbinding   = false
     fn gcm_agrees_with_an_independent_implementation() {
         if !python_gcm_available() {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_GCM_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_GCM_CONFORMANCE is set but no independent cipher is here"
+                std::env::var("CODE_BUILDER_REQUIRE_GCM_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_GCM_CONFORMANCE is set but no independent cipher is here"
             );
             eprintln!("gcm: no independent implementation is available here");
             return;
@@ -26086,14 +26087,14 @@ Viewbinding   = false
     #[test]
     fn the_abi_reports_its_version() {
         assert_eq!(
-            crate::ffi::apk_builder_abi_version(),
-            crate::ffi::APK_BUILDER_ABI_VERSION
+            crate::ffi::code_builder_abi_version(),
+            crate::ffi::CODE_BUILDER_ABI_VERSION
         );
     }
 
     #[test]
     fn the_abi_exposes_a_static_nul_terminated_version() {
-        let ptr = crate::ffi::apk_builder_core_version();
+        let ptr = crate::ffi::code_builder_core_version();
         assert!(!ptr.is_null());
         let version = unsafe { std::ffi::CStr::from_ptr(ptr) };
         assert_eq!(version.to_str().unwrap(), crate::CORE_VERSION);
@@ -26101,32 +26102,32 @@ Viewbinding   = false
 
     #[test]
     fn the_abi_accepts_null_as_an_empty_observation() {
-        let ptr = unsafe { crate::ffi::apk_builder_state_report(std::ptr::null()) };
+        let ptr = unsafe { crate::ffi::code_builder_state_report(std::ptr::null()) };
         assert!(!ptr.is_null());
         let report = unsafe { std::ffi::CStr::from_ptr(ptr) }
             .to_str()
             .unwrap()
             .to_string();
-        unsafe { crate::ffi::apk_builder_string_free(ptr) };
+        unsafe { crate::ffi::code_builder_string_free(ptr) };
         assert!(is_structurally_valid(&report));
     }
 
     #[test]
     fn the_abi_round_trips_an_observation() {
         let input = std::ffi::CString::new("minSdk=30;targetSdk=37").unwrap();
-        let ptr = unsafe { crate::ffi::apk_builder_state_report(input.as_ptr()) };
+        let ptr = unsafe { crate::ffi::code_builder_state_report(input.as_ptr()) };
         assert!(!ptr.is_null());
         let report = unsafe { std::ffi::CStr::from_ptr(ptr) }
             .to_str()
             .unwrap()
             .to_string();
-        unsafe { crate::ffi::apk_builder_string_free(ptr) };
+        unsafe { crate::ffi::code_builder_string_free(ptr) };
         assert!(report.contains("\"state\":\"MATCH\""));
     }
 
     #[test]
     fn freeing_null_is_a_no_op() {
-        unsafe { crate::ffi::apk_builder_string_free(std::ptr::null_mut()) };
+        unsafe { crate::ffi::code_builder_string_free(std::ptr::null_mut()) };
     }
     #[test]
     fn a_project_keeps_its_own_webp_launcher_icon() {
@@ -26325,11 +26326,11 @@ Viewbinding   = false
         let lowered = crate::desugar::lowered(made.clone(), 30).unwrap();
         let names: Vec<&str> = lowered.iter().map(|(name, _)| name.as_str()).collect();
         assert!(
-            names.contains(&"com/apk/builder/desugar/Backports.class"),
+            names.contains(&"com/code/builder/desugar/Backports.class"),
             "{names:?}"
         );
         assert!(
-            names.contains(&"com/apk/builder/desugar/RecordTag.class"),
+            names.contains(&"com/code/builder/desugar/RecordTag.class"),
             "{names:?}"
         );
         let point = lowered
@@ -26343,7 +26344,7 @@ Viewbinding   = false
                 .as_deref()
                 .map(|held| held.replace('.', "/"))
                 .as_deref(),
-            Some("com/apk/builder/desugar/RecordTag"),
+            Some("com/code/builder/desugar/RecordTag"),
             "java.lang.Record is not on Android before API 34"
         );
         let newer = lowered
@@ -26352,7 +26353,7 @@ Viewbinding   = false
             .unwrap();
         let said = pool_texts(&newer.1).join("\n");
         assert!(
-            said.contains("com/apk/builder/desugar/Backports"),
+            said.contains("com/code/builder/desugar/Backports"),
             "the calls go to the stand-ins"
         );
         for (name, bytes) in &lowered {
@@ -37076,7 +37077,7 @@ public class Screen extends Activity implements View.OnClickListener {
         root.setBackgroundColor(Color.parseColor("#101014"));
 
         title = new TextView(this);
-        title.setText("Apk Builder");
+        title.setText("Code Builder");
         title.setTextSize(28f);
         title.setTextColor(Color.WHITE);
         title.setTypeface(Typeface.DEFAULT_BOLD);
@@ -37088,7 +37089,7 @@ public class Screen extends Activity implements View.OnClickListener {
         input.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
-                title.setText(s.length() == 0 ? "Apk Builder" : s.toString());
+                title.setText(s.length() == 0 ? "Code Builder" : s.toString());
             }
             @Override public void afterTextChanged(Editable s) { }
         });
@@ -39996,10 +39997,10 @@ public class Listener {
             3,
             "the pure Java parts of the runtime are all there"
         );
-        sources.push(("com/apk/builder/debug/JournalCheck.java", JOURNAL_CHECK));
+        sources.push(("com/code/builder/debug/JournalCheck.java", JOURNAL_CHECK));
         runs_like_the_jdk(
             &sources,
-            "com.apk.builder.debug.JournalCheck",
+            "com.code.builder.debug.JournalCheck",
             "round trip\npersistence\nrotation\nconcurrency\nbursts\ncrashes\nclearing\nclearing survives a restart\nother processes\nanother handler is wrapped\nout of memory\ntombstones\nspeed\nall held\n",
         );
     }
@@ -40165,7 +40166,7 @@ public class Si {
         found.pop()
     }
 
-    const JOURNAL_CHECK: &str = r####"package com.apk.builder.debug;
+    const JOURNAL_CHECK: &str = r####"package com.code.builder.debug;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -40687,11 +40688,11 @@ public class Newer {
             .map(|(_, bytes)| String::from_utf8_lossy(bytes).to_string())
             .expect("the class is there");
         assert!(
-            main.contains("com/apk/builder/desugar/Backports"),
+            main.contains("com/code/builder/desugar/Backports"),
             "the calls are lowered"
         );
         assert!(
-            main.contains("com/apk/builder/desugar/HexFormat"),
+            main.contains("com/code/builder/desugar/HexFormat"),
             "the class is replaced"
         );
         assert!(
@@ -42746,7 +42747,7 @@ mod kotlin {
     }
 
     pub(super) fn standard_library() -> Option<(std::path::PathBuf, Vec<u8>)> {
-        if let Ok(named) = std::env::var("APK_BUILDER_KOTLIN_STDLIB") {
+        if let Ok(named) = std::env::var("CODE_BUILDER_KOTLIN_STDLIB") {
             let path = std::path::PathBuf::from(named);
             let bytes = std::fs::read(&path).ok()?;
             return Some((path, bytes));
@@ -42896,8 +42897,8 @@ mod kotlin {
     fn kotlin_programs_compile_and_answer_ok() {
         let Some((library_path, library)) = standard_library() else {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_KOTLIN_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_KOTLIN_CONFORMANCE is set but no kotlin-stdlib is here"
+                std::env::var("CODE_BUILDER_REQUIRE_KOTLIN_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_KOTLIN_CONFORMANCE is set but no kotlin-stdlib is here"
             );
             eprintln!("kotlin battery: no kotlin-stdlib to compile against");
             return;
@@ -64718,7 +64719,7 @@ mod reference {
     }
 
     pub(super) fn suite_threads() -> usize {
-        std::env::var("APK_BUILDER_SUITE_THREADS")
+        std::env::var("CODE_BUILDER_SUITE_THREADS")
             .ok()
             .and_then(|value| value.parse::<usize>().ok())
             .filter(|value| *value > 0)
@@ -64745,7 +64746,7 @@ mod reference {
                         let Some(path) = paths.get(index) else {
                             break;
                         };
-                        if std::env::var_os("APK_BUILDER_SUITE_TRACE").is_some() {
+                        if std::env::var_os("CODE_BUILDER_SUITE_TRACE").is_some() {
                             eprintln!("suite: {path}");
                         }
                         let verdict =
@@ -65529,7 +65530,7 @@ mod reference_checks {
             .into_iter()
             .filter(|path| path.ends_with(".kt"))
             .collect();
-        if let Ok(filter) = std::env::var("APK_BUILDER_NATIVE_FILTER") {
+        if let Ok(filter) = std::env::var("CODE_BUILDER_NATIVE_FILTER") {
             tests.retain(|path| path.contains(&filter));
         }
         let outcomes = run_parallel(tests, &|path| {
@@ -65572,7 +65573,7 @@ mod reference_checks {
             if let Err(problem) = native_main(&mut module, entry) {
                 return Verdict::Failed(problem);
             }
-            if std::env::var_os("APK_BUILDER_NATIVE_ARM32").is_some() {
+            if std::env::var_os("CODE_BUILDER_NATIVE_ARM32").is_some() {
                 let program = match crate::compilers::x86_64::armv7::native::build_executable(
                     &module,
                     "omni.main",
@@ -70438,8 +70439,8 @@ mod object_files {
             .unwrap_or(false);
         if !present {
             assert!(
-                std::env::var("APK_BUILDER_REQUIRE_LINKER_CONFORMANCE").is_err(),
-                "APK_BUILDER_REQUIRE_LINKER_CONFORMANCE is set but {tool} is not here"
+                std::env::var("CODE_BUILDER_REQUIRE_LINKER_CONFORMANCE").is_err(),
+                "CODE_BUILDER_REQUIRE_LINKER_CONFORMANCE is set but {tool} is not here"
             );
             eprintln!("object file conformance: {tool} is not available here");
         }
@@ -70698,7 +70699,7 @@ mod linker_conformance {
     use std::process::Command;
 
     pub(super) fn finish(folder: &Path) {
-        if std::env::var_os("APK_BUILDER_KEEP_LINKER_WORK").is_none() {
+        if std::env::var_os("CODE_BUILDER_KEEP_LINKER_WORK").is_none() {
             std::fs::remove_dir_all(folder).ok();
         }
     }
@@ -71213,7 +71214,7 @@ far_function:
         assert_eq!(run.status.code(), reference.status.code());
         assert_eq!(run.stdout, b"hello from omni\n");
         assert_eq!(run.stdout, reference.stdout);
-        if std::env::var_os("APK_BUILDER_KEEP_LINKER_WORK").is_none() {
+        if std::env::var_os("CODE_BUILDER_KEEP_LINKER_WORK").is_none() {
             finish(&folder);
         }
     }
@@ -71546,7 +71547,7 @@ pointers:
         .map(|name| host_file(name))
         .collect();
         if files.iter().any(Option::is_none) {
-            if std::env::var_os("APK_BUILDER_REQUIRE_LINKER_CONFORMANCE").is_some() {
+            if std::env::var_os("CODE_BUILDER_REQUIRE_LINKER_CONFORMANCE").is_some() {
                 panic!("the glibc start files are missing");
             }
             return;
@@ -73343,7 +73344,7 @@ mod linker_lit {
     }
 
     fn oracle() -> bool {
-        std::env::var_os("APK_BUILDER_LLD_ORACLE").is_some()
+        std::env::var_os("CODE_BUILDER_LLD_ORACLE").is_some()
     }
 
     fn tool_ld_lld(arguments: &[String], input: &[u8], world: &mut World) -> ToolOutcome {
@@ -73633,7 +73634,7 @@ mod linker_lit {
         let tree = Tree::of(&named).expect("the LLD tests are present");
         let root = format!("llvm-project/lld/test/{folder}/");
         let mut tests = lit_tests(&tree, &root, &[".test", ".s", ".ll", ".yaml"]);
-        if let Ok(filter) = std::env::var("APK_BUILDER_LLD_FILTER") {
+        if let Ok(filter) = std::env::var("CODE_BUILDER_LLD_FILTER") {
             tests.retain(|path| path.contains(&filter));
         }
         let architectures: &[&str] = &["x86", "aarch64", "arm"];
@@ -73674,7 +73675,7 @@ mod linker_lit {
                 Some(reason) => super::reference::Verdict::OutOfScope(reason),
                 None => suite.run_test(path),
             };
-            if std::env::var_os("APK_BUILDER_SUITE_TRACE").is_some() {
+            if std::env::var_os("CODE_BUILDER_SUITE_TRACE").is_some() {
                 eprintln!("finished: {path}");
             }
             verdict
@@ -74705,7 +74706,7 @@ mod x86_assembly {
         let tree = Tree::of(&named).expect("the MC tests are present");
         let root = format!("llvm-project/llvm/test/{folder}/");
         let mut tests = lit_tests(&tree, &root, &[".s", ".txt", ".test", ".asm"]);
-        if let Ok(filter) = std::env::var("APK_BUILDER_MC_FILTER") {
+        if let Ok(filter) = std::env::var("CODE_BUILDER_MC_FILTER") {
             tests.retain(|path| path.contains(&filter));
         }
         let features = [
@@ -74753,7 +74754,7 @@ mod x86_assembly {
                 match (verdict, limit) {
                     (Verdict::Failed(_), _)
                         if vector_extension
-                            && std::env::var_os("APK_BUILDER_MC_VECTOR_STRICT").is_none() =>
+                            && std::env::var_os("CODE_BUILDER_MC_VECTOR_STRICT").is_none() =>
                     {
                         (
                             path,
@@ -75127,8 +75128,8 @@ mod x86_assembly {
     #[test]
     #[ignore]
     fn dump_runtime_source_from_environment() {
-        let name = std::env::var("APK_BUILDER_MC_DUMP").unwrap_or_default();
-        let folder = std::env::var("APK_BUILDER_MC_DUMP_TO").unwrap_or_default();
+        let name = std::env::var("CODE_BUILDER_MC_DUMP").unwrap_or_default();
+        let folder = std::env::var("CODE_BUILDER_MC_DUMP_TO").unwrap_or_default();
         let tree =
             Tree::of(&["Beta_03_Clang_LLD_Runtime_GCC_Core"]).expect("the sources are present");
         for path in tree.paths_under(&name) {
@@ -75145,28 +75146,28 @@ mod x86_assembly {
     #[test]
     #[ignore]
     fn assemble_from_environment() {
-        let source = match std::env::var("APK_BUILDER_MC_FILE") {
+        let source = match std::env::var("CODE_BUILDER_MC_FILE") {
             Ok(path) => std::fs::read_to_string(path).unwrap_or_default(),
-            Err(_) => std::env::var("APK_BUILDER_MC_SOURCE")
+            Err(_) => std::env::var("CODE_BUILDER_MC_SOURCE")
                 .unwrap_or_default()
                 .replace("\\n", "\n"),
         };
-        let triple = std::env::var("APK_BUILDER_MC_TRIPLE")
+        let triple = std::env::var("CODE_BUILDER_MC_TRIPLE")
             .unwrap_or_else(|_| "x86_64-unknown-unknown".to_string());
         let mut options = AssemblerOptions::new(&triple);
         options.show_encoding = true;
-        if let Ok(features) = std::env::var("APK_BUILDER_MC_FEATURES") {
+        if let Ok(features) = std::env::var("CODE_BUILDER_MC_FEATURES") {
             options
                 .features
                 .extend(features.split(',').map(str::to_string));
         }
-        if std::env::var("APK_BUILDER_MC_INTEL").is_ok() {
+        if std::env::var("CODE_BUILDER_MC_INTEL").is_ok() {
             options.input_syntax = Syntax::Intel;
         }
-        if let Ok(path) = std::env::var("APK_BUILDER_MC_OBJECT") {
+        if let Ok(path) = std::env::var("CODE_BUILDER_MC_OBJECT") {
             options.output = OutputKind::Object;
             options.show_encoding = false;
-            if let Ok(cpu) = std::env::var("APK_BUILDER_MC_CPU") {
+            if let Ok(cpu) = std::env::var("CODE_BUILDER_MC_CPU") {
                 options.cpu = cpu;
             }
             let result =
@@ -75175,8 +75176,8 @@ mod x86_assembly {
             eprintln!("{}", format_assembly_messages(&render_messages(&result)));
             return;
         }
-        let result = if std::env::var("APK_BUILDER_MC_DISASSEMBLE").is_ok() {
-            options.show_encoding = std::env::var("APK_BUILDER_MC_ENCODING").is_ok();
+        let result = if std::env::var("CODE_BUILDER_MC_DISASSEMBLE").is_ok() {
+            options.show_encoding = std::env::var("CODE_BUILDER_MC_ENCODING").is_ok();
             disassemble_source(&options, source.as_bytes(), false)
         } else {
             assemble_source(&options, source.as_bytes(), None)
@@ -75240,7 +75241,7 @@ mod x86_assembly {
             return;
         }
         let path =
-            std::env::temp_dir().join(format!("apk_builder_assembled_{}", std::process::id()));
+            std::env::temp_dir().join(format!("code_builder_assembled_{}", std::process::id()));
         std::fs::write(&path, program).expect("the program is written");
         {
             use std::os::unix::fs::PermissionsExt;
@@ -75353,7 +75354,7 @@ mod x86_assembly {
         if !cfg!(all(target_os = "linux", target_arch = "x86_64")) {
             return;
         }
-        let path = std::env::temp_dir().join(format!("apk_builder_macros_{}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("code_builder_macros_{}", std::process::id()));
         std::fs::write(&path, program).expect("the program is written");
         {
             use std::os::unix::fs::PermissionsExt;
@@ -75489,7 +75490,7 @@ mod x86_assembly {
         if !cfg!(all(target_os = "linux", target_arch = "x86_64")) {
             return;
         }
-        let path = std::env::temp_dir().join(format!("apk_builder_project_{}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("code_builder_project_{}", std::process::id()));
         std::fs::write(&path, program).expect("the program is written");
         {
             use std::os::unix::fs::PermissionsExt;
@@ -77803,7 +77804,7 @@ mod native_x86_64 {
             return None;
         }
         let folder = std::env::temp_dir().join(format!(
-            "apk_builder_native_{name}_{}_{:?}",
+            "code_builder_native_{name}_{}_{:?}",
             std::process::id(),
             std::thread::current().id()
         ));
@@ -77877,7 +77878,7 @@ mod native_x86_64 {
             "an AArch64 program"
         );
         let path = std::env::temp_dir().join(format!(
-            "apk_builder_arm_{name}_{}_{:?}",
+            "code_builder_arm_{name}_{}_{:?}",
             std::process::id(),
             std::thread::current().id()
         ));
@@ -77940,7 +77941,7 @@ mod native_x86_64 {
             emulated.exit, expected.0,
             "the emulated arm64 program exits as the interpreter does"
         );
-        if let Ok(path) = std::env::var("APK_BUILDER_ARM32_DUMP") {
+        if let Ok(path) = std::env::var("CODE_BUILDER_ARM32_DUMP") {
             if let Ok(text) = crate::compilers::x86_64::armv7::native::emit_assembly(&module) {
                 let _ = std::fs::write(&path, text);
             }
@@ -77951,12 +77952,12 @@ mod native_x86_64 {
         assert_eq!(&arm32[18..20], &40u16.to_le_bytes(), "an ARM program");
         {
             let path = std::env::temp_dir().join(format!(
-                "apk_builder_arm32_{name}_{}_{:?}",
+                "code_builder_arm32_{name}_{}_{:?}",
                 std::process::id(),
                 std::thread::current().id()
             ));
             std::fs::write(&path, &arm32).expect("the program is written");
-            if let Ok(copy) = std::env::var("APK_BUILDER_ARM32_KEEP") {
+            if let Ok(copy) = std::env::var("CODE_BUILDER_ARM32_KEEP") {
                 let _ = std::fs::write(copy, &arm32);
             }
             let listing = std::process::Command::new("llvm-objdump-18")
@@ -80952,7 +80953,7 @@ block0:
 
     #[test]
     fn random_float_programs_agree_on_the_interpreter_x86_64_and_arm64() {
-        let count = std::env::var("APK_BUILDER_FUZZ_PROGRAMS")
+        let count = std::env::var("CODE_BUILDER_FUZZ_PROGRAMS")
             .ok()
             .and_then(|text| text.parse::<u64>().ok())
             .unwrap_or(120);
@@ -81039,7 +81040,7 @@ block0:
     #[test]
     fn random_branching_programs_keep_their_answer_through_every_rewrite() {
         use crate::compilers::compiler_infrastructure::optimizer;
-        let count = std::env::var("APK_BUILDER_FUZZ_PROGRAMS")
+        let count = std::env::var("CODE_BUILDER_FUZZ_PROGRAMS")
             .ok()
             .and_then(|text| text.parse::<u64>().ok())
             .unwrap_or(120);
@@ -81067,7 +81068,7 @@ block0:
 
     #[test]
     fn random_integer_programs_agree_on_the_interpreter_x86_64_and_arm64() {
-        let count = std::env::var("APK_BUILDER_FUZZ_PROGRAMS")
+        let count = std::env::var("CODE_BUILDER_FUZZ_PROGRAMS")
             .ok()
             .and_then(|text| text.parse::<u64>().ok())
             .unwrap_or(120);
@@ -81357,7 +81358,7 @@ block0(%step: i32):
         assert_eq!(&library[..4], b"\x7fELF");
         assert_eq!(&library[16..18], &3u16.to_le_bytes(), "a shared object");
         let path = std::env::temp_dir().join(format!(
-            "apk_builder_library_{}_{:?}.so",
+            "code_builder_library_{}_{:?}.so",
             std::process::id(),
             std::thread::current().id()
         ));
@@ -81386,7 +81387,7 @@ block0(%step: i32):
         let library = codegen::build_shared_library(&module)
             .unwrap_or_else(|problem| panic!("{} {:?}", problem.message, problem.context));
         let path = std::env::temp_dir().join(format!(
-            "apk_builder_threads_{}_{:?}.so",
+            "code_builder_threads_{}_{:?}.so",
             std::process::id(),
             std::thread::current().id()
         ));
@@ -81429,7 +81430,7 @@ block0(%step: i32):
         let library = codegen::build_shared_library(&module)
             .unwrap_or_else(|problem| panic!("{} {:?}", problem.message, problem.context));
         let path = std::env::temp_dir().join(format!(
-            "apk_builder_canary_{}_{:?}.so",
+            "code_builder_canary_{}_{:?}.so",
             std::process::id(),
             std::thread::current().id()
         ));
@@ -81484,7 +81485,7 @@ block0(%number: i32):
         let library = codegen::build_shared_library_with_imports(&module)
             .unwrap_or_else(|problem| panic!("{} {:?}", problem.message, problem.context));
         let path = std::env::temp_dir().join(format!(
-            "apk_builder_libc_{}_{:?}.so",
+            "code_builder_libc_{}_{:?}.so",
             std::process::id(),
             std::thread::current().id()
         ));
@@ -82241,7 +82242,7 @@ mod armv8_assembly {
     #[ignore]
     fn armv8_instruction_groups() {
         let target = armv8::target().expect("the target loads");
-        let names = std::env::var("APK_BUILDER_RECORDS").unwrap_or_default();
+        let names = std::env::var("CODE_BUILDER_RECORDS").unwrap_or_default();
         for name in names.split(',').filter(|name| !name.is_empty()) {
             let Some(index) = target.instruction_by_record.get(name) else {
                 eprintln!("{name}: no such instruction");
@@ -82259,8 +82260,8 @@ mod armv8_assembly {
     #[ignore]
     fn armv8_records_of_class() {
         let table = armv8::table().expect("the table reads");
-        let class = std::env::var("APK_BUILDER_CLASS").unwrap_or_default();
-        let limit: usize = std::env::var("APK_BUILDER_LIMIT")
+        let class = std::env::var("CODE_BUILDER_CLASS").unwrap_or_default();
+        let limit: usize = std::env::var("CODE_BUILDER_LIMIT")
             .ok()
             .and_then(|text| text.parse().ok())
             .unwrap_or(3);
@@ -82453,7 +82454,7 @@ mod armv8_assembly {
         let triple = triple.as_str();
         use std::io::Write;
         let folder = std::env::temp_dir().join(format!(
-            "apk_builder_armv7_{}_{:?}",
+            "code_builder_armv7_{}_{:?}",
             std::process::id(),
             std::thread::current().id()
         ));
@@ -83027,7 +83028,7 @@ mod armv8_assembly {
             result.output
         } else {
             let folder = std::env::temp_dir().join(format!(
-                "apk_builder_armv7_attr_{}_{:?}",
+                "code_builder_armv7_attr_{}_{:?}",
                 std::process::id(),
                 std::thread::current().id()
             ));
@@ -83239,7 +83240,7 @@ mod armv8_assembly {
             result.output
         } else {
             let folder = std::env::temp_dir().join(format!(
-                "apk_builder_armv7_sum_{}_{:?}",
+                "code_builder_armv7_sum_{}_{:?}",
                 std::process::id(),
                 std::thread::current().id()
             ));
@@ -83501,16 +83502,16 @@ mod armv8_assembly {
     #[ignore]
     fn armv7_debug_line() {
         use crate::compilers::x86_64::{assemble_source, AssemblerOptions, OutputKind};
-        let source = std::env::var("APK_BUILDER_LINE").unwrap_or_default();
+        let source = std::env::var("CODE_BUILDER_LINE").unwrap_or_default();
         let triple =
-            std::env::var("APK_BUILDER_TRIPLE").unwrap_or_else(|_| "armv7a-linux-gnueabihf".into());
+            std::env::var("CODE_BUILDER_TRIPLE").unwrap_or_else(|_| "armv7a-linux-gnueabihf".into());
         let mut options = AssemblerOptions::new(&triple);
         options.output = OutputKind::Assembly;
         options.show_encoding = true;
-        if let Ok(cpu) = std::env::var("APK_BUILDER_CPU") {
+        if let Ok(cpu) = std::env::var("CODE_BUILDER_CPU") {
             options.cpu = cpu;
         }
-        if let Ok(features) = std::env::var("APK_BUILDER_FEATURES") {
+        if let Ok(features) = std::env::var("CODE_BUILDER_FEATURES") {
             options.features = features
                 .split(',')
                 .filter(|held| !held.is_empty())
@@ -83529,29 +83530,29 @@ mod armv8_assembly {
     #[ignore]
     fn armv7_debug_file() {
         use crate::compilers::x86_64::{assemble_source, render_messages, AssemblerOptions};
-        let path = std::env::var("APK_BUILDER_FILE").unwrap_or_default();
+        let path = std::env::var("CODE_BUILDER_FILE").unwrap_or_default();
         let source = std::fs::read(&path).expect("the file reads");
         let triple =
-            std::env::var("APK_BUILDER_TRIPLE").unwrap_or_else(|_| "armv7a-linux-gnueabihf".into());
+            std::env::var("CODE_BUILDER_TRIPLE").unwrap_or_else(|_| "armv7a-linux-gnueabihf".into());
         let mut options = AssemblerOptions::new(&triple);
-        options.show_encoding = std::env::var("APK_BUILDER_PRESERVE").is_err();
-        options.preserve_comments = std::env::var("APK_BUILDER_PRESERVE").is_ok();
-        options.no_initial_text_section = std::env::var("APK_BUILDER_PRESERVE").is_ok();
-        if std::env::var("APK_BUILDER_OBJECT").is_ok() {
+        options.show_encoding = std::env::var("CODE_BUILDER_PRESERVE").is_err();
+        options.preserve_comments = std::env::var("CODE_BUILDER_PRESERVE").is_ok();
+        options.no_initial_text_section = std::env::var("CODE_BUILDER_PRESERVE").is_ok();
+        if std::env::var("CODE_BUILDER_OBJECT").is_ok() {
             options.output = crate::compilers::x86_64::OutputKind::Object;
         }
         options.source_name = path.clone();
-        if let Ok(cpu) = std::env::var("APK_BUILDER_CPU") {
+        if let Ok(cpu) = std::env::var("CODE_BUILDER_CPU") {
             options.cpu = cpu;
         }
-        if let Ok(features) = std::env::var("APK_BUILDER_FEATURES") {
+        if let Ok(features) = std::env::var("CODE_BUILDER_FEATURES") {
             options.features = features
                 .split(',')
                 .filter(|held| !held.is_empty())
                 .map(str::to_string)
                 .collect();
         }
-        let result = if std::env::var("APK_BUILDER_DISASM").is_ok() {
+        let result = if std::env::var("CODE_BUILDER_DISASM").is_ok() {
             crate::compilers::x86_64::disassemble_source(&options, &source, false)
                 .expect("the source disassembles")
         } else {
@@ -83562,7 +83563,7 @@ mod armv8_assembly {
             "{}",
             super::x86_assembly::format_assembly_messages(&diagnostics)
         );
-        if let Ok(out) = std::env::var("APK_BUILDER_OUT") {
+        if let Ok(out) = std::env::var("CODE_BUILDER_OUT") {
             std::fs::write(out, &result.output).expect("the object is written");
         } else {
             print!("{}", String::from_utf8_lossy(&result.output));
@@ -83572,7 +83573,7 @@ mod armv8_assembly {
     #[test]
     #[ignore]
     fn armv7_dump_matchables() {
-        let name = std::env::var("APK_BUILDER_LINE").unwrap_or_default();
+        let name = std::env::var("CODE_BUILDER_LINE").unwrap_or_default();
         let matcher = crate::compilers::x86_64::armv7::matcher();
         for entry in &matcher.matchables {
             if entry.mnemonic != name {
@@ -83602,7 +83603,7 @@ mod armv8_assembly {
     #[ignore]
     fn armv7_dump_instruction() {
         use crate::compilers::table_gen::TableValue;
-        let wanted = std::env::var("APK_BUILDER_LINE").unwrap_or_default();
+        let wanted = std::env::var("CODE_BUILDER_LINE").unwrap_or_default();
         let target = crate::compilers::x86_64::armv7::target().expect("target");
         for instruction in &target.instructions {
             if instruction.record != wanted {
@@ -83680,8 +83681,8 @@ mod armv8_assembly {
     #[test]
     #[ignore]
     fn armv7_write_object() {
-        let path = std::env::var("APK_BUILDER_FILE").unwrap_or_default();
-        let output = std::env::var("APK_BUILDER_OUT").unwrap_or_default();
+        let path = std::env::var("CODE_BUILDER_FILE").unwrap_or_default();
+        let output = std::env::var("CODE_BUILDER_OUT").unwrap_or_default();
         let text = std::fs::read_to_string(&path).unwrap_or_default();
         let object =
             crate::compilers::x86_64::armv7::native::assemble(&text).expect("the text assembles");
@@ -83691,7 +83692,7 @@ mod armv8_assembly {
     #[test]
     #[ignore]
     fn armv7_dump_registers() {
-        let filter = std::env::var("APK_BUILDER_LINE").unwrap_or_default();
+        let filter = std::env::var("CODE_BUILDER_LINE").unwrap_or_default();
         let target = crate::compilers::x86_64::armv7::target().expect("target");
         for (index, register) in target.registers.iter().enumerate() {
             if register
@@ -83714,7 +83715,7 @@ mod armv8_assembly {
     #[test]
     #[ignore]
     fn armv7_dump_records() {
-        let filter = std::env::var("APK_BUILDER_LINE").unwrap_or_default();
+        let filter = std::env::var("CODE_BUILDER_LINE").unwrap_or_default();
         let target = crate::compilers::x86_64::armv7::target().expect("the tables load");
         let mut shown = 0;
         for record in target.records.values() {
@@ -83756,7 +83757,7 @@ mod armv8_assembly {
     #[test]
     #[ignore]
     fn armv7_dump_classes() {
-        let filter = std::env::var("APK_BUILDER_LINE").unwrap_or_default();
+        let filter = std::env::var("CODE_BUILDER_LINE").unwrap_or_default();
         let matcher = crate::compilers::x86_64::armv7::matcher();
         for class in &matcher.classes {
             if class.name.contains(&filter) {
@@ -83777,11 +83778,11 @@ mod armv8_assembly {
     #[ignore]
     fn armv8_debug_line() {
         use crate::compilers::x86_64::{assemble_source, AssemblerOptions, OutputKind};
-        let source = std::env::var("APK_BUILDER_LINE").unwrap_or_default();
+        let source = std::env::var("CODE_BUILDER_LINE").unwrap_or_default();
         let mut options = AssemblerOptions::new("aarch64-unknown-linux-gnu");
         options.output = OutputKind::Object;
         options.show_instruction_operands = true;
-        if std::env::var("APK_BUILDER_TEXT").is_ok() {
+        if std::env::var("CODE_BUILDER_TEXT").is_ok() {
             options.output = OutputKind::Assembly;
             options.show_instruction_operands = false;
             options.show_encoding = true;
@@ -83791,10 +83792,10 @@ mod armv8_assembly {
         for message in &result.messages {
             eprintln!("{:?}: {}", message.kind, message.text);
         }
-        if let Ok(path) = std::env::var("APK_BUILDER_OUTPUT") {
+        if let Ok(path) = std::env::var("CODE_BUILDER_OUTPUT") {
             std::fs::write(path, &result.output).expect("the object is written");
         }
-        if std::env::var("APK_BUILDER_TEXT").is_ok() {
+        if std::env::var("CODE_BUILDER_TEXT").is_ok() {
             print!("{}", String::from_utf8_lossy(&result.output));
         }
     }
@@ -83838,7 +83839,7 @@ mod armv8_assembly {
     #[ignore]
     fn armv8_records_from_environment() {
         let table = armv8::table().expect("the table reads");
-        let names = std::env::var("APK_BUILDER_RECORDS").unwrap_or_default();
+        let names = std::env::var("CODE_BUILDER_RECORDS").unwrap_or_default();
         for name in names.split(',').filter(|name| !name.is_empty()) {
             match table.record(name) {
                 None => eprintln!("{name}: no such record"),
@@ -89680,7 +89681,7 @@ int main(void) {
 
     fn project_folder(tag: &str) -> std::path::PathBuf {
         let folder = std::env::temp_dir().join(format!(
-            "apk_builder_snake_{tag}_{}_{:?}",
+            "code_builder_snake_{tag}_{}_{:?}",
             std::process::id(),
             std::thread::current().id()
         ));
@@ -89720,7 +89721,7 @@ int main(void) {
             );
             assert!(text.contains("libsnake.so"), "{name} names itself");
         }
-        if let Ok(dir) = std::env::var("APK_BUILDER_KEEP_NATIVE") {
+        if let Ok(dir) = std::env::var("CODE_BUILDER_KEEP_NATIVE") {
             for (name, bytes) in &made {
                 let target = std::path::Path::new(&dir).join(name.replace('/', "_"));
                 std::fs::write(target, bytes).expect("the library is kept");
@@ -89764,7 +89765,7 @@ int main(void) {
                 "{wanted} is in {names:?}"
             );
         }
-        if let Ok(dir) = std::env::var("APK_BUILDER_KEEP_NATIVE") {
+        if let Ok(dir) = std::env::var("CODE_BUILDER_KEEP_NATIVE") {
             std::fs::write(
                 std::path::Path::new(&dir).join("snake.apk"),
                 &outcome.package,
@@ -89879,7 +89880,7 @@ int main(void) {
         std::fs::write(folder.join("Libraries/kotlin-stdlib.jar"), &library).expect("stdlib");
         let root = folder.display().to_string();
         let host = format!(
-            "{{\"package\":\"com.apk.builder\",\"certificate\":\"{}\",\"debugger\":true,\"seal\":true}}",
+            "{{\"package\":\"com.code.builder\",\"certificate\":\"{}\",\"debugger\":true,\"seal\":true}}",
             "A".repeat(64)
         );
         let host = crate::debugger::read_host(&host).expect("the host is read");
@@ -89891,16 +89892,16 @@ int main(void) {
         let project = crate::builder::project_for(&root, Some(&made_by), Some(&host))
             .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
         let plan = project.debugger.as_ref().expect("the debugger is planned");
-        assert_eq!(plan.host, "com.apk.builder");
+        assert_eq!(plan.host, "com.code.builder");
         let named: Vec<&str> = project
             .code
             .iter()
             .map(|one| one.descriptor.as_str())
             .collect();
         for wanted in [
-            "Lcom/apk/builder/debug/DebugProvider;",
-            "Lcom/apk/builder/debug/Presence;",
-            "Lcom/apk/builder/debug/ComponentFactory;",
+            "Lcom/code/builder/debug/DebugProvider;",
+            "Lcom/code/builder/debug/Presence;",
+            "Lcom/code/builder/debug/ComponentFactory;",
             "Lcom/demo/snake/Native;",
         ] {
             assert!(named.contains(&wanted), "{wanted} is in the code");
@@ -89953,7 +89954,7 @@ int main(void) {
         assert_eq!(parts.len(), 2, "{both}");
         assert_eq!(parts[0], crate::builder::made_by(&certificate).unwrap());
         assert_eq!(
-            parts[1], "791520830DDA9866013571DD74F7461FCACC1B96D05386BD8D725531527FC7C3",
+            parts[1], "5733ADA71FFD79776489FF26B5084E90362BBF5050CE4E544510B001221FE4D0",
             "the post-quantum certificate is the one Android 17 reports as the signer"
         );
         let alone = crate::builder::made_by_all(&certificate, None).expect("one fingerprint");
@@ -91050,9 +91051,9 @@ export function f() {} const m = await import('w');"#,
     #[test]
     #[ignore]
     fn roundtrip_script_from_environment() {
-        let list = std::env::var("APK_BUILDER_JS_LIST").unwrap_or_default();
-        let target = std::env::var("APK_BUILDER_JS_OUT").unwrap_or_default();
-        let module = std::env::var("APK_BUILDER_JS_MODULE").is_ok();
+        let list = std::env::var("CODE_BUILDER_JS_LIST").unwrap_or_default();
+        let target = std::env::var("CODE_BUILDER_JS_OUT").unwrap_or_default();
+        let module = std::env::var("CODE_BUILDER_JS_MODULE").is_ok();
         let mut report = String::new();
         let mut checked = 0;
         for path in std::fs::read_to_string(list).unwrap_or_default().lines() {
@@ -91084,9 +91085,9 @@ export function f() {} const m = await import('w');"#,
     #[test]
     #[ignore]
     fn dump_script_from_environment() {
-        let list = std::env::var("APK_BUILDER_JS_LIST").unwrap_or_default();
-        let target = std::env::var("APK_BUILDER_JS_OUT").unwrap_or_default();
-        let module = std::env::var("APK_BUILDER_JS_MODULE").is_ok();
+        let list = std::env::var("CODE_BUILDER_JS_LIST").unwrap_or_default();
+        let target = std::env::var("CODE_BUILDER_JS_OUT").unwrap_or_default();
+        let module = std::env::var("CODE_BUILDER_JS_MODULE").is_ok();
         let mut report = String::new();
         for path in std::fs::read_to_string(list).unwrap_or_default().lines() {
             let Ok(source) = std::fs::read_to_string(path) else {
@@ -91379,9 +91380,9 @@ mod html {
     #[test]
     #[ignore]
     fn dump_html_from_environment() {
-        let list = std::env::var("APK_BUILDER_HTML_LIST").unwrap_or_default();
-        let target = std::env::var("APK_BUILDER_HTML_OUT").unwrap_or_default();
-        let context = std::env::var("APK_BUILDER_HTML_CONTEXT").ok();
+        let list = std::env::var("CODE_BUILDER_HTML_LIST").unwrap_or_default();
+        let target = std::env::var("CODE_BUILDER_HTML_OUT").unwrap_or_default();
+        let context = std::env::var("CODE_BUILDER_HTML_CONTEXT").ok();
         let mut report = String::new();
         for path in std::fs::read_to_string(list).unwrap_or_default().lines() {
             let Ok(bytes) = std::fs::read(path) else {
@@ -91927,7 +91928,7 @@ mod web_suites {
                 cases.extend(cases_of(&path, &String::from_utf8_lossy(bytes)));
             }
         }
-        if let Ok(only) = std::env::var("APK_BUILDER_HTML_ONLY") {
+        if let Ok(only) = std::env::var("CODE_BUILDER_HTML_ONLY") {
             cases.retain(|case| case.id.contains(&only));
         }
         let ids: Vec<String> = cases.iter().map(|case| case.id.clone()).collect();
@@ -91994,7 +91995,7 @@ mod web_suites {
     #[ignore]
     fn suite_js_test262() {
         let tree = Tree::of(&TEST262_BUNDLES).expect("the test262 bundles are present");
-        let root = std::env::var("APK_BUILDER_JS_ROOT")
+        let root = std::env::var("CODE_BUILDER_JS_ROOT")
             .unwrap_or_else(|_| "test262/test/language/".to_string());
         let tests: Vec<String> = tree
             .paths_under(&root)
@@ -92214,7 +92215,7 @@ __attribute__((weak)) float fabsf(float x) { return x < 0 ? -x : x; }
                 tests.push(path);
             }
         }
-        if let Ok(only) = std::env::var("APK_BUILDER_TORTURE_ONLY") {
+        if let Ok(only) = std::env::var("CODE_BUILDER_TORTURE_ONLY") {
             tests.retain(|path| path.contains(&only));
         }
         let outcomes = run_parallel(tests, &|path| {
@@ -92275,19 +92276,19 @@ mod c_projects {
     #[ignore]
     fn build_c_project_from_environment() {
         let root =
-            std::path::PathBuf::from(std::env::var("APK_BUILDER_C_ROOT").unwrap_or_default());
-        let files = std::env::var("APK_BUILDER_C_FILES").unwrap_or_default();
-        let flags = std::env::var("APK_BUILDER_C_FLAGS").unwrap_or_default();
-        let target = std::env::var("APK_BUILDER_C_OUT").unwrap_or_default();
+            std::path::PathBuf::from(std::env::var("CODE_BUILDER_C_ROOT").unwrap_or_default());
+        let files = std::env::var("CODE_BUILDER_C_FILES").unwrap_or_default();
+        let flags = std::env::var("CODE_BUILDER_C_FLAGS").unwrap_or_default();
+        let target = std::env::var("CODE_BUILDER_C_OUT").unwrap_or_default();
         let mut headers: Vec<(String, String)> = Vec::new();
         collect(&root, &root, &mut headers);
-        if let Ok(directories) = std::env::var("APK_BUILDER_C_INCLUDE") {
+        if let Ok(directories) = std::env::var("CODE_BUILDER_C_INCLUDE") {
             for directory in directories.split(':').filter(|one| !one.is_empty()) {
                 let directory = std::path::PathBuf::from(directory);
                 collect(&directory, &directory, &mut headers);
             }
         }
-        if std::env::var("APK_BUILDER_C_MINI").is_ok() {
+        if std::env::var("CODE_BUILDER_C_MINI").is_ok() {
             for (name, text) in super::torture::HEADERS {
                 headers.push((name.to_string(), text.to_string()));
             }
@@ -92332,11 +92333,11 @@ mod c_projects {
             }
         };
         eprintln!("COMPILED {} functions", module.functions.len());
-        if let Ok(path) = std::env::var("APK_BUILDER_C_IR") {
+        if let Ok(path) = std::env::var("CODE_BUILDER_C_IR") {
             let prepared = crate::compilers::x86_64::codegen::prepared(&module);
             std::fs::write(path, prepared.to_text()).expect("the program text is written");
         }
-        if std::env::var("APK_BUILDER_C_PHASES").is_ok() {
+        if std::env::var("CODE_BUILDER_C_PHASES").is_ok() {
             for round in 0..2 {
                 let started = std::time::Instant::now();
                 let tiny = crate::compilers::x86_64::codegen::assemble(".text\nf:\n\tret\n");
@@ -92535,7 +92536,7 @@ mod compiler_rt_builtins {
         }
         tests.sort();
         tests.dedup_by(|a, b| a.0 == b.0);
-        if let Ok(only) = std::env::var("APK_BUILDER_BUILTINS_ONLY") {
+        if let Ok(only) = std::env::var("CODE_BUILDER_BUILTINS_ONLY") {
             tests.retain(|(name, _)| name.contains(&only));
         }
         let ids: Vec<String> = tests.iter().map(|one| one.0.clone()).collect();
@@ -93071,8 +93072,8 @@ move_table:
 
     #[test]
     fn real_musl_assembly_files_assemble_link_and_behave_like_libc() {
-        let Ok(root) = std::env::var("APK_BUILDER_MUSL_ROOT") else {
-            eprintln!("musl assembly: APK_BUILDER_MUSL_ROOT is not set");
+        let Ok(root) = std::env::var("CODE_BUILDER_MUSL_ROOT") else {
+            eprintln!("musl assembly: CODE_BUILDER_MUSL_ROOT is not set");
             return;
         };
         let root = std::path::PathBuf::from(root);
@@ -93157,9 +93158,9 @@ move_table:
         if !cfg!(all(target_os = "linux", target_arch = "x86_64")) {
             return;
         }
-        let path = std::env::temp_dir().join(format!("apk_builder_musl_{}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("code_builder_musl_{}", std::process::id()));
         std::fs::write(&path, program).expect("the program is written");
-        if let Ok(copy) = std::env::var("APK_BUILDER_MUSL_KEEP") {
+        if let Ok(copy) = std::env::var("CODE_BUILDER_MUSL_KEEP") {
             let _ = std::fs::write(copy, program);
         }
         {
@@ -93240,8 +93241,8 @@ mod real_arm_routines {
 
     #[test]
     fn arm_optimized_routines_string_assembly_goes_through_the_preprocessor_and_the_assembler() {
-        let Ok(root) = std::env::var("APK_BUILDER_ARM_ROUTINES_ROOT") else {
-            eprintln!("arm routines: APK_BUILDER_ARM_ROUTINES_ROOT is not set");
+        let Ok(root) = std::env::var("CODE_BUILDER_ARM_ROUTINES_ROOT") else {
+            eprintln!("arm routines: CODE_BUILDER_ARM_ROUTINES_ROOT is not set");
             return;
         };
         let root = std::path::PathBuf::from(root);

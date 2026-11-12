@@ -26,6 +26,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Apk_Builder"
+rootProject.name = "Code_Builder"
 
 include(":Builder")

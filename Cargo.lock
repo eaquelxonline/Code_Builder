@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "apk_builder_core"
+name = "code_builder_core"
 version = "1.0.0"

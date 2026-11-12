@@ -1,4 +1,4 @@
-package com.apk.builder
+package com.code.builder
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
@@ -148,7 +148,7 @@ enum class LogLevel {
 
 object AppLog {
 
-    const val DIRECTORY_NAME: String = "Apk_Builder"
+    const val DIRECTORY_NAME: String = "Code_Builder"
 
     const val SESSION_FILE: String = "Session_Log.txt"
 
@@ -156,7 +156,7 @@ object AppLog {
 
     const val MAX_BYTES: Int = 256 * 1024
 
-    private const val TAG = "ApkBuilder"
+    private const val TAG = "CodeBuilder"
 
     private val lock = Any()
     private val session = StringBuilder(8 * 1024)
@@ -231,7 +231,7 @@ object AppLog {
     }
 
     private fun sessionDocument(): String = buildString {
-        append("Apk Builder session log\n")
+        append("Code Builder session log\n")
         append("Started: ").append(installedAt).append('\n')
         append("Written: ").append(timestamp()).append('\n')
         append("-".repeat(72)).append('\n')
@@ -349,7 +349,7 @@ class BuilderApplication : Application() {
 
 internal object DebuggerHost {
 
-    const val ACTION = "com.apk.builder.debug.RUNTIME"
+    const val ACTION = "com.code.builder.debug.RUNTIME"
 
     const val AUTHORITY_SUFFIX = ".debugger"
 
@@ -423,7 +423,7 @@ object Sentry {
         if (Builder.load() !is Builder.LoadState.Loaded) {
             return "UNKNOWN"
         }
-        val expected = context.getString(R.string.apk_builder_expected_certificate).ifEmpty { null }
+        val expected = context.getString(R.string.code_builder_expected_certificate).ifEmpty { null }
         val standing = runCatching {
             SelfCheck.parse(
                 Builder.nativeVerifySelf(context.applicationInfo.sourceDir, expected)
@@ -594,12 +594,12 @@ object Builder {
     fun load(): LoadState {
         loadState?.let { return it }
         val state = try {
-            System.loadLibrary("apk_builder")
-            AppLog.event(LogLevel.INFO, "native", "libapk_builder.so loaded.")
+            System.loadLibrary("code_builder")
+            AppLog.event(LogLevel.INFO, "native", "libcode_builder.so loaded.")
             LoadState.Loaded
         } catch (error: UnsatisfiedLinkError) {
             val reason = "The native library could not be loaded: " +
-                "${error.message ?: "no detail"}. This usually means the Apk Builder Core " +
+                "${error.message ?: "no detail"}. This usually means the Code Builder Core " +
                 "was not linked into this build, or the bridge and the Core " +
                 "disagree on the ABI version."
             AppLog.event(LogLevel.ERROR, "native", reason)
@@ -3875,7 +3875,7 @@ class BuilderActivity : Activity() {
             "missing, or end with the done line if the project now stands on its own."
 
         val BUILDER_LIMITS = """
-            This project is built on the phone by Apk Builder, with its own Java 25
+            This project is built on the phone by Code Builder, with its own Java 25
             compiler, resource compiler, dex writer and signer. There is no Gradle
             process, no Kotlin compiler, no C or C++ and no Rust here, so write
             every source file in Java 25 and nothing else. Records, sealed types,
@@ -18074,7 +18074,7 @@ class BuilderActivity : Activity() {
             link.connectTimeout = LIBRARY_OPEN_MILLIS
             link.readTimeout = LIBRARY_READ_MILLIS
             link.instanceFollowRedirects = true
-            link.setRequestProperty("User-Agent", "apk-builder")
+            link.setRequestProperty("User-Agent", "code-builder")
             val code = runCatching { link.responseCode }.getOrElse { -1 }
             if (code == HttpURLConnection.HTTP_NOT_FOUND && one.kind == LIBRARY_METADATA) {
                 link.disconnect()
@@ -22062,7 +22062,7 @@ class CodeEditor(context: Context, private var palette: Palette) : EditText(cont
 
 internal object DeviceKey {
 
-    const val ALIAS = "apk_builder_signing"
+    const val ALIAS = "code_builder_signing"
 
     const val STORE = "AndroidKeyStore"
 
@@ -22072,7 +22072,7 @@ internal object DeviceKey {
 
     fun present(): Boolean = runCatching { store().containsAlias(ALIAS) }.getOrDefault(false)
 
-    const val QUANTUM_SEED = "apk_builder_signing.mldsa"
+    const val QUANTUM_SEED = "code_builder_signing.mldsa"
 
     const val QUANTUM_SEED_BYTES = 32
 
@@ -22098,7 +22098,7 @@ internal object DeviceKey {
             .setDigests(KeyProperties.DIGEST_SHA256)
             .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
             .setKeySize(4096)
-            .setCertificateSubject(javax.security.auth.x500.X500Principal("CN=Apk Builder"))
+            .setCertificateSubject(javax.security.auth.x500.X500Principal("CN=Code Builder"))
             .setCertificateNotBefore(from.time)
             .setCertificateNotAfter(until.time)
             .setUserAuthenticationRequired(false)
@@ -22119,7 +22119,7 @@ internal object DeviceKey {
                     .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
                     .setKeySize(2048)
                     .setCertificateSubject(
-                        javax.security.auth.x500.X500Principal("CN=Apk Builder")
+                        javax.security.auth.x500.X500Principal("CN=Code Builder")
                     )
                     .setCertificateNotBefore(from.time)
                     .setCertificateNotAfter(until.time)
@@ -22781,7 +22781,7 @@ internal object Brain {
             "accept",
             if (listening) "text/event-stream" else "application/json",
         )
-        link.setRequestProperty("User-Agent", "apk-builder")
+        link.setRequestProperty("User-Agent", "code-builder")
         when {
             vendor.copilot -> {
                 link.setRequestProperty("authorization", "Bearer $ticket")
@@ -23273,7 +23273,7 @@ internal object Brain {
 
 internal object Bell {
 
-    const val CHANNEL = "apk_builder"
+    const val CHANNEL = "code_builder"
 
     const val BUILD_NOTE = 1
 
@@ -23332,7 +23332,7 @@ internal object Bell {
 
 internal object Vault {
 
-    private const val ALIAS = "apk_builder_secrets"
+    private const val ALIAS = "code_builder_secrets"
 
     private const val STORE = "AndroidKeyStore"
 
@@ -23413,7 +23413,7 @@ internal object Remote {
 
     private const val SERVICE = "git-upload-pack"
 
-    private const val AGENT = "apk-builder"
+    private const val AGENT = "code-builder"
 
     private const val OPEN_MILLIS = 20_000
 
@@ -23755,7 +23755,7 @@ internal object Copilot {
         link.doOutput = true
         link.setRequestProperty("accept", "application/json")
         link.setRequestProperty("content-type", "application/x-www-form-urlencoded")
-        link.setRequestProperty("user-agent", "apk-builder")
+        link.setRequestProperty("user-agent", "code-builder")
         runCatching {
             link.outputStream.use { out -> out.write(form.toByteArray(Charsets.UTF_8)) }
         }.getOrElse {

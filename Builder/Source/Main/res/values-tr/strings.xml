@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Apk Builder</string>
+    <string name="app_name">Code Builder</string>
     <string name="version_shown">1.0.0</string>
     <string name="help_title">Yardım Merkezi</string>
     <string name="find_project">Projede Ara</string>
@@ -216,7 +216,7 @@
     <string name="theme_active">Şu anda aktif</string>
     <string name="about_version">Sürüm %1$s</string>
     <string name="policy_six_body">İnternet yalnızca yukarıda anlatılan işlemler için kullanılır. Paket yükleme, derlediğin bir APK\'yı Android\'in yükleyicisine devreder; yükleyici her zaman önce sana sorar. Bildirimler uzun bir derleme bittiğinde haber verir. Günlük okuma izni asla kendiliğinden verilmez: Logcat ekranının diğer uygulamaların günlüklerini gösterebilmesi için onu ADB ile verebilir ve istediğin zaman geri alabilirsin. Uygulama rehberini, konumunu, kameranı, mikrofonunu ya da arama geçmişini istemez.</string>
-    <string name="legal_stamp">Bu metin %1$s sürümüne aittir. © %2$s Eaquel · Apk Builder.</string>
+    <string name="legal_stamp">Bu metin %1$s sürümüne aittir. © %2$s Eaquel · Code Builder.</string>
     <string name="policy_six_head">İzinler</string>
     <string name="policy_five_body">Asistanı kullandığında mesajın, eklediğin dosyalar ve fotoğraflar ve seçtiğin proje bağlamı doğrudan cihazından seçtiğin sağlayıcıya gönderilir; örneğin GitHub Copilot, Pollinations AI, KeylessAI, OpenZoo, Kilo Gateway, maximumsats.com ya da LLM7.io. Bu verinin orada ne olacağı o sağlayıcının kendi gizlilik politikasına tabidir. O sağlayıcının almasını istemediğin gizli ya da kişisel bilgileri gönderme.</string>
     <string name="policy_five_head">Yapay Zeka Asistanı Sağlayıcıları</string>
@@ -225,7 +225,7 @@
     <string name="policy_three_head">Anahtarlar, Parolalar ve Belirteçler</string>
     <string name="policy_two_body">Projelerin, kaynak dosyaların, kaydedilmemiş taslakların, derleme çıktıların, imza anahtar depoların, tercihlerin, asistan sohbetlerin ve uygulamanın kendi kaydı bu cihazdaki uygulamaya özel depolamada tutulur. Android bu depolamayı diğer uygulamaların erişiminden uzak tutar. Bunların hiçbiri geliştiriciye yüklenmez.</string>
     <string name="policy_two_head">Cihazında Saklananlar</string>
-    <string name="policy_one_body">Apk Builder, cihazında çalışan bir Android geliştirme ortamıdır. Bu politika; uygulamanın neyi sakladığını, neyin ne zaman cihazından çıktığını ve hangi seçeneklere sahip olduğunu açıklar. Uygulamada hesap, analitik, reklam ya da herhangi bir izleme yoktur.</string>
+    <string name="policy_one_body">Code Builder, cihazında çalışan bir Android geliştirme ortamıdır. Bu politika; uygulamanın neyi sakladığını, neyin ne zaman cihazından çıktığını ve hangi seçeneklere sahip olduğunu açıklar. Uygulamada hesap, analitik, reklam ya da herhangi bir izleme yoktur.</string>
     <string name="policy_one_head">Genel Bakış</string>
     <string name="terms_six_body">Yapay zeka sağlayıcıları, GitHub, Git sunucuları ve Maven depoları üçüncü taraflarca kendi koşullarına göre işletilir. Erişilebilirlikleri, sınırları ve yanıtları geliştiricinin denetimi dışındadır. Bir asistanın önerdiği kod hatalı olabilir; yayımlamadan önce gözden geçir ve test et.</string>
     <string name="terms_six_head">Üçüncü Taraf Hizmetler</string>
@@ -235,14 +235,14 @@
     <string name="terms_four_head">Kabul Edilebilir Kullanım</string>
     <string name="terms_three_body">Projelerin, kaynak kodun, varlıkların ve derlediğin paketler sana aittir. Uygulama bunlar üzerinde hiçbir hak iddia etmez ve onları kendi amaçları için kullanmaz.</string>
     <string name="terms_three_head">Çalışman Senindir</string>
-    <string name="terms_two_body">Apk Builder, Android uygulamalarını cihazında derler, paketler ve imzalar. Derleyici, kaynak derleyicisi, dex dönüştürücü, küçültücü ve imzalayıcı telefonunun kendi işlemcisinde çalışır; derlemenin hiçbir adımı bir sunucuya gönderilmez.</string>
+    <string name="terms_two_body">Code Builder, Android uygulamalarını cihazında derler, paketler ve imzalar. Derleyici, kaynak derleyicisi, dex dönüştürücü, küçültücü ve imzalayıcı telefonunun kendi işlemcisinde çalışır; derlemenin hiçbir adımı bir sunucuya gönderilmez.</string>
     <string name="terms_two_head">Uygulama Ne Sağlar</string>
-    <string name="terms_one_body">Apk Builder\'ı yükleyerek ya da kullanarak bu koşulları kabul etmiş olursun. Kabul etmiyorsan uygulamayı kaldır; kaldırıldıktan sonra geride hiçbir şey tutulmaz.</string>
+    <string name="terms_one_body">Code Builder\'ı yükleyerek ya da kullanarak bu koşulları kabul etmiş olursun. Kabul etmiyorsan uygulamayı kaldır; kaldırıldıktan sonra geride hiçbir şey tutulmaz.</string>
     <string name="terms_one_head">Bu Koşulları Kabul Etmek</string>
     <string name="about_contact">İletişim</string>
     <string name="about_developer">Geliştirici</string>
     <string name="about_developer_name">Eaquel</string>
-    <string name="about_rights">© %1$s Eaquel · Apk Builder</string>
+    <string name="about_rights">© %1$s Eaquel · Code Builder</string>
     <string name="counted">%1$d/%2$d</string>
     <string name="feedback_title">Geri Bildirim</string>
     <string name="feedback_send">Geri Bildirimi Gönder</string>
@@ -267,7 +267,7 @@
     <string name="faq_search">Soru ara...</string>
     <string name="terminal_search">Komutlarda ara...</string>
     <string name="help_popular">Popüler:</string>
-    <string name="help_note">Apk Builder hakkında merak ettiğin her şey burada. Hızlıca öğren, daha fazlasını keşfet!</string>
+    <string name="help_note">Code Builder hakkında merak ettiğin her şey burada. Hızlıca öğren, daha fazlasını keşfet!</string>
     <string name="help_hello">Merhaba! 👋</string>
     <string name="help_none">Buna uyan bir şey yok.</string>
     <string name="help_band_all">Tümü</string>
@@ -279,7 +279,7 @@
     <string name="help_band_terminal">Terminal Kullanımı</string>
     <string name="help_first">İlk adımlar</string>
     <string name="help_first_note">Bu uygulama nedir, nereden başlanır</string>
-    <string name="help_first_body">Apk Builder, Android paketlerini bu cihazda derler. Sunucu da yok, masaüstü araç zinciri de: derleyici, paketleyici ve imzalayıcı burada çalışır. Ana Sayfa’dan bir proje kur, kodunu Java altına yaz, sonra derle.</string>
+    <string name="help_first_body">Code Builder, Android paketlerini bu cihazda derler. Sunucu da yok, masaüstü araç zinciri de: derleyici, paketleyici ve imzalayıcı burada çalışır. Ana Sayfa’dan bir proje kur, kodunu Java altına yaz, sonra derle.</string>
     <string name="help_project">Yeni bir proje</string>
     <string name="help_project_note">Ad, paket, sürüm ve simge</string>
     <string name="help_project_body">Bir projeye ad, com.example.app gibi bir paket adı, bir sürüm ve üzerinde çalışacağı Android sürümleri gerekir. Android kurulu bir uygulamayı paket adından tanır; bu yüzden onu yayımlamadan önce seç, sonrasında değil. Simge, Dosyalar’dan istediğin zaman eklenebilir.</string>
@@ -361,7 +361,7 @@
     <string name="kinds_holds">Desteklenen Diller:</string>
     <string name="kinds_holds_web">Desteklenen Web Teknolojileri:</string>
     <string name="brand_note">Android Geliştirme Ortamı</string>
-    <string name="app_shown">Apk Builder %1$s</string>
+    <string name="app_shown">Code Builder %1$s</string>
     <string name="raise_open">Proje Aç</string>
     <string name="import_none">Buradaki hiçbir şey o dosyayı açamadı.</string>
     <string name="import_done">%1$d dosya bir projeye açıldı</string>
@@ -374,11 +374,11 @@
     <string name="rate_two">Daha fazla geliştiriciye ulaşmamızı sağlarsın.</string>
     <string name="rate_one">Daha iyi bir uygulama için motivasyon alırız.</string>
     <string name="rate_why">Uygulamayı Play Store\'da değerlendirerek bize destek olabilirsin. Bu, uygulamanın daha fazla kişiye ulaşmasına yardımcı olur.</string>
-    <string name="rate_ask">Apk Builder\'ı beğendin mi?</string>
-    <string name="about_head">Apk Builder hakkında detaylı bilgiler.</string>
-    <string name="about_note">Apk Builder, Android uygulamaları geliştirmek,\ndüzenlemek ve test etmek için tasarlanmış\ngüçlü ve kullanıcı dostu bir geliştirme ortamıdır.\nHerkes için, her yerde, daha özgür bir geliştirme deneyimi.</string>
+    <string name="rate_ask">Code Builder\'ı beğendin mi?</string>
+    <string name="about_head">Code Builder hakkında detaylı bilgiler.</string>
+    <string name="about_note">Code Builder, Android uygulamaları geliştirmek,\ndüzenlemek ve test etmek için tasarlanmış\ngüçlü ve kullanıcı dostu bir geliştirme ortamıdır.\nHerkes için, her yerde, daha özgür bir geliştirme deneyimi.</string>
     <string name="about_contact_note">Bizimle iletişime geçin.</string>
-    <string name="about_terms_note">Apk Builder\'ı kullanma kuralları</string>
+    <string name="about_terms_note">Code Builder\'ı kullanma kuralları</string>
     <string name="about_terms">Kullanım Koşulları</string>
     <string name="about_policy_note">Cihazında kalanlar ve cihazından çıkanlar</string>
     <string name="about_policy">Gizlilik Politikası</string>
@@ -451,7 +451,7 @@
     <string name="log_apps">Uygulama Seç</string>
     <string name="log_apps_find">Uygulama ara</string>
     <string name="log_written">Olaylar</string>
-    <string name="log_empty_note">Apk Builder ile derlediğin bir uygulamayı seç, sonra Başlat\'a dokun.</string>
+    <string name="log_empty_note">Code Builder ile derlediğin bir uygulamayı seç, sonra Başlat\'a dokun.</string>
     <string name="log_about">Debugger neleri saklar</string>
     <string name="log_guide">Rehberi Aç</string>
     <string name="clone_title">Depo Klonla</string>
@@ -555,7 +555,7 @@
     <string name="about_join">Gelişime Katıl</string>
     <string name="about_join_note">Daha iyi bir gelecek için birlikte</string>
     <string name="about_reserved">Tüm hakları saklıdır.</string>
-    <string name="about_thanks">Apk Builder’ı kullandığınız için teşekkür ederiz!</string>
+    <string name="about_thanks">Code Builder’ı kullandığınız için teşekkür ederiz!</string>
     <string name="about_thanks_note">Daha iyi bir geliştirme deneyimi için daima yanınızdayız.</string>
     <string name="feedback_kind_fault_note">Bir sorun var</string>
     <string name="feedback_kind_idea_note">Yeni bir fikir</string>
@@ -589,7 +589,7 @@
     <string name="policy_seven_head">Üçüncü Taraf Kod Yok</string>
     <string name="policy_seven_body">Uygulamada hiçbir üçüncü taraf SDK yoktur: analitik yok, çökme bildirme hizmeti yok, reklam ağı yok. Çökme kayıtları cihazında kalır; onları Geri Bildirim ekranından paylaşıp paylaşmamaya sen karar verirsin. Web sitelerine giden bağlantılar seçtiğin tarayıcıda ya da uygulamada, o sitenin kendi politikasına göre açılır.</string>
     <string name="policy_eight_head">Çocuklar</string>
-    <string name="policy_eight_body">Apk Builder geliştiriciler için bir araçtır ve 13 yaşından küçük çocuklara yönelik değildir. Çocuklar dahil hiç kimseden bilerek bilgi toplamaz.</string>
+    <string name="policy_eight_body">Code Builder geliştiriciler için bir araçtır ve 13 yaşından küçük çocuklara yönelik değildir. Çocuklar dahil hiç kimseden bilerek bilgi toplamaz.</string>
     <string name="policy_nine_head">Verilerini Silmek</string>
     <string name="policy_nine_body">Bir sohbeti, bir projeyi ya da bir imza anahtarını uygulamanın içinden istediğin zaman silebilirsin. Uygulamayı kaldırmak; projeler, anahtarlar ve sohbetler dahil uygulamaya özel depolamayı siler. Ortak depolamaya dışa aktardığın projeler bıraktığın yerde kalır.</string>
     <string name="policy_ten_head">Değişiklikler ve İletişim</string>
@@ -603,19 +603,19 @@
     <string name="terms_ten_head">Değişiklikler ve İletişim</string>
     <string name="terms_ten_body">Bu koşullar uygulamayla birlikte güncellenebilir. Bir güncellemeden sonra uygulamayı kullanmaya devam etmek yeni sürümü kabul ettiğin anlamına gelir. Sorularını Geri Bildirim ekranından gönderebilirsin.</string>
     <string name="rights_one_head">Telif Hakkı</string>
-    <string name="rights_one_body">© %1$s Eaquel. Apk Builder, kaynak kodu, tasarımı, simgeleri, çizimleri ve metinleri telif hakkıyla korunur. Tüm hakları saklıdır.</string>
+    <string name="rights_one_body">© %1$s Eaquel. Code Builder, kaynak kodu, tasarımı, simgeleri, çizimleri ve metinleri telif hakkıyla korunur. Tüm hakları saklıdır.</string>
     <string name="rights_two_head">Ad ve Logo</string>
-    <string name="rights_two_body">Apk Builder adı ve logosu bu uygulamayı tanımlar. Başka bir ürün için, o ürünün geliştiriciden geldiğini ya da geliştirici tarafından onaylandığını düşündürecek biçimde kullanılamaz.</string>
+    <string name="rights_two_body">Code Builder adı ve logosu bu uygulamayı tanımlar. Başka bir ürün için, o ürünün geliştiriciden geldiğini ya da geliştirici tarafından onaylandığını düşündürecek biçimde kullanılamaz.</string>
     <string name="rights_three_head">Yaptığın Şey Sana Aittir</string>
     <string name="rights_three_body">Yukarıdaki bildirim uygulamanın kendisini kapsar. Onunla oluşturduğun projeler ve derlediğin uygulamalar senindir: onları dilediğin gibi yayımlayabilir, satabilir ve lisanslayabilirsin.</string>
     <string name="rights_four_head">Diğer Ticari Markalar</string>
     <string name="rights_four_body">Android, Google LLC\'nin ticari markasıdır. Java, Oracle ve/veya bağlı kuruluşlarının tescilli ticari markasıdır. Kotlin, JetBrains s.r.o.\'nun ticari markasıdır. GitHub ve GitHub Copilot, GitHub, Inc.\'in ticari markalarıdır. Diğer adlar sahiplerine aittir ve yalnızca uyumluluğu anlatmak için kullanılır.</string>
     <string name="rights_five_head">İzin İstemek</string>
     <string name="rights_five_body">Uygulamanın herhangi bir bölümünü kullanmak hakkında sormak için geliştiriciye Geri Bildirim ekranından yaz.</string>
-    <string name="developer_role">Bağımsız geliştirici · Apk Builder\'ın yaratıcısı</string>
+    <string name="developer_role">Bağımsız geliştirici · Code Builder\'ın yaratıcısı</string>
     <string name="developer_about_head">Geliştirici Hakkında</string>
-    <string name="developer_about">Eaquel, Apk Builder\'ı tasarlıyor ve geliştiriyor: telefonun kendisinde çalışan eksiksiz bir Android geliştirme ortamı. Derleyici, kaynak derleyicisi, dex dönüştürücü, küçültücü ve imzalayıcı sıfırdan Rust ile, arayüz ise Kotlin ile, hiçbir üçüncü taraf kütüphane kullanılmadan yazıldı.</string>
-    <string name="developer_work_head">Apk Builder\'ın İçinde Neler Var</string>
+    <string name="developer_about">Eaquel, Code Builder\'ı tasarlıyor ve geliştiriyor: telefonun kendisinde çalışan eksiksiz bir Android geliştirme ortamı. Derleyici, kaynak derleyicisi, dex dönüştürücü, küçültücü ve imzalayıcı sıfırdan Rust ile, arayüz ise Kotlin ile, hiçbir üçüncü taraf kütüphane kullanılmadan yazıldı.</string>
+    <string name="developer_work_head">Code Builder\'ın İçinde Neler Var</string>
     <string name="developer_core">Rust Çekirdeği</string>
     <string name="developer_core_note">Derleyici, dex, paketleme ve imzalama</string>
     <string name="developer_face">Kotlin Arayüzü</string>
@@ -655,9 +655,9 @@
     <string name="vibe_custom_template_note">{{model}}, {{prompt}}, {{system}}, {{messages}}, {{max_tokens}} ve {{effort}} göndermeden önce doldurulur.</string>
     <string name="vibe_custom_test">Test Et</string>
     <string name="vibe_custom_window">Bağlam Penceresi</string>
-    <string name="vibe_disclaimer_1">1. SORUMLULUK: Seçtiğiniz sağlayıcının hizmet şartları, gizlilik politikası ve kullanım koşullarına uymak tamamen sizin sorumluluğunuzdadır. APK Builder, bu sağlayıcılarla aranızdaki ilişkinin tarafı değildir.</string>
-    <string name="vibe_disclaimer_2">2. VERİ AKTARIMI: Bu sağlayıcıyı yapılandırdığınızda, gönderdiğiniz istemler ve veriler o sağlayıcının sunucularına iletilir. APK Builder bu verileri saklamaz, işlemez veya üçüncü taraflarla paylaşmaz. Verilerinizin gizliliği, seçtiğiniz sağlayıcının politikalarına tabidir.</string>
-    <string name="vibe_disclaimer_3">3. ÜÇÜNCÜ TARAF RİSKLERİ: Sağlayıcı kaynaklı kesintiler, API değişiklikleri, hız sınırlamaları, ücretlendirme değişiklikleri, hesap askıya alma veya anahtar sızıntısı gibi durumlardan APK Builder sorumlu tutulamaz.</string>
+    <string name="vibe_disclaimer_1">1. SORUMLULUK: Seçtiğiniz sağlayıcının hizmet şartları, gizlilik politikası ve kullanım koşullarına uymak tamamen sizin sorumluluğunuzdadır. Code Builder, bu sağlayıcılarla aranızdaki ilişkinin tarafı değildir.</string>
+    <string name="vibe_disclaimer_2">2. VERİ AKTARIMI: Bu sağlayıcıyı yapılandırdığınızda, gönderdiğiniz istemler ve veriler o sağlayıcının sunucularına iletilir. Code Builder bu verileri saklamaz, işlemez veya üçüncü taraflarla paylaşmaz. Verilerinizin gizliliği, seçtiğiniz sağlayıcının politikalarına tabidir.</string>
+    <string name="vibe_disclaimer_3">3. ÜÇÜNCÜ TARAF RİSKLERİ: Sağlayıcı kaynaklı kesintiler, API değişiklikleri, hız sınırlamaları, ücretlendirme değişiklikleri, hesap askıya alma veya anahtar sızıntısı gibi durumlardan Code Builder sorumlu tutulamaz.</string>
     <string name="vibe_disclaimer_4">4. ÇIKTI SORUMLULUĞU: Yapay zeka çıktıları hatalı, eksik veya yanıltıcı olabilir (\"halüsinasyon\"). Üretilen kodun doğruluğunu, güvenliğini ve yasal uygunluğunu kontrol etmek tamamen sizin sorumluluğunuzdadır.</string>
     <string name="vibe_disclaimer_5">5. YASAL UYGUNLUK: Kullandığınız sağlayıcının bulunduğu ülkenin yasalarına ve kendi ülkenizin yasalarına uymak sizin sorumluluğunuzdadır.</string>
     <string name="vibe_disclaimer_accept">Okudum, anladım ve kabul ediyorum.</string>
@@ -729,10 +729,10 @@
     <string name="agent_checking">Yazılanlar derleniyor ve kontrol ediliyor…</string>
     <string name="debugger_title">Debugger</string>
     <string name="debugger_app_pick">Derlediğin bir uygulamayı seç</string>
-    <string name="debugger_app_none">Henüz debugger taşıyan kurulu bir uygulama yok. Apk Builder ile bir uygulama derle, kur ve tekrar bak.</string>
+    <string name="debugger_app_none">Henüz debugger taşıyan kurulu bir uygulama yok. Code Builder ile bir uygulama derle, kur ve tekrar bak.</string>
     <string name="debugger_linked">Bağlı</string>
     <string name="debugger_unlinked">Bağlı değil</string>
-    <string name="debugger_refused">Bu uygulama başka bir anahtarla imzalanmış bir Apk Builder ile derlenmiş; bu yüzden debugger\'ı burada yanıt vermiyor.</string>
+    <string name="debugger_refused">Bu uygulama başka bir anahtarla imzalanmış bir Code Builder ile derlenmiş; bu yüzden debugger\'ı burada yanıt vermiyor.</string>
     <string name="debugger_gone">Uygulama kurulu değil ya da debugger olmadan derlenmiş.</string>
     <string name="debugger_level">Seviye</string>
     <string name="debugger_profile">Derleme profili</string>
@@ -754,7 +754,7 @@
     <string name="debugger_kind_lifecycle">Yaşam Döngüsü</string>
     <string name="debugger_kind_performance">Performans</string>
     <string name="debugger_kind_log">Günlük</string>
-    <string name="debugger_privacy">Her şey cihazda, uygulamanın kendi özel alanında kalır. Yalnızca aynı anahtarla imzalanmış Apk Builder okuyabilir; hiçbir yere gönderilmez ve internet gerekmez. Şifre, kişi, konum ya da dosya saklamaz.</string>
+    <string name="debugger_privacy">Her şey cihazda, uygulamanın kendi özel alanında kalır. Yalnızca aynı anahtarla imzalanmış Code Builder okuyabilir; hiçbir yere gönderilmez ve internet gerekmez. Şifre, kişi, konum ya da dosya saklamaz.</string>
     <string name="debugger_collect_crashes">Çökmeler, tam yığın izi ve diğer tüm iş parçacıklarıyla</string>
     <string name="debugger_collect_native">C, C++ ve Rust kodundaki yerel çökmeler</string>
     <string name="debugger_collect_anr">Ana iş parçacığının donmaları</string>

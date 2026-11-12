@@ -45854,7 +45854,7 @@ fn merge_modules(units: Vec<omni::Module>) -> Result<omni::Module, Diagnostic> {
             "Gap: the merged module is invalid: {} {}\n{}",
             problem.message,
             problem.context.join(" | "),
-            if std::env::var("APK_BUILDER_DUMP").is_ok() {
+            if std::env::var("CODE_BUILDER_DUMP").is_ok() {
                 merged.to_text()
             } else {
                 String::new()

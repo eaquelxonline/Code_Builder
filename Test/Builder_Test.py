@@ -66,7 +66,7 @@ TORTURE_SUITES = [
 ]
 C_FRONT_END_SUITES = ["clang-c-preprocessor", "clang-c-lexer", "clang-c-parser", "clang-c-sema"]
 RECORDING = {"on": False}
-KOTLIN = ROOT / "Builder/Source/Main/Kotlin/com/apk/builder/Builder.kt"
+KOTLIN = ROOT / "Builder/Source/Main/Kotlin/com/code/builder/Builder.kt"
 KOTLIN_ROOT = ROOT / "Builder/Source/Main/Kotlin"
 RESOURCES = ROOT / "Builder/Source/Main/res"
 COMPILERS = ROOT / "Compilers"
@@ -74,10 +74,10 @@ INFRASTRUCTURE = COMPILERS / "Compiler_Infrastructure"
 ANDROID = ROOT / "Android.rs"
 
 CONFORMANCE = {
-    "APK_BUILDER_REQUIRE_APKSIGNER": "1",
-    "APK_BUILDER_REQUIRE_AXML_CONFORMANCE": "1",
-    "APK_BUILDER_REQUIRE_IMAGE_CONFORMANCE": "1",
-    "APK_BUILDER_REQUIRE_INFLATE_CONFORMANCE": "1",
+    "CODE_BUILDER_REQUIRE_APKSIGNER": "1",
+    "CODE_BUILDER_REQUIRE_AXML_CONFORMANCE": "1",
+    "CODE_BUILDER_REQUIRE_IMAGE_CONFORMANCE": "1",
+    "CODE_BUILDER_REQUIRE_INFLATE_CONFORMANCE": "1",
 }
 
 def interface() -> str:
@@ -434,7 +434,7 @@ def sign_a_copy(package: Path) -> Path:
             "keytool", "-genkeypair", "-keystore", str(store),
             "-storepass", "apklocal", "-keypass", "apklocal", "-alias", "local",
             "-keyalg", "RSA", "-keysize", "2048", "-validity", "3650",
-            "-dname", "CN=Apk Builder Local, O=Apk Builder, C=TR",
+            "-dname", "CN=Code Builder Local, O=Code Builder, C=TR",
         ])
     shutil.copyfile(package, copy)
     run([
@@ -458,24 +458,24 @@ def check_core() -> str:
     env = dict(CONFORMANCE)
     demanded = list(CONFORMANCE)
     for flag, present in (
-        ("APK_BUILDER_REQUIRE_AXML_CONFORMANCE", tool_present(build_tool, "aapt2")),
-        ("APK_BUILDER_REQUIRE_RSA_CONFORMANCE", shutil.which("openssl") is not None),
-        ("APK_BUILDER_REQUIRE_DEX_CONFORMANCE",
+        ("CODE_BUILDER_REQUIRE_AXML_CONFORMANCE", tool_present(build_tool, "aapt2")),
+        ("CODE_BUILDER_REQUIRE_RSA_CONFORMANCE", shutil.which("openssl") is not None),
+        ("CODE_BUILDER_REQUIRE_DEX_CONFORMANCE",
          tool_present(build_tool, "dexdump") and bool(built)),
-        ("APK_BUILDER_REQUIRE_CLASS_CONFORMANCE",
+        ("CODE_BUILDER_REQUIRE_CLASS_CONFORMANCE",
          shutil.which("javap") is not None and bool(built)),
-        ("APK_BUILDER_REQUIRE_BUNDLETOOL",
+        ("CODE_BUILDER_REQUIRE_BUNDLETOOL",
          shutil.which("bundletool") is not None
          and bool(sorted(ROOT.glob("Builder/build/outputs/bundle/*/*.aab")))),
-        ("APK_BUILDER_REQUIRE_SELF_BUILT_APK",
+        ("CODE_BUILDER_REQUIRE_SELF_BUILT_APK",
          tool_present(build_tool, "apksigner") and shutil.which("openssl") is not None),
-        ("APK_BUILDER_REQUIRE_SELF_POLICY", bool(built)),
+        ("CODE_BUILDER_REQUIRE_SELF_POLICY", bool(built)),
     ):
         if present and flag not in env:
             env[flag] = "1"
             demanded.append(flag)
     if under_test:
-        env["APK_BUILDER_PACKAGE_UNDER_TEST"] = str(under_test[0])
+        env["CODE_BUILDER_PACKAGE_UNDER_TEST"] = str(under_test[0])
 
     done = run(["cargo", "test", "--locked"], env=env)
     passed = sum(
@@ -519,7 +519,7 @@ def check_strings() -> str:
     used = set(
         re.findall(r"(?<!android\.)\bR\.string\.([a-z_0-9]+)", interface())
     )
-    generated = {"apk_builder_expected_certificate"}
+    generated = {"code_builder_expected_certificate"}
     fromXml = {"app_name"}
     unresolved = sorted(used - set(base) - generated)
     if unresolved:
@@ -577,7 +577,7 @@ def check_bridge() -> str:
     nm = ndk_tool("llvm-nm")
 
     declared = sorted(
-        f"Java_com_apk_builder_Builder_{name}"
+        f"Java_com_code_builder_Builder_{name}"
         for name in re.findall(r"external fun (native[A-Za-z]*)", interface())
     ) + ["JNI_OnLoad"]
     declared = sorted(declared)
@@ -590,7 +590,7 @@ def check_bridge() -> str:
 
     checked = 0
     for abi in ("arm64-v8a", "x86_64"):
-        library = work / f"lib/{abi}/libapk_builder.so"
+        library = work / f"lib/{abi}/libcode_builder.so"
         if not library.is_file():
             raise AssertionError(f"no native library for {abi}")
         listed = run([str(nm), "-D", "--defined-only", str(library)])
@@ -602,7 +602,7 @@ def check_bridge() -> str:
                 f"{abi} exports {sorted(set(exported) - set(declared))} extra, "
                 f"{sorted(set(declared) - set(exported))} missing"
             )
-        if any("apk_builder_state_report" in name for name in exported):
+        if any("code_builder_state_report" in name for name in exported):
             raise AssertionError(f"{abi} leaks the Core's own symbols")
         checked += 1
     return f"{len(declared)} symbols agree across {checked} ABIs"
@@ -614,7 +614,7 @@ def check_reproducible() -> str:
     it leaves behind is what gets published, and a run that rebuilt only the
     package would quietly drop the bundle.
     """
-    if os.environ.get("APK_BUILDER_SKIP_REPRODUCIBLE"):
+    if os.environ.get("CODE_BUILDER_SKIP_REPRODUCIBLE"):
         raise Skip("asked to skip the rebuild")
     import hashlib
 
@@ -914,7 +914,7 @@ def bundles_present() -> bool:
 def run_suites(names: list[str], threads: int | None = None,
                module: str = "reference_checks") -> dict[str, dict]:
     """Every named suite, run once, read back from the lines it prints."""
-    env = {"APK_BUILDER_SUITE_THREADS": str(threads)} if threads else {}
+    env = {"CODE_BUILDER_SUITE_THREADS": str(threads)} if threads else {}
     tests = [
         f"tests::{SUITE_HOMES.get(name, module)}::suite_{name.replace('-', '_')}"
         for name in names
@@ -1066,7 +1066,7 @@ def check_torture() -> str:
 
 def kotlin_standard_library() -> Path | None:
     """The newest kotlin-stdlib this machine holds, the way the Core suite finds it."""
-    named = os.environ.get("APK_BUILDER_KOTLIN_STDLIB")
+    named = os.environ.get("CODE_BUILDER_KOTLIN_STDLIB")
     if named:
         return Path(named) if Path(named).is_file() else None
     base = Path.home() / ".gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib"

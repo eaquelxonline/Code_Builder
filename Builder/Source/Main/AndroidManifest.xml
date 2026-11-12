@@ -12,7 +12,7 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
         <intent>
-            <action android:name="com.apk.builder.debug.RUNTIME" />
+            <action android:name="com.code.builder.debug.RUNTIME" />
         </intent>
     </queries>
 
@@ -26,7 +26,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.ApkBuilder"
+        android:theme="@style/Theme.CodeBuilder"
         android:usesCleartextTraffic="false">
 
         <provider

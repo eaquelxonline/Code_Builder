@@ -19,7 +19,7 @@
 
 namespace {
 
-constexpr const char *kLogTag = "ApkBuilder";
+constexpr const char *kLogTag = "CodeBuilder";
 constexpr const char *kIllegalState = "java/lang/IllegalStateException";
 constexpr const char *kIllegalArgument = "java/lang/IllegalArgumentException";
 constexpr const char *kOutOfMemory = "java/lang/OutOfMemoryError";
@@ -190,7 +190,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void * ) {
     return JNI_ERR;
   }
 
-  const uint32_t core_abi = apk_builder_abi_version();
+  const uint32_t core_abi = code_builder_abi_version();
   if (core_abi != kExpectedAbiVersion) {
     __android_log_print(
         ANDROID_LOG_ERROR, kLogTag,
@@ -200,7 +200,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void * ) {
   }
 
   __android_log_print(ANDROID_LOG_INFO, kLogTag,
-                      "Apk Builder Core %s loaded (ABI %u).", apk_builder_core_version(),
+                      "Code Builder Core %s loaded (ABI %u).", code_builder_core_version(),
                       core_abi);
   return JNI_VERSION_1_6;
 }
@@ -208,12 +208,12 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void * ) {
 jstring HandBack(JNIEnv *env, char *report) {
   if (report == nullptr) {
     ThrowJava(env, kIllegalState,
-              "Apk Builder Core could not report. This is a defect in the Core, not "
+              "Code Builder Core could not report. This is a defect in the Core, not "
               "in the project being built.");
     return nullptr;
   }
   jstring result = env->NewStringUTF(report);
-  apk_builder_string_free(report);
+  code_builder_string_free(report);
   if (result == nullptr) {
     ThrowJava(env, kOutOfMemory,
               "A Core report could not be converted to a Java string.");
@@ -221,7 +221,7 @@ jstring HandBack(JNIEnv *env, char *report) {
   return result;
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeCreateProject(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeCreateProject(
     JNIEnv *env, jobject , jstring root, jstring spec) {
   std::string root_text;
   std::string spec_text;
@@ -231,10 +231,10 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeCreateProject(
     ThrowJava(env, kIllegalState, "A project needs a folder and a specification.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_create_project(root_text.c_str(), spec_text.c_str()));
+  return HandBack(env, code_builder_create_project(root_text.c_str(), spec_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeBuildAll(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeBuildAll(
     JNIEnv *env, jobject , jstring root, jstring package_path,
     jstring bundle_path, jstring key_path, jcharArray key_password) {
   std::string root_text;
@@ -257,37 +257,37 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeBuildAll(
     return nullptr;
   }
 
-  return HandBack(env, apk_builder_build_all(root_text.c_str(), package_text.c_str(),
+  return HandBack(env, code_builder_build_all(root_text.c_str(), package_text.c_str(),
                                       bundle_text.c_str(), key_text.c_str(),
                                       key_password == nullptr
                                           ? nullptr
                                           : password.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeBindDevice(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeBindDevice(
     JNIEnv *env, jobject , jstring secret) {
   std::string secret_text;
   if (secret == nullptr || !JavaStringToUtf8(env, secret, &secret_text)) {
     ThrowJava(env, kIllegalState, "Binding the shared key needs something to bind it to.");
     return nullptr;
   }
-  jstring answer = HandBack(env, apk_builder_bind_device(secret_text.c_str()));
+  jstring answer = HandBack(env, code_builder_bind_device(secret_text.c_str()));
 
   Wipe(&secret_text);
   return answer;
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeDefaultKey(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeDefaultKey(
     JNIEnv *env, jobject , jstring directory) {
   std::string directory_text;
   if (directory == nullptr || !JavaStringToUtf8(env, directory, &directory_text)) {
     ThrowJava(env, kIllegalState, "The shared signing key needs a folder.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_default_key(directory_text.c_str()));
+  return HandBack(env, code_builder_default_key(directory_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeCreateKey(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeCreateKey(
     JNIEnv *env, jobject , jstring directory, jstring spec,
     jcharArray key_password) {
   std::string directory_text;
@@ -305,31 +305,31 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeCreateKey(
     return nullptr;
   }
 
-  return HandBack(env, apk_builder_create_key(directory_text.c_str(), spec_text.c_str(),
+  return HandBack(env, code_builder_create_key(directory_text.c_str(), spec_text.c_str(),
                                        password.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeListKeys(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeListKeys(
     JNIEnv *env, jobject , jstring directory) {
   std::string directory_text;
   if (directory == nullptr || !JavaStringToUtf8(env, directory, &directory_text)) {
     ThrowJava(env, kIllegalState, "Listing signing keys needs a folder.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_list_keys(directory_text.c_str()));
+  return HandBack(env, code_builder_list_keys(directory_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeDeleteKey(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeDeleteKey(
     JNIEnv *env, jobject , jstring path) {
   std::string path_text;
   if (path == nullptr || !JavaStringToUtf8(env, path, &path_text)) {
     ThrowJava(env, kIllegalState, "Removing a signing key needs its path.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_delete_key(path_text.c_str()));
+  return HandBack(env, code_builder_delete_key(path_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeCheckKey(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeCheckKey(
     JNIEnv *env, jobject , jstring path, jcharArray key_password) {
   std::string path_text;
   if (path == nullptr || key_password == nullptr ||
@@ -343,10 +343,10 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeCheckKey(
     return nullptr;
   }
 
-  return HandBack(env, apk_builder_check_key(path_text.c_str(), password.c_str()));
+  return HandBack(env, code_builder_check_key(path_text.c_str(), password.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeVerifySelf(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeVerifySelf(
     JNIEnv *env, jobject , jstring package_path, jstring expected) {
   std::string path_text;
   std::string expected_text;
@@ -357,7 +357,7 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeVerifySelf(
   if (expected != nullptr && !JavaStringToUtf8(env, expected, &expected_text)) {
     return nullptr;
   }
-  return HandBack(env, apk_builder_verify_self(path_text.c_str(),
+  return HandBack(env, code_builder_verify_self(path_text.c_str(),
                                         expected == nullptr ? nullptr
                                                             : expected_text.c_str()));
 }
@@ -373,27 +373,27 @@ bool TwoPaths(JNIEnv *env, jstring first, jstring second, std::string *first_tex
   return true;
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeListProjects(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeListProjects(
     JNIEnv *env, jobject , jstring directory) {
   std::string directory_text;
   if (directory == nullptr || !JavaStringToUtf8(env, directory, &directory_text)) {
     ThrowJava(env, kIllegalState, "Listing projects needs a folder.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_list_projects(directory_text.c_str()));
+  return HandBack(env, code_builder_list_projects(directory_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeProjectTree(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeProjectTree(
     JNIEnv *env, jobject , jstring root) {
   std::string root_text;
   if (root == nullptr || !JavaStringToUtf8(env, root, &root_text)) {
     ThrowJava(env, kIllegalState, "Reading a project needs its folder.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_project_tree(root_text.c_str()));
+  return HandBack(env, code_builder_project_tree(root_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeLayOut(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeLayOut(
     JNIEnv *env, jobject , jstring name, jstring text) {
   std::string name_text;
   std::string body_text;
@@ -402,20 +402,20 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeLayOut(
     ThrowJava(env, kIllegalState, "Laying out needs a name and the text.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_lay_out(name_text.c_str(), body_text.c_str()));
+  return HandBack(env, code_builder_lay_out(name_text.c_str(), body_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeDependencies(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeDependencies(
     JNIEnv *env, jobject , jstring root) {
   std::string root_text;
   if (root == nullptr || !JavaStringToUtf8(env, root, &root_text)) {
     ThrowJava(env, kIllegalState, "Listing dependencies needs a project.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_dependencies(root_text.c_str()));
+  return HandBack(env, code_builder_dependencies(root_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeDependencyRemove(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeDependencyRemove(
     JNIEnv *env, jobject , jstring root, jstring name) {
   std::string root_text;
   std::string name_text;
@@ -424,20 +424,20 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeDependencyRemove(
     ThrowJava(env, kIllegalState, "Removing a dependency needs a project and a name.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_dependency_remove(root_text.c_str(), name_text.c_str()));
+  return HandBack(env, code_builder_dependency_remove(root_text.c_str(), name_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeManifestFacts(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeManifestFacts(
     JNIEnv *env, jobject , jstring root) {
   std::string root_text;
   if (root == nullptr || !JavaStringToUtf8(env, root, &root_text)) {
     ThrowJava(env, kIllegalState, "Reading a manifest needs its project.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_manifest_facts(root_text.c_str()));
+  return HandBack(env, code_builder_manifest_facts(root_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeManifestSet(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeManifestSet(
     JNIEnv *env, jobject , jstring root, jstring field, jstring value) {
   std::string root_text;
   std::string field_text;
@@ -448,11 +448,11 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeManifestSet(
     ThrowJava(env, kIllegalState, "Changing a manifest needs a project, a field and a value.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_manifest_set(root_text.c_str(), field_text.c_str(),
+  return HandBack(env, code_builder_manifest_set(root_text.c_str(), field_text.c_str(),
                                          value_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeManifestPermission(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeManifestPermission(
     JNIEnv *env, jobject , jstring root, jstring name, jboolean wanted) {
   std::string root_text;
   std::string name_text;
@@ -461,11 +461,11 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeManifestPermission(
     ThrowJava(env, kIllegalState, "Changing a permission needs a project and a name.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_manifest_permission(root_text.c_str(), name_text.c_str(),
+  return HandBack(env, code_builder_manifest_permission(root_text.c_str(), name_text.c_str(),
                                                 wanted == JNI_TRUE));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeSymbols(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeSymbols(
     JNIEnv *env, jobject , jstring root, jstring needle) {
   std::string root_text;
   std::string needle_text;
@@ -474,10 +474,10 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeSymbols(
     ThrowJava(env, kIllegalState, "Looking for a name needs a project and a name.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_symbols(root_text.c_str(), needle_text.c_str()));
+  return HandBack(env, code_builder_symbols(root_text.c_str(), needle_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeWhereWritten(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeWhereWritten(
     JNIEnv *env, jobject , jstring root, jstring qualified) {
   std::string root_text;
   std::string qualified_text;
@@ -486,30 +486,30 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeWhereWritten(
     ThrowJava(env, kIllegalState, "Finding where a type is written needs a project and a type.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_where_written(root_text.c_str(), qualified_text.c_str()));
+  return HandBack(env, code_builder_where_written(root_text.c_str(), qualified_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeInspectPackage(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeInspectPackage(
     JNIEnv *env, jobject , jstring path) {
   std::string path_text;
   if (path == nullptr || !JavaStringToUtf8(env, path, &path_text)) {
     ThrowJava(env, kIllegalState, "Opening a package needs its path.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_inspect_package(path_text.c_str()));
+  return HandBack(env, code_builder_inspect_package(path_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeCheckProject(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeCheckProject(
     JNIEnv *env, jobject , jstring root) {
   std::string root_text;
   if (root == nullptr || !JavaStringToUtf8(env, root, &root_text)) {
     ThrowJava(env, kIllegalState, "Checking a project needs its folder.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_check_project(root_text.c_str()));
+  return HandBack(env, code_builder_check_project(root_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeSearchProject(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeSearchProject(
     JNIEnv *env, jobject , jstring root, jstring needle, jboolean sensitive,
     jboolean whole_word) {
   std::string root_text;
@@ -519,12 +519,12 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeSearchProject(
     ThrowJava(env, kIllegalState, "Searching needs a project and something to look for.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_search_project(root_text.c_str(), needle_text.c_str(),
+  return HandBack(env, code_builder_search_project(root_text.c_str(), needle_text.c_str(),
                                            sensitive == JNI_TRUE,
                                            whole_word == JNI_TRUE));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeReadFile(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeReadFile(
     JNIEnv *env, jobject , jstring root, jstring relative) {
   std::string root_text;
   std::string relative_text;
@@ -532,10 +532,10 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeReadFile(
                 "Reading a file needs a project and a path.")) {
     return nullptr;
   }
-  return HandBack(env, apk_builder_read_file(root_text.c_str(), relative_text.c_str()));
+  return HandBack(env, code_builder_read_file(root_text.c_str(), relative_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeWriteFile(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeWriteFile(
     JNIEnv *env, jobject , jstring root, jstring relative, jstring contents) {
   std::string root_text;
   std::string relative_text;
@@ -547,11 +547,11 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeWriteFile(
   if (contents != nullptr && !JavaStringToUtf8(env, contents, &contents_text)) {
     return nullptr;
   }
-  return HandBack(env, apk_builder_write_file(root_text.c_str(), relative_text.c_str(),
+  return HandBack(env, code_builder_write_file(root_text.c_str(), relative_text.c_str(),
                                        contents_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeGitCheckout(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeGitCheckout(
     JNIEnv *env, jobject , jstring pack_path, jstring head, jstring into) {
   std::string pack_text;
   std::string head_text;
@@ -564,31 +564,31 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeGitCheckout(
               "A clone needs a pack, a commit and a folder to write into.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_git_checkout(pack_text.c_str(), head_text.c_str(),
+  return HandBack(env, code_builder_git_checkout(pack_text.c_str(), head_text.c_str(),
                                          into_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeMavenPlan(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeMavenPlan(
     JNIEnv *env, jobject , jstring root) {
   std::string root_text;
   if (root == nullptr || !JavaStringToUtf8(env, root, &root_text)) {
     ThrowJava(env, kIllegalState, "Planning the libraries needs a project.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_maven_plan(root_text.c_str()));
+  return HandBack(env, code_builder_maven_plan(root_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeProjectRepairs(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeProjectRepairs(
     JNIEnv *env, jobject , jstring root) {
   std::string root_text;
   if (root == nullptr || !JavaStringToUtf8(env, root, &root_text)) {
     ThrowJava(env, kIllegalState, "Looking for repairs needs a project.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_project_repairs(root_text.c_str()));
+  return HandBack(env, code_builder_project_repairs(root_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeApplyRepairs(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeApplyRepairs(
     JNIEnv *env, jobject , jstring root, jstring repairs) {
   std::string root_text;
   std::string repairs_text;
@@ -600,20 +600,20 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeApplyRepairs(
     return nullptr;
   }
   return HandBack(env,
-                  apk_builder_apply_repairs(root_text.c_str(), repairs_text.c_str()));
+                  code_builder_apply_repairs(root_text.c_str(), repairs_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeDigestFile(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeDigestFile(
     JNIEnv *env, jobject , jstring path) {
   std::string path_text;
   if (path == nullptr || !JavaStringToUtf8(env, path, &path_text)) {
     ThrowJava(env, kIllegalState, "Summing a file needs a path.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_digest_file(path_text.c_str()));
+  return HandBack(env, code_builder_digest_file(path_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativePackArchive(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativePackArchive(
     JNIEnv *env, jobject , jstring root, jstring names, jstring into,
     jstring format, jstring password) {
   std::string root_text;
@@ -634,14 +634,14 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativePackArchive(
     return nullptr;
   }
   jstring answer = HandBack(
-      env, apk_builder_pack_archive(root_text.c_str(), names_text.c_str(),
+      env, code_builder_pack_archive(root_text.c_str(), names_text.c_str(),
                              into_text.c_str(), format_text.c_str(),
                              password_text.c_str()));
   Wipe(&password_text);
   return answer;
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeOpenArchive(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeOpenArchive(
     JNIEnv *env, jobject , jstring archive_path, jstring into, jstring password) {
   std::string archive_text;
   std::string into_text;
@@ -656,23 +656,23 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeOpenArchive(
     return nullptr;
   }
   jstring answer = HandBack(
-      env, apk_builder_open_archive(archive_text.c_str(), into_text.c_str(),
+      env, code_builder_open_archive(archive_text.c_str(), into_text.c_str(),
                              password_text.c_str()));
   Wipe(&password_text);
   return answer;
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeAdoptProject(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeAdoptProject(
     JNIEnv *env, jobject , jstring root) {
   std::string root_text;
   if (root == nullptr || !JavaStringToUtf8(env, root, &root_text)) {
     ThrowJava(env, kIllegalState, "Opening a project needs its folder.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_adopt_project(root_text.c_str()));
+  return HandBack(env, code_builder_adopt_project(root_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeNewFolder(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeNewFolder(
     JNIEnv *env, jobject , jstring root, jstring relative) {
   std::string root_text;
   std::string relative_text;
@@ -680,10 +680,10 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeNewFolder(
                 "Making a folder needs a project and a path.")) {
     return nullptr;
   }
-  return HandBack(env, apk_builder_new_folder(root_text.c_str(), relative_text.c_str()));
+  return HandBack(env, code_builder_new_folder(root_text.c_str(), relative_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeRemovePath(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeRemovePath(
     JNIEnv *env, jobject , jstring root, jstring relative, jstring trash_root) {
   std::string root_text;
   std::string relative_text;
@@ -697,11 +697,11 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeRemovePath(
               "Removing something needs a project, a path and a trash.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_remove_path(root_text.c_str(), relative_text.c_str(),
+  return HandBack(env, code_builder_remove_path(root_text.c_str(), relative_text.c_str(),
                                         trash_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeRenamePath(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeRenamePath(
     JNIEnv *env, jobject , jstring root, jstring from, jstring to) {
   std::string root_text;
   std::string from_text;
@@ -715,11 +715,11 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeRenamePath(
               "Moving something needs a project and two paths.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_rename_path(root_text.c_str(), from_text.c_str(),
+  return HandBack(env, code_builder_rename_path(root_text.c_str(), from_text.c_str(),
                                         to_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeCopyPath(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeCopyPath(
     JNIEnv *env, jobject , jstring root, jstring from, jstring to) {
   std::string root_text;
   std::string from_text;
@@ -733,11 +733,11 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeCopyPath(
               "Moving something needs a project and two paths.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_copy_path(root_text.c_str(), from_text.c_str(),
+  return HandBack(env, code_builder_copy_path(root_text.c_str(), from_text.c_str(),
                                         to_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeBuildUnsigned(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeBuildUnsigned(
     JNIEnv *env, jobject , jstring root, jstring packagePath,
     jstring certificate, jstring quantumSeed) {
   std::string rootHeld;
@@ -750,12 +750,12 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeBuildUnsigned(
       !JavaStringToUtf8(env, quantumSeed, &seedHeld)) {
     return nullptr;
   }
-  return HandBack(env, apk_builder_build_unsigned(rootHeld.c_str(), pathHeld.c_str(),
+  return HandBack(env, code_builder_build_unsigned(rootHeld.c_str(), pathHeld.c_str(),
                                            certificateHeld.c_str(),
                                            seedHeld.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeSealPackage(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeSealPackage(
     JNIEnv *env, jobject , jstring packagePath, jstring sealedPath,
     jstring certificate, jstring signatureV2, jstring signatureV3,
     jstring signatureV31, jstring signatureV32, jstring quantumSeed,
@@ -778,7 +778,7 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeSealPackage(
       !JavaStringToUtf8(env, quantumSeed, &seedHeld)) {
     return nullptr;
   }
-  return HandBack(env, apk_builder_seal_package(
+  return HandBack(env, code_builder_seal_package(
                            pathHeld.c_str(), sealedHeld.c_str(),
                            certificateHeld.c_str(), firstHeld.c_str(),
                            secondHeld.c_str(), thirdHeld.c_str(),
@@ -787,17 +787,17 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeSealPackage(
                            static_cast<uint32_t>(maxSdk)));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeListBuilt(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeListBuilt(
     JNIEnv *env, jobject , jstring directory) {
   std::string directory_text;
   if (directory == nullptr || !JavaStringToUtf8(env, directory, &directory_text)) {
     ThrowJava(env, kIllegalState, "Listing what was built needs a folder.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_list_built(directory_text.c_str()));
+  return HandBack(env, code_builder_list_built(directory_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeTrashSend(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeTrashSend(
     JNIEnv *env, jobject , jstring trash_root, jstring path) {
   std::string trash_text;
   std::string path_text;
@@ -805,20 +805,20 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeTrashSend(
                 "Deleting something needs a trash and a path.")) {
     return nullptr;
   }
-  return HandBack(env, apk_builder_trash_send(trash_text.c_str(), path_text.c_str()));
+  return HandBack(env, code_builder_trash_send(trash_text.c_str(), path_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeTrashList(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeTrashList(
     JNIEnv *env, jobject , jstring trash_root) {
   std::string trash_text;
   if (trash_root == nullptr || !JavaStringToUtf8(env, trash_root, &trash_text)) {
     ThrowJava(env, kIllegalState, "Listing the trash needs its folder.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_trash_list(trash_text.c_str()));
+  return HandBack(env, code_builder_trash_list(trash_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeTrashRestore(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeTrashRestore(
     JNIEnv *env, jobject , jstring trash_root, jstring id) {
   std::string trash_text;
   std::string id_text;
@@ -826,10 +826,10 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeTrashRestore(
                 "Putting something back needs a trash and a name.")) {
     return nullptr;
   }
-  return HandBack(env, apk_builder_trash_restore(trash_text.c_str(), id_text.c_str()));
+  return HandBack(env, code_builder_trash_restore(trash_text.c_str(), id_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeTrashPurge(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeTrashPurge(
     JNIEnv *env, jobject , jstring trash_root, jstring id) {
   std::string trash_text;
   std::string id_text;
@@ -837,20 +837,20 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeTrashPurge(
                 "Removing something for good needs a trash and a name.")) {
     return nullptr;
   }
-  return HandBack(env, apk_builder_trash_purge(trash_text.c_str(), id_text.c_str()));
+  return HandBack(env, code_builder_trash_purge(trash_text.c_str(), id_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeTrashEmpty(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeTrashEmpty(
     JNIEnv *env, jobject , jstring trash_root) {
   std::string trash_text;
   if (trash_root == nullptr || !JavaStringToUtf8(env, trash_root, &trash_text)) {
     ThrowJava(env, kIllegalState, "Emptying the trash needs its folder.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_trash_empty(trash_text.c_str()));
+  return HandBack(env, code_builder_trash_empty(trash_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeSetIcon(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeSetIcon(
     JNIEnv *env, jobject , jstring root, jstring source) {
   std::string root_text;
   std::string source_text;
@@ -858,73 +858,73 @@ JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeSetIcon(
                 "An application image needs a project and a file.")) {
     return nullptr;
   }
-  return HandBack(env, apk_builder_set_icon(root_text.c_str(), source_text.c_str()));
+  return HandBack(env, code_builder_set_icon(root_text.c_str(), source_text.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeBuildProgress(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeBuildProgress(
     JNIEnv *env, jobject ) {
-  return HandBack(env, apk_builder_build_progress());
+  return HandBack(env, code_builder_build_progress());
 }
 
-JNIEXPORT void JNICALL Java_com_apk_builder_Builder_nativeBuildStop(
+JNIEXPORT void JNICALL Java_com_code_builder_Builder_nativeBuildStop(
     JNIEnv *, jobject ) {
-  apk_builder_build_stop();
+  code_builder_build_stop();
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeSpeak(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeSpeak(
     JNIEnv *env, jobject , jstring tag) {
   std::string held;
   if (tag != nullptr && !JavaStringToUtf8(env, tag, &held)) {
     ThrowJava(env, kIllegalState, "A language has to be named as text.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_speak(held.c_str()));
+  return HandBack(env, code_builder_speak(held.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeTerminalDocs(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeTerminalDocs(
     JNIEnv *env, jobject , jstring tag) {
   std::string held;
   if (tag != nullptr && !JavaStringToUtf8(env, tag, &held)) {
     ThrowJava(env, kIllegalState, "A language has to be named as text.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_terminal_docs(held.c_str()));
+  return HandBack(env, code_builder_terminal_docs(held.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeVibe(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeVibe(
     JNIEnv *env, jobject , jstring request) {
   std::string held;
   if (request == nullptr || !JavaStringToUtf8(env, request, &held)) {
     ThrowJava(env, kIllegalState, "A request has to be given as text.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_vibe(held.c_str()));
+  return HandBack(env, code_builder_vibe(held.c_str()));
 }
 
-JNIEXPORT jstring JNICALL Java_com_apk_builder_Builder_nativeDebuggerConfigure(
+JNIEXPORT jstring JNICALL Java_com_code_builder_Builder_nativeDebuggerConfigure(
     JNIEnv *env, jobject , jstring spec) {
   std::string held;
   if (spec == nullptr || !JavaStringToUtf8(env, spec, &held)) {
     ThrowJava(env, kIllegalState, "The debugger settings have to be given as text.");
     return nullptr;
   }
-  return HandBack(env, apk_builder_debugger_configure(held.c_str()));
+  return HandBack(env, code_builder_debugger_configure(held.c_str()));
 }
 
-JNIEXPORT void JNICALL Java_com_apk_builder_Builder_nativeBuildExpect(
+JNIEXPORT void JNICALL Java_com_code_builder_Builder_nativeBuildExpect(
     JNIEnv *env, jobject , jstring timings) {
   if (timings == nullptr) {
-    apk_builder_build_expect(nullptr);
+    code_builder_build_expect(nullptr);
     return;
   }
   std::string held;
   if (!JavaStringToUtf8(env, timings, &held)) {
     return;
   }
-  apk_builder_build_expect(held.c_str());
+  code_builder_build_expect(held.c_str());
 }
 
-JNIEXPORT jint JNICALL Java_com_apk_builder_Builder_nativeShellOpen(
+JNIEXPORT jint JNICALL Java_com_code_builder_Builder_nativeShellOpen(
     JNIEnv *env, jobject , jstring folder, jstring home, jint rows, jint columns) {
   std::string folder_text;
   std::string home_text;
@@ -949,7 +949,7 @@ JNIEXPORT jint JNICALL Java_com_apk_builder_Builder_nativeShellOpen(
     setenv("TERM", "xterm-256color", 1);
     setenv("LANG", "C.UTF-8", 1);
     setenv("PS1", "\033[1;32mBuilder@Host\033[0m :\033[1;34m~\033[0m$ ", 1);
-    const std::string rc_path = home_text + "/.apk_builder_shell_rc";
+    const std::string rc_path = home_text + "/.code_builder_shell_rc";
     FILE *rc = fopen(rc_path.c_str(), "w");
     if (rc != nullptr) {
       fputs("PS1='\033[1;32mBuilder@Host\033[0m :\033[1;34m~\033[0m$ '\n", rc);
@@ -971,7 +971,7 @@ JNIEXPORT jint JNICALL Java_com_apk_builder_Builder_nativeShellOpen(
   return master;
 }
 
-JNIEXPORT jint JNICALL Java_com_apk_builder_Builder_nativeShellRead(
+JNIEXPORT jint JNICALL Java_com_code_builder_Builder_nativeShellRead(
     JNIEnv *env, jobject , jint handle, jbyteArray into, jint wait) {
   if (handle < 0 || into == nullptr) {
     return -1;
@@ -999,7 +999,7 @@ JNIEXPORT jint JNICALL Java_com_apk_builder_Builder_nativeShellRead(
   return (errno == EAGAIN || errno == EINTR) ? 0 : -1;
 }
 
-JNIEXPORT jint JNICALL Java_com_apk_builder_Builder_nativeShellWrite(
+JNIEXPORT jint JNICALL Java_com_code_builder_Builder_nativeShellWrite(
     JNIEnv *env, jobject , jint handle, jbyteArray from) {
   if (handle < 0 || from == nullptr) {
     return -1;
@@ -1025,7 +1025,7 @@ JNIEXPORT jint JNICALL Java_com_apk_builder_Builder_nativeShellWrite(
   return written;
 }
 
-JNIEXPORT void JNICALL Java_com_apk_builder_Builder_nativeShellResize(
+JNIEXPORT void JNICALL Java_com_code_builder_Builder_nativeShellResize(
     JNIEnv *, jobject , jint handle, jint rows, jint columns) {
   if (handle < 0) {
     return;
@@ -1036,7 +1036,7 @@ JNIEXPORT void JNICALL Java_com_apk_builder_Builder_nativeShellResize(
   ioctl(handle, TIOCSWINSZ, &size);
 }
 
-JNIEXPORT void JNICALL Java_com_apk_builder_Builder_nativeShellClose(
+JNIEXPORT void JNICALL Java_com_code_builder_Builder_nativeShellClose(
     JNIEnv *, jobject , jint handle) {
   if (handle < 0) {
     return;
@@ -1050,7 +1050,7 @@ JNIEXPORT void JNICALL Java_com_apk_builder_Builder_nativeShellClose(
   }
 }
 
-JNIEXPORT void JNICALL Java_com_apk_builder_Builder_nativeShellInterrupt(
+JNIEXPORT void JNICALL Java_com_code_builder_Builder_nativeShellInterrupt(
     JNIEnv *, jobject , jint handle) {
   if (handle < 0) {
     return;

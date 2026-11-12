@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Apk Builder</string>
+    <string name="app_name">Code Builder</string>
     <string name="version_shown">1.0.0</string>
     <string name="help_title">Help Centre</string>
     <string name="find_project">Search the project</string>
@@ -216,7 +216,7 @@
     <string name="theme_active">In use now</string>
     <string name="about_version">Version %1$s</string>
     <string name="policy_six_body">Internet is used only for the actions described above. Installing packages hands an APK you built to Android\'s installer, which always asks you first. Notifications tell you when a long build has finished. Reading logs is never granted automatically: you can grant it over ADB so the Logcat screen can show other apps\' logs, and revoke it at any time. The app does not ask for your contacts, location, camera, microphone or call history.</string>
-    <string name="legal_stamp">This text belongs to version %1$s. © %2$s Eaquel · Apk Builder.</string>
+    <string name="legal_stamp">This text belongs to version %1$s. © %2$s Eaquel · Code Builder.</string>
     <string name="policy_six_head">Permissions</string>
     <string name="policy_five_body">When you use the assistant, your message, the files and photos you attach and the project context you choose are sent directly from your device to the provider you selected, such as GitHub Copilot, Pollinations AI, KeylessAI, OpenZoo, Kilo Gateway, maximumsats.com or LLM7.io. What happens to that data there is governed by that provider\'s own privacy policy. Do not send secrets or personal data you would not want that provider to receive.</string>
     <string name="policy_five_head">AI assistant providers</string>
@@ -225,7 +225,7 @@
     <string name="policy_three_head">Keys, passwords and tokens</string>
     <string name="policy_two_body">Your projects, source files, unsaved drafts, build outputs, signing keystores, preferences, assistant conversations and the app\'s own log are kept in the app\'s private storage on this device. Android keeps that storage out of reach of other apps. None of it is uploaded to the developer.</string>
     <string name="policy_two_head">What is stored on your device</string>
-    <string name="policy_one_body">Apk Builder is an Android development environment that works on your device. This policy explains what the app keeps, what leaves your device and when, and the choices you have. The app has no accounts, no analytics, no advertising and no tracking of any kind.</string>
+    <string name="policy_one_body">Code Builder is an Android development environment that works on your device. This policy explains what the app keeps, what leaves your device and when, and the choices you have. The app has no accounts, no analytics, no advertising and no tracking of any kind.</string>
     <string name="policy_one_head">Overview</string>
     <string name="terms_six_body">The AI providers, GitHub, Git hosts and Maven repositories are run by third parties under their own terms. Their availability, limits and answers are outside the developer\'s control. Code an assistant suggests may be wrong; review and test it before you release it.</string>
     <string name="terms_six_head">Third-party services</string>
@@ -235,14 +235,14 @@
     <string name="terms_four_head">Acceptable use</string>
     <string name="terms_three_body">Your projects, source code, assets and the packages you build belong to you. The app claims no rights over them and does not use them for any purpose of its own.</string>
     <string name="terms_three_head">Your work is yours</string>
-    <string name="terms_two_body">Apk Builder compiles, packages and signs Android applications on your device. The compiler, resource compiler, dexer, shrinker and signer run on your phone\'s own processor; no step of a build is sent to a server.</string>
+    <string name="terms_two_body">Code Builder compiles, packages and signs Android applications on your device. The compiler, resource compiler, dexer, shrinker and signer run on your phone\'s own processor; no step of a build is sent to a server.</string>
     <string name="terms_two_head">What the app provides</string>
-    <string name="terms_one_body">By installing or using Apk Builder you agree to these terms. If you do not agree, uninstall the app; nothing is kept once it has been removed.</string>
+    <string name="terms_one_body">By installing or using Code Builder you agree to these terms. If you do not agree, uninstall the app; nothing is kept once it has been removed.</string>
     <string name="terms_one_head">Accepting these terms</string>
     <string name="about_contact">Contact</string>
     <string name="about_developer">Developer</string>
     <string name="about_developer_name">Eaquel</string>
-    <string name="about_rights">© %1$s Eaquel · Apk Builder</string>
+    <string name="about_rights">© %1$s Eaquel · Code Builder</string>
     <string name="counted">%1$d/%2$d</string>
     <string name="feedback_title">Feedback</string>
     <string name="feedback_send">Send the feedback</string>
@@ -267,7 +267,7 @@
     <string name="faq_search">Search questions...</string>
     <string name="terminal_search">Search the commands...</string>
     <string name="help_popular">Popular:</string>
-    <string name="help_note">Everything you want to know about Apk Builder is here. Learn quickly, discover more.</string>
+    <string name="help_note">Everything you want to know about Code Builder is here. Learn quickly, discover more.</string>
     <string name="help_hello">Hello! 👋</string>
     <string name="help_none">Nothing here matches that.</string>
     <string name="help_band_all">All</string>
@@ -279,7 +279,7 @@
     <string name="help_band_terminal">Terminal usage</string>
     <string name="help_first">First steps</string>
     <string name="help_first_note">What this app is, and where to begin</string>
-    <string name="help_first_body">Apk Builder compiles Android packages on this device. There is no server and no desktop toolchain: the compiler, the packager and the signer all run here. Make a project from Home, write your code under Java, then build it.</string>
+    <string name="help_first_body">Code Builder compiles Android packages on this device. There is no server and no desktop toolchain: the compiler, the packager and the signer all run here. Make a project from Home, write your code under Java, then build it.</string>
     <string name="help_project">A new project</string>
     <string name="help_project_note">Name, package, version and icon</string>
     <string name="help_project_body">A project needs a name, a package name such as com.example.app, a version, and the Android versions it runs on. The package name is what Android knows an installed app by, so choose it before you publish rather than after. An icon can be added at any time from Files.</string>
@@ -361,7 +361,7 @@
     <string name="kinds_holds">Supported Languages:</string>
     <string name="kinds_holds_web">Web technologies it supports:</string>
     <string name="brand_note">Android development environment</string>
-    <string name="app_shown">Apk Builder %1$s</string>
+    <string name="app_shown">Code Builder %1$s</string>
     <string name="raise_open">Open Project</string>
     <string name="import_none">Nothing here could open that file.</string>
     <string name="import_done">%1$d files opened into a project</string>
@@ -374,11 +374,11 @@
     <string name="rate_two">It helps us reach more developers.</string>
     <string name="rate_one">It keeps us motivated to make a better app.</string>
     <string name="rate_why">Rating the app on the Play Store supports us. It helps the app reach more people.</string>
-    <string name="rate_ask">Did you like Apk Builder?</string>
-    <string name="about_head">Everything about Apk Builder.</string>
-    <string name="about_note">Apk Builder is a powerful, friendly environment built\nfor writing, editing and testing Android applications.\nA freer way to build, for everyone, everywhere.</string>
+    <string name="rate_ask">Did you like Code Builder?</string>
+    <string name="about_head">Everything about Code Builder.</string>
+    <string name="about_note">Code Builder is a powerful, friendly environment built\nfor writing, editing and testing Android applications.\nA freer way to build, for everyone, everywhere.</string>
     <string name="about_contact_note">Get in touch with us.</string>
-    <string name="about_terms_note">The rules for using Apk Builder</string>
+    <string name="about_terms_note">The rules for using Code Builder</string>
     <string name="about_terms">Terms of Use</string>
     <string name="about_policy_note">What stays on your device and what leaves it</string>
     <string name="about_policy">Privacy Policy</string>
@@ -451,7 +451,7 @@
     <string name="log_apps">Choose app</string>
     <string name="log_apps_find">Find an application</string>
     <string name="log_written">Events</string>
-    <string name="log_empty_note">Choose an app you built with Apk Builder, then tap Start.</string>
+    <string name="log_empty_note">Choose an app you built with Code Builder, then tap Start.</string>
     <string name="log_about">What the debugger keeps</string>
     <string name="log_guide">Open the guide</string>
     <string name="clone_title">Clone a repository</string>
@@ -555,7 +555,7 @@
     <string name="about_join">Join in</string>
     <string name="about_join_note">Together, for a better one</string>
     <string name="about_reserved">All rights reserved.</string>
-    <string name="about_thanks">Thank you for using Apk Builder!</string>
+    <string name="about_thanks">Thank you for using Code Builder!</string>
     <string name="about_thanks_note">We are here for a better development experience.</string>
     <string name="feedback_kind_fault_note">Something is wrong</string>
     <string name="feedback_kind_idea_note">A new idea</string>
@@ -589,7 +589,7 @@
     <string name="policy_seven_head">No third-party code</string>
     <string name="policy_seven_body">The app contains no third-party SDKs: no analytics, no crash reporting service and no advertising network. Crash records stay on your device, and you decide whether to share them through the Feedback screen. Links to websites open in the browser or app you choose, under that site\'s own policy.</string>
     <string name="policy_eight_head">Children</string>
-    <string name="policy_eight_body">Apk Builder is a tool for developers and is not directed at children under 13. It does not knowingly collect information from anyone, including children.</string>
+    <string name="policy_eight_body">Code Builder is a tool for developers and is not directed at children under 13. It does not knowingly collect information from anyone, including children.</string>
     <string name="policy_nine_head">Deleting your data</string>
     <string name="policy_nine_body">You can delete a conversation, a project or a signing key from within the app at any time. Uninstalling the app deletes its private storage, including projects, keys and conversations. Projects you exported to shared storage stay where you put them.</string>
     <string name="policy_ten_head">Changes and contact</string>
@@ -603,19 +603,19 @@
     <string name="terms_ten_head">Changes and contact</string>
     <string name="terms_ten_body">These terms may be updated together with the app. Continuing to use the app after an update means you accept the new version. Questions can be sent through the Feedback screen.</string>
     <string name="rights_one_head">Copyright</string>
-    <string name="rights_one_body">© %1$s Eaquel. Apk Builder, its source code, design, icons, illustrations and texts are protected by copyright. All rights reserved.</string>
+    <string name="rights_one_body">© %1$s Eaquel. Code Builder, its source code, design, icons, illustrations and texts are protected by copyright. All rights reserved.</string>
     <string name="rights_two_head">Name and logo</string>
-    <string name="rights_two_body">The Apk Builder name and logo identify this app. They may not be used for another product in a way that suggests it comes from, or is endorsed by, the developer.</string>
+    <string name="rights_two_body">The Code Builder name and logo identify this app. They may not be used for another product in a way that suggests it comes from, or is endorsed by, the developer.</string>
     <string name="rights_three_head">What you make belongs to you</string>
     <string name="rights_three_body">The notice above covers the app itself. The projects you create and the applications you build with it are yours: you may publish, sell and license them as you wish.</string>
     <string name="rights_four_head">Other trademarks</string>
     <string name="rights_four_body">Android is a trademark of Google LLC. Java is a registered trademark of Oracle and/or its affiliates. Kotlin is a trademark of JetBrains s.r.o. GitHub and GitHub Copilot are trademarks of GitHub, Inc. Other names belong to their owners and are used only to describe compatibility.</string>
     <string name="rights_five_head">Asking for permission</string>
     <string name="rights_five_body">To ask about using any part of the app, write to the developer through the Feedback screen.</string>
-    <string name="developer_role">Independent developer · Creator of Apk Builder</string>
+    <string name="developer_role">Independent developer · Creator of Code Builder</string>
     <string name="developer_about_head">About the developer</string>
-    <string name="developer_about">Eaquel designs and builds Apk Builder: a complete Android development environment that runs on the phone itself. The compiler, resource compiler, dexer, shrinker and signer are written from scratch in Rust, and the interface in Kotlin, without third-party libraries.</string>
-    <string name="developer_work_head">What goes into Apk Builder</string>
+    <string name="developer_about">Eaquel designs and builds Code Builder: a complete Android development environment that runs on the phone itself. The compiler, resource compiler, dexer, shrinker and signer are written from scratch in Rust, and the interface in Kotlin, without third-party libraries.</string>
+    <string name="developer_work_head">What goes into Code Builder</string>
     <string name="developer_core">Rust core</string>
     <string name="developer_core_note">Compiler, dex, packaging and signing</string>
     <string name="developer_face">Kotlin interface</string>
@@ -655,9 +655,9 @@
     <string name="vibe_custom_template_note">{{model}}, {{prompt}}, {{system}}, {{messages}}, {{max_tokens}} and {{effort}} are filled in before sending.</string>
     <string name="vibe_custom_test">Test</string>
     <string name="vibe_custom_window">Context Window</string>
-    <string name="vibe_disclaimer_1">1. RESPONSIBILITY: Complying with the terms of service, privacy policy and conditions of use of the provider you choose is entirely your responsibility. APK Builder is not a party to the relationship between you and these providers.</string>
-    <string name="vibe_disclaimer_2">2. DATA TRANSFER: When you configure this provider, the prompts and data you send are transmitted to that provider’s servers. APK Builder does not store, process or share this data with third parties. The privacy of your data is subject to the policies of the provider you choose.</string>
-    <string name="vibe_disclaimer_3">3. THIRD-PARTY RISKS: APK Builder cannot be held responsible for provider-caused outages, API changes, rate limits, pricing changes, account suspension or key leaks.</string>
+    <string name="vibe_disclaimer_1">1. RESPONSIBILITY: Complying with the terms of service, privacy policy and conditions of use of the provider you choose is entirely your responsibility. Code Builder is not a party to the relationship between you and these providers.</string>
+    <string name="vibe_disclaimer_2">2. DATA TRANSFER: When you configure this provider, the prompts and data you send are transmitted to that provider’s servers. Code Builder does not store, process or share this data with third parties. The privacy of your data is subject to the policies of the provider you choose.</string>
+    <string name="vibe_disclaimer_3">3. THIRD-PARTY RISKS: Code Builder cannot be held responsible for provider-caused outages, API changes, rate limits, pricing changes, account suspension or key leaks.</string>
     <string name="vibe_disclaimer_4">4. OUTPUT RESPONSIBILITY: AI output may be wrong, incomplete or misleading (\"hallucination\"). Checking the correctness, security and legal compliance of the generated code is entirely your responsibility.</string>
     <string name="vibe_disclaimer_5">5. LEGAL COMPLIANCE: Complying with the laws of the provider’s country and of your own country is your responsibility.</string>
     <string name="vibe_disclaimer_accept">I have read, understood and accept.</string>
@@ -729,10 +729,10 @@
     <string name="agent_checking">Compiling and checking what was written…</string>
     <string name="debugger_title">Debugger</string>
     <string name="debugger_app_pick">Choose an app you built</string>
-    <string name="debugger_app_none">No installed app carries the debugger yet. Build one with Apk Builder, install it, then look again.</string>
+    <string name="debugger_app_none">No installed app carries the debugger yet. Build one with Code Builder, install it, then look again.</string>
     <string name="debugger_linked">Connected</string>
     <string name="debugger_unlinked">Not connected</string>
-    <string name="debugger_refused">This app was built by Apk Builder signed with another key, so its debugger does not answer here.</string>
+    <string name="debugger_refused">This app was built by Code Builder signed with another key, so its debugger does not answer here.</string>
     <string name="debugger_gone">The app is not installed, or it was built without the debugger.</string>
     <string name="debugger_level">Level</string>
     <string name="debugger_profile">Build profile</string>
@@ -754,7 +754,7 @@
     <string name="debugger_kind_lifecycle">Lifecycle</string>
     <string name="debugger_kind_performance">Performance</string>
     <string name="debugger_kind_log">Log</string>
-    <string name="debugger_privacy">Everything stays on the device, in the app\'s own private storage. Only Apk Builder signed with the same key can read it, nothing is sent anywhere and no internet is needed. It keeps no passwords, contacts, location or files.</string>
+    <string name="debugger_privacy">Everything stays on the device, in the app\'s own private storage. Only Code Builder signed with the same key can read it, nothing is sent anywhere and no internet is needed. It keeps no passwords, contacts, location or files.</string>
     <string name="debugger_collect_crashes">Crashes, with the whole stack trace and every other thread</string>
     <string name="debugger_collect_native">Native crashes in C, C++ and Rust code</string>
     <string name="debugger_collect_anr">Freezes of the main thread</string>

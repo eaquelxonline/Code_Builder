@@ -1,14 +1,14 @@
 [package]
-name          = "apk_builder_core"
+name          = "code_builder_core"
 version       = "1.0.0"
 edition       = "2021"
 rust-version  = "1.97.1"
 publish       = false
-description   = "Apk_Builder Core — build graph, capability security and toolchain infrastructure"
+description   = "Code_Builder Core — build graph, capability security and toolchain infrastructure"
 license       = "MIT"
 
 [lib]
-name       = "apk_builder_core"
+name       = "code_builder_core"
 path       = "Builder.rs"
 crate-type = ["staticlib", "lib"]
 

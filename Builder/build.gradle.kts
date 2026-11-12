@@ -66,17 +66,17 @@ fun builderSetting(propertyName: String, environmentName: String): String? =
     builderLocalProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() }
         ?: providers.environmentVariable(environmentName).orNull?.takeIf { it.isNotBlank() }
 
-val builderCmakeDirectory: String? = builderSetting("cmake.dir", "APK_BUILDER_CMAKE_DIR")
+val builderCmakeDirectory: String? = builderSetting("cmake.dir", "CODE_BUILDER_CMAKE_DIR")
 
-val builderSigningStoreFile = builderSetting("apkbuilder.signing.storeFile", "APK_BUILDER_SIGNING_STORE_FILE")
+val builderSigningStoreFile = builderSetting("codebuilder.signing.storeFile", "CODE_BUILDER_SIGNING_STORE_FILE")
 val builderSigningStorePassword =
-    builderSetting("apkbuilder.signing.storePassword", "APK_BUILDER_SIGNING_STORE_PASSWORD")
-val builderSigningKeyAlias = builderSetting("apkbuilder.signing.keyAlias", "APK_BUILDER_SIGNING_KEY_ALIAS")
+    builderSetting("codebuilder.signing.storePassword", "CODE_BUILDER_SIGNING_STORE_PASSWORD")
+val builderSigningKeyAlias = builderSetting("codebuilder.signing.keyAlias", "CODE_BUILDER_SIGNING_KEY_ALIAS")
 val builderSigningKeyPasswordEarly =
-    builderSetting("apkbuilder.signing.keyPassword", "APK_BUILDER_SIGNING_KEY_PASSWORD")
+    builderSetting("codebuilder.signing.keyPassword", "CODE_BUILDER_SIGNING_KEY_PASSWORD")
 
 val builderExpectedCertificate: String = run {
-    val given = builderSetting("apkbuilder.signing.certificateSha256", "APK_BUILDER_SIGNING_CERT_SHA256")
+    val given = builderSetting("codebuilder.signing.certificateSha256", "CODE_BUILDER_SIGNING_CERT_SHA256")
     if (given != null) {
         return@run given
     }
@@ -100,13 +100,13 @@ val builderExpectedCertificate: String = run {
 }
 
 val builderSigningKeyPassword =
-    builderSetting("apkbuilder.signing.keyPassword", "APK_BUILDER_SIGNING_KEY_PASSWORD")
+    builderSetting("codebuilder.signing.keyPassword", "CODE_BUILDER_SIGNING_KEY_PASSWORD")
 
 val builderSigningSettings = mapOf(
-    "apkbuilder.signing.storeFile" to builderSigningStoreFile,
-    "apkbuilder.signing.storePassword" to builderSigningStorePassword,
-    "apkbuilder.signing.keyAlias" to builderSigningKeyAlias,
-    "apkbuilder.signing.keyPassword" to builderSigningKeyPassword,
+    "codebuilder.signing.storeFile" to builderSigningStoreFile,
+    "codebuilder.signing.storePassword" to builderSigningStorePassword,
+    "codebuilder.signing.keyAlias" to builderSigningKeyAlias,
+    "codebuilder.signing.keyPassword" to builderSigningKeyPassword,
 )
 
 val builderSigningConfigured: Boolean = when (builderSigningSettings.count { it.value != null }) {
@@ -132,14 +132,14 @@ val builderNdkToolchainBin =
 val cargoTasks = builderAbis.map { (abi, triple) ->
     val clangDriver = "$builderNdkToolchainBin/${builderClangPrefix.getValue(triple)}$builderMinSdk-clang"
     val linkerVariable = "CARGO_TARGET_${triple.uppercase().replace('-', '_')}_LINKER"
-    val archivePath = "$builderRustArtifactDirectory/$triple/$builderRustProfile/libapk_builder_core.a"
+    val archivePath = "$builderRustArtifactDirectory/$triple/$builderRustProfile/libcode_builder_core.a"
     val coreDirectory = builderCoreDirectory.asFile
     val abiName = abi
     val ndkVersion = builderNdkVersion
 
     tasks.register<Exec>("cargoBuild${abi.replace("-", "").replaceFirstChar(Char::uppercase)}") {
         group = "build"
-        description = "Compiles the Apk Builder Core for $abi ($triple)."
+        description = "Compiles the Code Builder Core for $abi ($triple)."
 
         workingDir = coreDirectory
 
@@ -172,13 +172,13 @@ val cargoTasks = builderAbis.map { (abi, triple) ->
 }
 
 android {
-    namespace = "com.apk.builder"
+    namespace = "com.code.builder"
     compileSdk = builderCompileSdk
     buildToolsVersion = builderBuildToolsVersion
     ndkVersion = builderNdkVersion
 
     defaultConfig {
-        applicationId = "com.apk.builder"
+        applicationId = "com.code.builder"
         minSdk = builderMinSdk
         targetSdk = builderTargetSdk
         versionCode = 1
@@ -191,8 +191,8 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += listOf(
-                    "-DAPK_BUILDER_RUST_ARTIFACT_DIR=$builderRustArtifactDirectory",
-                    "-DAPK_BUILDER_RUST_PROFILE=$builderRustProfile",
+                    "-DCODE_BUILDER_RUST_ARTIFACT_DIR=$builderRustArtifactDirectory",
+                    "-DCODE_BUILDER_RUST_PROFILE=$builderRustProfile",
                     "-DANDROID_STL=c++_static",
                 )
                 cppFlags += listOf("-fno-exceptions", "-fno-rtti")
@@ -234,7 +234,7 @@ android {
     }
 
     defaultConfig {
-        resValue("string", "apk_builder_expected_certificate", builderExpectedCertificate)
+        resValue("string", "code_builder_expected_certificate", builderExpectedCertificate)
     }
 
     buildTypes {
@@ -517,7 +517,7 @@ tasks.register("verifyApkClasses") {
 
     val apkDirectory = layout.buildDirectory.dir("outputs/apk")
     val manifestFile = file("Source/Main/AndroidManifest.xml")
-    val namespace = "com.apk.builder"
+    val namespace = "com.code.builder"
     val dexdump = "$builderSdkDirectory/build-tools/$builderBuildToolsVersion/dexdump"
     val scratch = layout.buildDirectory.dir("tmp/verifyApkClasses")
 
@@ -669,14 +669,14 @@ tasks.register("signingHelp") {
             |
             |  Then add to local.properties, which is never committed:
             |
-            |    apkbuilder.signing.storeFile=/absolute/path/to/builder-release.jks
-            |    apkbuilder.signing.storePassword=...
-            |    apkbuilder.signing.keyAlias=builder
-            |    apkbuilder.signing.keyPassword=...
+            |    codebuilder.signing.storeFile=/absolute/path/to/builder-release.jks
+            |    codebuilder.signing.storePassword=...
+            |    codebuilder.signing.keyAlias=builder
+            |    codebuilder.signing.keyPassword=...
             |
             |  The same four values are also read from the environment as
-            |  APK_BUILDER_SIGNING_STORE_FILE, APK_BUILDER_SIGNING_STORE_PASSWORD,
-            |  APK_BUILDER_SIGNING_KEY_ALIAS and APK_BUILDER_SIGNING_KEY_PASSWORD.
+            |  CODE_BUILDER_SIGNING_STORE_FILE, CODE_BUILDER_SIGNING_STORE_PASSWORD,
+            |  CODE_BUILDER_SIGNING_KEY_ALIAS and CODE_BUILDER_SIGNING_KEY_PASSWORD.
             |
             |Option 2 - sign the finished APK by hand. apksigner rewrites only the
             |signature and leaves the archive layout intact:

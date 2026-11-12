@@ -1,6 +1,6 @@
 const REPO = 'Code_Builder';
 const BRANCH = 'Apk_Builder_Beta';
-const FOLDER = 'Apk_Builder_Yedek';
+const FOLDER = 'Code_Builder_Yedek';
 const PREFIX = REPO + '_' + BRANCH + '_';
 const COPTE_KALAN = 2;
 const DRIVE = 'https://www.googleapis.com/drive/v3/files';

@@ -63054,7 +63054,7 @@ annotation class SharedImmutable
         output: &str,
     ) -> Result<Artifact, Diagnostic> {
         let manifest = format!(
-            "unique_name={}\nabi_version=omni-ir-1\nnative_targets={}\ncompiler_version=apk-builder\nbuiltins_platform=NATIVE\nir_provider=omni\n",
+            "unique_name={}\nabi_version=omni-ir-1\nnative_targets={}\ncompiler_version=code-builder\nbuiltins_platform=NATIVE\nir_provider=omni\n",
             options.module(),
             options.target.name
         );

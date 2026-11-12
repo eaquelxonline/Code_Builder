@@ -1,10 +1,10 @@
--keepclasseswithmembernames class com.apk.builder.Builder {
+-keepclasseswithmembernames class com.code.builder.Builder {
     native <methods>;
 }
--keep class com.apk.builder.Builder { *; }
+-keep class com.code.builder.Builder { *; }
 
--keep class com.apk.builder.BuilderActivity { *; }
--keep class com.apk.builder.BuilderApplication { *; }
+-keep class com.code.builder.BuilderActivity { *; }
+-keep class com.code.builder.BuilderApplication { *; }
 
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile

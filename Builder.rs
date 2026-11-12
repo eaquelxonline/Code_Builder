@@ -492,7 +492,7 @@ pub mod json {
         pub fn finish(self) -> String {
             assert!(
                 self.needs_comma.is_empty(),
-                "apk_builder_core::json::Writer::finish called with {} unclosed container(s)",
+                "code_builder_core::json::Writer::finish called with {} unclosed container(s)",
                 self.needs_comma.len()
             );
             self.buf
@@ -2257,7 +2257,7 @@ pub mod toolchain {
             checksum: None,
             observable_on_device: false,
             note: "Provides the Clang toolchain that links the Core into \
-                   libapk_builder.so.",
+                   libcode_builder.so.",
         },
         Pin {
             id: "androidApi",
@@ -2300,7 +2300,7 @@ pub mod toolchain {
             display_name: "minSdk",
             pinned: "30",
             requirement: Requirement::Exact,
-            source: "Apk_Builder build configuration",
+            source: "Code_Builder build configuration",
             checksum: None,
             observable_on_device: true,
             note: "Lowest Android release the builder itself runs on.",
@@ -2310,7 +2310,7 @@ pub mod toolchain {
             display_name: "targetSdk",
             pinned: "37",
             requirement: Requirement::Exact,
-            source: "Apk_Builder build configuration",
+            source: "Code_Builder build configuration",
             checksum: None,
             observable_on_device: true,
             note: "Behavioural contract the builder opts into.",
@@ -12300,7 +12300,7 @@ pub mod resources {
                     )
                     .with_context(format!("Found: {trimmed}"))
                     .with_suggestion(
-                        "A reference is written @type/name, for example @color/apk_builder_accent.",
+                        "A reference is written @type/name, for example @color/code_builder_accent.",
                     ),
                 );
                 return None;
@@ -20636,7 +20636,7 @@ pub mod rsa {
         crate::cipher::hmac_sha256(wrapping, CONTAINER_TAG_DOMAIN)
     }
 
-    const CONTAINER_TAG_DOMAIN: &[u8] = b"Apk_Builder key container tag, version 2";
+    const CONTAINER_TAG_DOMAIN: &[u8] = b"Code_Builder key container tag, version 2";
 
     pub fn seal_pkcs8(key: &PrivateKey, password: &str) -> Result<Vec<u8>, Diagnostic> {
         seal_pkcs8_tagging(key, password).map(|(sealed, _)| sealed)
@@ -21990,8 +21990,8 @@ pub mod certificate {
     pub fn quantum(keys: &crate::mldsa::Keys) -> Result<Vec<u8>, Diagnostic> {
         let mut name_body = Vec::new();
         name_body.extend_from_slice(&relative_name(COUNTRY, "TR"));
-        name_body.extend_from_slice(&relative_name(ORGANISATION, "Apk Builder"));
-        name_body.extend_from_slice(&relative_name(COMMON_NAME, "Apk Builder Quantum Safe"));
+        name_body.extend_from_slice(&relative_name(ORGANISATION, "Code Builder"));
+        name_body.extend_from_slice(&relative_name(COMMON_NAME, "Code Builder Quantum Safe"));
         let name = der::encode_element(der::tag::SEQUENCE, &name_body);
 
         let mut validity_body = Vec::new();
@@ -30120,21 +30120,21 @@ pub mod debugger {
     use crate::FailureClass;
     use std::sync::Mutex;
 
-    pub const PACKAGE: &str = "com.apk.builder.debug";
+    pub const PACKAGE: &str = "com.code.builder.debug";
 
-    pub const FOLDER: &str = "com/apk/builder/debug/";
+    pub const FOLDER: &str = "com/code/builder/debug/";
 
     pub const AUTHORITY_SUFFIX: &str = ".debugger";
 
-    pub const PRESENCE_ACTION: &str = "com.apk.builder.debug.RUNTIME";
+    pub const PRESENCE_ACTION: &str = "com.code.builder.debug.RUNTIME";
 
-    pub const PROVIDER: &str = "com.apk.builder.debug.DebugProvider";
+    pub const PROVIDER: &str = "com.code.builder.debug.DebugProvider";
 
-    pub const RECEIVER: &str = "com.apk.builder.debug.Presence";
+    pub const RECEIVER: &str = "com.code.builder.debug.Presence";
 
-    pub const FACTORY: &str = "com.apk.builder.debug.ComponentFactory";
+    pub const FACTORY: &str = "com.code.builder.debug.ComponentFactory";
 
-    pub const HOST_PACKAGE: &str = "com.apk.builder";
+    pub const HOST_PACKAGE: &str = "com.code.builder";
 
     pub const RUNTIME_VERSION: u32 = 1;
 
@@ -30479,8 +30479,8 @@ pub mod debugger {
 
     pub const RUNTIME: &[(&str, &str)] = &[
         (
-            "com/apk/builder/debug/Journal.java",
-            r####"package com.apk.builder.debug;
+            "com/code/builder/debug/Journal.java",
+            r####"package com.code.builder.debug;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -31090,8 +31090,8 @@ public final class Journal {
 "####,
         ),
         (
-            "com/apk/builder/debug/Crashes.java",
-            r####"package com.apk.builder.debug;
+            "com/code/builder/debug/Crashes.java",
+            r####"package com.code.builder.debug;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -31287,8 +31287,8 @@ public final class Crashes implements Thread.UncaughtExceptionHandler {
 "####,
         ),
         (
-            "com/apk/builder/debug/Tombstone.java",
-            r####"package com.apk.builder.debug;
+            "com/code/builder/debug/Tombstone.java",
+            r####"package com.code.builder.debug;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31689,8 +31689,8 @@ public final class Tombstone {
 "####,
         ),
         (
-            "com/apk/builder/debug/Debugger.java",
-            r####"package com.apk.builder.debug;
+            "com/code/builder/debug/Debugger.java",
+            r####"package com.code.builder.debug;
 
 import android.app.Application;
 import android.content.Context;
@@ -31878,7 +31878,7 @@ public final class Debugger {
             out.append(abis[at]);
         }
         out.append('\n');
-        out.append("Built by Apk Builder ").append(BuildFacts.BUILDER_VERSION).append('\n');
+        out.append("Built by Code Builder ").append(BuildFacts.BUILDER_VERSION).append('\n');
         out.append("Profile: ").append(BuildFacts.PROFILE).append(", level ")
                 .append(BuildFacts.LEVEL).append(", runtime ")
                 .append(BuildFacts.RUNTIME_VERSION).append('\n');
@@ -31889,8 +31889,8 @@ public final class Debugger {
 "####,
         ),
         (
-            "com/apk/builder/debug/Watchdog.java",
-            r####"package com.apk.builder.debug;
+            "com/code/builder/debug/Watchdog.java",
+            r####"package com.code.builder.debug;
 
 import android.os.Debug;
 import android.os.Handler;
@@ -32045,8 +32045,8 @@ public final class Watchdog extends Thread {
 "####,
         ),
         (
-            "com/apk/builder/debug/ActivityTrail.java",
-            r####"package com.apk.builder.debug;
+            "com/code/builder/debug/ActivityTrail.java",
+            r####"package com.code.builder.debug;
 
 import android.app.Activity;
 import android.app.Application;
@@ -32211,8 +32211,8 @@ public final class ActivityTrail implements Application.ActivityLifecycleCallbac
 "####,
         ),
         (
-            "com/apk/builder/debug/ExitHistory.java",
-            r####"package com.apk.builder.debug;
+            "com/code/builder/debug/ExitHistory.java",
+            r####"package com.code.builder.debug;
 
 import android.app.ActivityManager;
 import android.app.ApplicationExitInfo;
@@ -32390,8 +32390,8 @@ public final class ExitHistory {
 "####,
         ),
         (
-            "com/apk/builder/debug/OwnLog.java",
-            r####"package com.apk.builder.debug;
+            "com/code/builder/debug/OwnLog.java",
+            r####"package com.code.builder.debug;
 
 import android.os.Process;
 
@@ -32483,8 +32483,8 @@ public final class OwnLog extends Thread {
 "####,
         ),
         (
-            "com/apk/builder/debug/CallerCheck.java",
-            r####"package com.apk.builder.debug;
+            "com/code/builder/debug/CallerCheck.java",
+            r####"package com.code.builder.debug;
 
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -32537,8 +32537,8 @@ public final class CallerCheck {
 "####,
         ),
         (
-            "com/apk/builder/debug/DebugProvider.java",
-            r####"package com.apk.builder.debug;
+            "com/code/builder/debug/DebugProvider.java",
+            r####"package com.code.builder.debug;
 
 import android.content.ContentProvider;
 import android.content.ContentValues;
@@ -32580,7 +32580,7 @@ public final class DebugProvider extends ContentProvider {
     public Cursor query(Uri uri, String[] projection, String selection, String[] arguments,
             String order) {
         if (!trusted()) {
-            throw new SecurityException("Only Apk Builder reads this app's debugger.");
+            throw new SecurityException("Only Code Builder reads this app's debugger.");
         }
         Debugger.adoptAside();
         Journal journal = Debugger.journal();
@@ -32632,7 +32632,7 @@ public final class DebugProvider extends ContentProvider {
     @Override
     public Bundle call(String method, String argument, Bundle extras) {
         if (!trusted()) {
-            throw new SecurityException("Only Apk Builder reads this app's debugger.");
+            throw new SecurityException("Only Code Builder reads this app's debugger.");
         }
         Bundle out = new Bundle();
         Debugger.adoptAside();
@@ -32683,8 +32683,8 @@ public final class DebugProvider extends ContentProvider {
 "####,
         ),
         (
-            "com/apk/builder/debug/ComponentFactory.java",
-            r####"package com.apk.builder.debug;
+            "com/code/builder/debug/ComponentFactory.java",
+            r####"package com.code.builder.debug;
 
 import android.app.Activity;
 import android.app.AppComponentFactory;
@@ -32840,8 +32840,8 @@ public final class ComponentFactory extends AppComponentFactory {
 "####,
         ),
         (
-            "com/apk/builder/debug/Presence.java",
-            r####"package com.apk.builder.debug;
+            "com/code/builder/debug/Presence.java",
+            r####"package com.code.builder.debug;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -32849,7 +32849,7 @@ import android.content.Intent;
 
 public final class Presence extends BroadcastReceiver {
 
-    public static final String ACTION = "com.apk.builder.debug.RUNTIME";
+    public static final String ACTION = "com.code.builder.debug.RUNTIME";
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -39006,7 +39006,7 @@ pub mod desugar {
     use crate::diag::{Diagnostic, Severity};
     use crate::FailureClass;
 
-    pub const HOME: &str = "com/apk/builder/desugar/Backports";
+    pub const HOME: &str = "com/code/builder/desugar/Backports";
 
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     pub enum Called {
@@ -39171,25 +39171,25 @@ pub mod desugar {
         (
             "java/lang/MatchException",
             36,
-            "com/apk/builder/desugar/MatchException",
+            "com/code/builder/desugar/MatchException",
         ),
-        ("java/lang/Record", 34, "com/apk/builder/desugar/RecordTag"),
+        ("java/lang/Record", 34, "com/code/builder/desugar/RecordTag"),
         (
             "java/util/HexFormat",
             34,
-            "com/apk/builder/desugar/HexFormat",
+            "com/code/builder/desugar/HexFormat",
         ),
         (
             "java/util/ServiceLoader$Provider",
             35,
-            "com/apk/builder/desugar/ServiceProvider",
+            "com/code/builder/desugar/ServiceProvider",
         ),
     ];
 
     pub const SOURCES: &[(&str, &str)] = &[
         (
-            "com/apk/builder/desugar/Backports.java",
-            r####"package com.apk.builder.desugar;
+            "com/code/builder/desugar/Backports.java",
+            r####"package com.code.builder.desugar;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -40635,8 +40635,8 @@ public final class Backports {
 "####,
         ),
         (
-            "com/apk/builder/desugar/HexFormat.java",
-            r####"package com.apk.builder.desugar;
+            "com/code/builder/desugar/HexFormat.java",
+            r####"package com.code.builder.desugar;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -40876,8 +40876,8 @@ public final class HexFormat {
 "####,
         ),
         (
-            "com/apk/builder/desugar/MatchException.java",
-            r####"package com.apk.builder.desugar;
+            "com/code/builder/desugar/MatchException.java",
+            r####"package com.code.builder.desugar;
 
 public final class MatchException extends RuntimeException {
     public MatchException(String message, Throwable cause) {
@@ -40887,8 +40887,8 @@ public final class MatchException extends RuntimeException {
 "####,
         ),
         (
-            "com/apk/builder/desugar/ServiceProvider.java",
-            r####"package com.apk.builder.desugar;
+            "com/code/builder/desugar/ServiceProvider.java",
+            r####"package com.code.builder.desugar;
 
 import java.util.function.Supplier;
 
@@ -40916,8 +40916,8 @@ public interface ServiceProvider extends Supplier<Object> {
 "####,
         ),
         (
-            "com/apk/builder/desugar/RecordTag.java",
-            r####"package com.apk.builder.desugar;
+            "com/code/builder/desugar/RecordTag.java",
+            r####"package com.code.builder.desugar;
 
 public abstract class RecordTag {
     protected RecordTag() {
@@ -43200,9 +43200,9 @@ pub mod settings {
             w.end_object();
 
             w.blank();
-            w.note("The debugger Apk Builder puts into the package it builds. It");
+            w.note("The debugger Code Builder puts into the package it builds. It");
             w.note("keeps crashes, freezes and why the process ended on the device,");
-            w.note("inside the application's own storage, and only Apk Builder can");
+            w.note("inside the application's own storage, and only Code Builder can");
             w.note("read them. Nothing leaves the device. profile is the build type");
             w.note("being built; levels says how much is kept for each: off, crash,");
             w.note("standard or full.");
@@ -45822,7 +45822,7 @@ pub mod gradle {
         }
         let here = std::path::Path::new(root);
         let mut moved = 0;
-        for (classic_folder, apk_builder_folder) in CLASSIC_MAP {
+        for (classic_folder, code_builder_folder) in CLASSIC_MAP {
             let from = here.join(classic_folder);
             if !from.is_dir() {
                 continue;
@@ -45830,7 +45830,7 @@ pub mod gradle {
             let mut held = Vec::new();
             walk(&from, "", &mut held);
             for (named, path) in held {
-                let folder = routed_folder(apk_builder_folder, &named);
+                let folder = routed_folder(code_builder_folder, &named);
                 if carry(&path, &here.join(folder).join(&named))? {
                     moved += 1;
                 }
@@ -45928,7 +45928,7 @@ pub mod gradle {
                 out.moved += 1;
             }
         }
-        for (gradle_folder, apk_builder_folder) in SOURCE_MAP {
+        for (gradle_folder, code_builder_folder) in SOURCE_MAP {
             let from = here.join(gradle_folder);
             if !from.is_dir() {
                 continue;
@@ -45936,7 +45936,7 @@ pub mod gradle {
             let mut held = Vec::new();
             walk(&from, "", &mut held);
             for (named, path) in held {
-                let folder = routed_folder(apk_builder_folder, &named);
+                let folder = routed_folder(code_builder_folder, &named);
                 if carry(&path, &root.join(folder).join(&named))? {
                     out.moved += 1;
                 }
@@ -45965,7 +45965,7 @@ pub mod gradle {
         if !base.is_dir() {
             return Ok(());
         }
-        for (gradle_folder, apk_builder_folder) in SOURCE_MAP {
+        for (gradle_folder, code_builder_folder) in SOURCE_MAP {
             let Some(inside) = gradle_folder.strip_prefix("src/main/") else {
                 continue;
             };
@@ -45976,7 +45976,7 @@ pub mod gradle {
             let mut held = Vec::new();
             walk(&from, "", &mut held);
             for (named, path) in held {
-                let folder = routed_folder(apk_builder_folder, &named);
+                let folder = routed_folder(code_builder_folder, &named);
                 if carry(&path, &root.join(folder).join(&named))? {
                     out.moved += 1;
                 }
@@ -48244,7 +48244,7 @@ pub mod scaffold {
             "rust" => (
                 format!("{ENTRY_CLASS}.rs"),
                 format!(
-                    "#![no_std]\n\n#[panic_handler]\nfn panic(_: &core::panic::PanicInfo) -> ! {{\n    loop {{}}\n}}\n\n#[no_mangle]\npub extern \"C\" fn apk_builder_entry() -> i32 {{\n    0\n}}\n\n// {class}\n"
+                    "#![no_std]\n\n#[panic_handler]\nfn panic(_: &core::panic::PanicInfo) -> ! {{\n    loop {{}}\n}}\n\n#[no_mangle]\npub extern \"C\" fn code_builder_entry() -> i32 {{\n    0\n}}\n\n// {class}\n"
                 ),
             ),
             _ => (String::new(), String::new()),
@@ -54747,7 +54747,7 @@ pub mod keystore {
 
     static DEVICE: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
 
-    const SHARED_BINDING_DOMAIN: &[u8] = b"Apk_Builder shared key, bound to this device";
+    const SHARED_BINDING_DOMAIN: &[u8] = b"Code_Builder shared key, bound to this device";
 
     pub fn bind_device(secret: &str) {
         let held = secret.trim();
@@ -55096,7 +55096,7 @@ pub mod keystore {
 
     pub fn parts(data: &[u8]) -> Result<Container<'_>, Diagnostic> {
         if data.len() < 12 || (&data[..8] != MAGIC && data[..8] != EARLIER_MAGIC) {
-            return Err(fail("EY032", "The file is not an Apk Builder signing key.")
+            return Err(fail("EY032", "The file is not a Code Builder signing key.")
                 .with_suggestion("A key file made by this build starts with APKBKEY1."));
         }
         let version = u32::from_le_bytes([data[8], data[9], data[10], data[11]]);
@@ -58594,8 +58594,8 @@ pub mod builder {
     impl Default for Identity {
         fn default() -> Identity {
             Identity {
-                common_name: "Apk_Builder".to_string(),
-                organisation: "Apk Builder".to_string(),
+                common_name: "Code_Builder".to_string(),
+                organisation: "Code Builder".to_string(),
                 country: "TR".to_string(),
             }
         }
@@ -63226,14 +63226,14 @@ pub fn state_report(observed_environment: &str) -> String {
     w.begin_object(None);
 
     w.begin_object(Some("core"));
-    w.field_str("name", "Apk_Builder Core");
+    w.field_str("name", "Code_Builder Core");
     w.field_str("version", CORE_VERSION);
-    w.field_u64("abiVersion", ffi::APK_BUILDER_ABI_VERSION as u64);
+    w.field_u64("abiVersion", ffi::CODE_BUILDER_ABI_VERSION as u64);
     w.field_bool("selfHosted", false);
     w.field_str(
         "selfHostingNote",
-        "Apk_Builder is not self-hosted. Directive section 53 requires the whole \
-         chain from source to signed artifact to run on Apk Builder infrastructure; none \
+        "Code_Builder is not self-hosted. Directive section 53 requires the whole \
+         chain from source to signed artifact to run on Code Builder infrastructure; none \
          of it does yet.",
     );
     w.begin_array(Some("bootstrapDependencies"));
@@ -65804,21 +65804,21 @@ pub mod ffi {
     use std::ffi::{c_char, CStr, CString};
     use std::panic::catch_unwind;
 
-    pub const APK_BUILDER_ABI_VERSION: u32 = 1;
+    pub const CODE_BUILDER_ABI_VERSION: u32 = 1;
 
     #[no_mangle]
-    pub extern "C" fn apk_builder_abi_version() -> u32 {
-        APK_BUILDER_ABI_VERSION
+    pub extern "C" fn code_builder_abi_version() -> u32 {
+        CODE_BUILDER_ABI_VERSION
     }
 
     #[no_mangle]
-    pub extern "C" fn apk_builder_core_version() -> *const c_char {
+    pub extern "C" fn code_builder_core_version() -> *const c_char {
         const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), "\0");
         VERSION.as_ptr() as *const c_char
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_state_report(
+    pub unsafe extern "C" fn code_builder_state_report(
         observed_environment: *const c_char,
     ) -> *mut c_char {
         let result = catch_unwind(|| {
@@ -65938,7 +65938,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn apk_builder_build_progress() -> *mut c_char {
+    pub extern "C" fn code_builder_build_progress() -> *mut c_char {
         let result = catch_unwind(|| match CString::new(crate::progress::report()) {
             Ok(report) => report.into_raw(),
             Err(_) => std::ptr::null_mut(),
@@ -65947,12 +65947,12 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn apk_builder_build_stop() {
+    pub extern "C" fn code_builder_build_stop() {
         let _ = catch_unwind(crate::progress::stop);
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_speak(tag: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_speak(tag: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let asked = text_from(tag).unwrap_or_default();
             let spoken = crate::speech::choose(&asked);
@@ -65974,7 +65974,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_terminal_docs(tag: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_terminal_docs(tag: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let asked = text_from(tag).unwrap_or_default();
             match CString::new(crate::terminal::docs_json(&asked)) {
@@ -65986,7 +65986,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_vibe(request: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_vibe(request: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let asked = text_from(request).unwrap_or_default();
             match CString::new(crate::vibe_coding::answer(&asked)) {
@@ -65998,7 +65998,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_build_expect(timings: *const c_char) {
+    pub unsafe extern "C" fn code_builder_build_expect(timings: *const c_char) {
         let _ = catch_unwind(|| {
             if let Some(held) = text_from(timings) {
                 crate::progress::learn(&held);
@@ -66007,7 +66007,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_create_project(
+    pub unsafe extern "C" fn code_builder_create_project(
         root: *const c_char,
         spec: *const c_char,
     ) -> *mut c_char {
@@ -66037,7 +66037,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_build_project(
+    pub unsafe extern "C" fn code_builder_build_project(
         root: *const c_char,
         output_path: *const c_char,
         key_path: *const c_char,
@@ -66106,7 +66106,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_bundle_project(
+    pub unsafe extern "C" fn code_builder_bundle_project(
         root: *const c_char,
         output_path: *const c_char,
     ) -> *mut c_char {
@@ -66143,7 +66143,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_verify_self(
+    pub unsafe extern "C" fn code_builder_verify_self(
         package_path: *const c_char,
         expected_certificate: *const c_char,
     ) -> *mut c_char {
@@ -66164,7 +66164,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_debugger_configure(spec: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_debugger_configure(spec: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let spec = text_from(spec).unwrap_or_default();
             let mut w = crate::json::Writer::new();
@@ -66184,7 +66184,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_create_key(
+    pub unsafe extern "C" fn code_builder_create_key(
         directory: *const c_char,
         spec: *const c_char,
         password: *const c_char,
@@ -66215,7 +66215,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_bind_device(secret: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_bind_device(secret: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(secret) = text_from(secret) else {
                 return std::ptr::null_mut();
@@ -66231,7 +66231,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_default_key(directory: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_default_key(directory: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(directory) = text_from(directory) else {
                 return std::ptr::null_mut();
@@ -66253,7 +66253,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_build_all(
+    pub unsafe extern "C" fn code_builder_build_all(
         root: *const c_char,
         package_path: *const c_char,
         bundle_path: *const c_char,
@@ -66350,7 +66350,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_list_keys(directory: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_list_keys(directory: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(directory) = text_from(directory) else {
                 return std::ptr::null_mut();
@@ -66370,7 +66370,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_delete_key(path: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_delete_key(path: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(path) = text_from(path) else {
                 return std::ptr::null_mut();
@@ -66391,7 +66391,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_check_key(
+    pub unsafe extern "C" fn code_builder_check_key(
         path: *const c_char,
         password: *const c_char,
     ) -> *mut c_char {
@@ -66415,7 +66415,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_list_projects(directory: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_list_projects(directory: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(directory) = text_from(directory) else {
                 return std::ptr::null_mut();
@@ -66435,7 +66435,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_project_tree(root: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_project_tree(root: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(root) = text_from(root) else {
                 return std::ptr::null_mut();
@@ -66467,7 +66467,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_project_health(root: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_project_health(root: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(root) = text_from(root) else {
                 return std::ptr::null_mut();
@@ -66488,7 +66488,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_lay_out(
+    pub unsafe extern "C" fn code_builder_lay_out(
         name: *const c_char,
         text: *const c_char,
     ) -> *mut c_char {
@@ -66521,7 +66521,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_dependencies(root: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_dependencies(root: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(root) = text_from(root) else {
                 return std::ptr::null_mut();
@@ -66542,7 +66542,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_dependency_remove(
+    pub unsafe extern "C" fn code_builder_dependency_remove(
         root: *const c_char,
         name: *const c_char,
     ) -> *mut c_char {
@@ -66566,7 +66566,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_manifest_facts(root: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_manifest_facts(root: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(root) = text_from(root) else {
                 return std::ptr::null_mut();
@@ -66587,7 +66587,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_manifest_set(
+    pub unsafe extern "C" fn code_builder_manifest_set(
         root: *const c_char,
         field: *const c_char,
         value: *const c_char,
@@ -66614,7 +66614,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_manifest_permission(
+    pub unsafe extern "C" fn code_builder_manifest_permission(
         root: *const c_char,
         name: *const c_char,
         wanted: bool,
@@ -66639,7 +66639,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_symbols(
+    pub unsafe extern "C" fn code_builder_symbols(
         root: *const c_char,
         needle: *const c_char,
     ) -> *mut c_char {
@@ -66670,7 +66670,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_where_written(
+    pub unsafe extern "C" fn code_builder_where_written(
         root: *const c_char,
         qualified: *const c_char,
     ) -> *mut c_char {
@@ -66698,7 +66698,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_inspect_package(path: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_inspect_package(path: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(path) = text_from(path) else {
                 return std::ptr::null_mut();
@@ -66720,7 +66720,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_check_project(root: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_check_project(root: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(root) = text_from(root) else {
                 return std::ptr::null_mut();
@@ -66738,7 +66738,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_maven_plan(root: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_maven_plan(root: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(root) = text_from(root) else {
                 return std::ptr::null_mut();
@@ -66759,7 +66759,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_project_repairs(root: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_project_repairs(root: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(root) = text_from(root) else {
                 return std::ptr::null_mut();
@@ -66786,7 +66786,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_apply_repairs(
+    pub unsafe extern "C" fn code_builder_apply_repairs(
         root: *const c_char,
         repairs: *const c_char,
     ) -> *mut c_char {
@@ -66838,7 +66838,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_search_project(
+    pub unsafe extern "C" fn code_builder_search_project(
         root: *const c_char,
         needle: *const c_char,
         sensitive: bool,
@@ -66865,7 +66865,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_read_file(
+    pub unsafe extern "C" fn code_builder_read_file(
         root: *const c_char,
         relative: *const c_char,
     ) -> *mut c_char {
@@ -66891,7 +66891,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_write_file(
+    pub unsafe extern "C" fn code_builder_write_file(
         root: *const c_char,
         relative: *const c_char,
         contents: *const c_char,
@@ -66919,7 +66919,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_git_checkout(
+    pub unsafe extern "C" fn code_builder_git_checkout(
         pack_path: *const c_char,
         head: *const c_char,
         into: *const c_char,
@@ -66973,7 +66973,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_digest_file(path: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_digest_file(path: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(path) = text_from(path) else {
                 return std::ptr::null_mut();
@@ -66999,7 +66999,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_pack_archive(
+    pub unsafe extern "C" fn code_builder_pack_archive(
         root: *const c_char,
         names: *const c_char,
         into: *const c_char,
@@ -67042,7 +67042,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_open_archive(
+    pub unsafe extern "C" fn code_builder_open_archive(
         archive_path: *const c_char,
         into: *const c_char,
         password: *const c_char,
@@ -67091,7 +67091,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_adopt_project(root: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_adopt_project(root: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(root) = text_from(root) else {
                 return std::ptr::null_mut();
@@ -67135,7 +67135,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_new_folder(
+    pub unsafe extern "C" fn code_builder_new_folder(
         root: *const c_char,
         relative: *const c_char,
     ) -> *mut c_char {
@@ -67159,7 +67159,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_remove_path(
+    pub unsafe extern "C" fn code_builder_remove_path(
         root: *const c_char,
         relative: *const c_char,
         trash_root: *const c_char,
@@ -67190,7 +67190,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_rename_path(
+    pub unsafe extern "C" fn code_builder_rename_path(
         root: *const c_char,
         from: *const c_char,
         to: *const c_char,
@@ -67218,7 +67218,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_build_unsigned(
+    pub unsafe extern "C" fn code_builder_build_unsigned(
         root: *const c_char,
         package_path: *const c_char,
         certificate: *const c_char,
@@ -67320,7 +67320,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_seal_package(
+    pub unsafe extern "C" fn code_builder_seal_package(
         package_path: *const c_char,
         sealed_path: *const c_char,
         certificate: *const c_char,
@@ -67518,7 +67518,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_copy_path(
+    pub unsafe extern "C" fn code_builder_copy_path(
         root: *const c_char,
         from: *const c_char,
         to: *const c_char,
@@ -67546,7 +67546,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_list_built(directory: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_list_built(directory: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(directory) = text_from(directory) else {
                 return std::ptr::null_mut();
@@ -67566,7 +67566,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_trash_send(
+    pub unsafe extern "C" fn code_builder_trash_send(
         trash_root: *const c_char,
         path: *const c_char,
     ) -> *mut c_char {
@@ -67593,7 +67593,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_trash_list(trash_root: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_trash_list(trash_root: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(trash_root) = text_from(trash_root) else {
                 return std::ptr::null_mut();
@@ -67617,7 +67617,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_trash_restore(
+    pub unsafe extern "C" fn code_builder_trash_restore(
         trash_root: *const c_char,
         id: *const c_char,
     ) -> *mut c_char {
@@ -67643,7 +67643,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_trash_purge(
+    pub unsafe extern "C" fn code_builder_trash_purge(
         trash_root: *const c_char,
         id: *const c_char,
     ) -> *mut c_char {
@@ -67667,7 +67667,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_trash_empty(trash_root: *const c_char) -> *mut c_char {
+    pub unsafe extern "C" fn code_builder_trash_empty(trash_root: *const c_char) -> *mut c_char {
         let result = catch_unwind(|| {
             let Some(trash_root) = text_from(trash_root) else {
                 return std::ptr::null_mut();
@@ -67683,7 +67683,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_set_icon(
+    pub unsafe extern "C" fn code_builder_set_icon(
         root: *const c_char,
         source: *const c_char,
     ) -> *mut c_char {
@@ -67715,7 +67715,7 @@ pub mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn apk_builder_string_free(value: *mut c_char) {
+    pub unsafe extern "C" fn code_builder_string_free(value: *mut c_char) {
         if value.is_null() {
             return;
         }

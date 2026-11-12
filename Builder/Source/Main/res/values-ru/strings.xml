@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Apk Builder</string>
+    <string name="app_name">Code Builder</string>
     <string name="version_shown">1.0.0</string>
     <string name="help_title">Центр помощи</string>
     <string name="find_project">Поиск по проекту</string>
@@ -216,7 +216,7 @@
     <string name="theme_active">Сейчас используется</string>
     <string name="about_version">Версия %1$s</string>
     <string name="policy_six_body">Интернет используется только для описанных выше действий. Установка пакетов передаёт собранный вами APK установщику Android, который всегда сначала спрашивает вас. Уведомления сообщают о завершении долгой сборки. Чтение журналов никогда не выдаётся автоматически: вы можете выдать его через ADB, чтобы экран Logcat показывал журналы других приложений, и отозвать в любой момент. Приложение не запрашивает контакты, местоположение, камеру, микрофон или журнал звонков.</string>
-    <string name="legal_stamp">Этот текст относится к версии %1$s. © %2$s Eaquel · Apk Builder.</string>
+    <string name="legal_stamp">Этот текст относится к версии %1$s. © %2$s Eaquel · Code Builder.</string>
     <string name="policy_six_head">Разрешения</string>
     <string name="policy_five_body">Когда вы пользуетесь ассистентом, ваше сообщение, приложенные файлы и фотографии и выбранный контекст проекта отправляются напрямую с устройства выбранному поставщику, например GitHub Copilot, Pollinations AI, KeylessAI, OpenZoo, Kilo Gateway, maximumsats.com или LLM7.io. Что происходит с этими данными там, определяется политикой конфиденциальности этого поставщика. Не отправляйте секреты и личные данные, которые не хотите ему передавать.</string>
     <string name="policy_five_head">Поставщики ИИ-ассистента</string>
@@ -225,7 +225,7 @@
     <string name="policy_three_head">Ключи, пароли и токены</string>
     <string name="policy_two_body">Ваши проекты, исходные файлы, несохранённые черновики, результаты сборки, хранилища ключей подписи, настройки, беседы с ассистентом и собственный журнал приложения хранятся в его закрытом хранилище на этом устройстве. Android не допускает к нему другие приложения. Ничего из этого не отправляется разработчику.</string>
     <string name="policy_two_head">Что хранится на устройстве</string>
-    <string name="policy_one_body">Apk Builder — это среда разработки для Android, работающая на вашем устройстве. Эта политика объясняет, что хранит приложение, что и когда покидает ваше устройство и какой у вас есть выбор. В приложении нет аккаунтов, аналитики, рекламы и какого-либо отслеживания.</string>
+    <string name="policy_one_body">Code Builder — это среда разработки для Android, работающая на вашем устройстве. Эта политика объясняет, что хранит приложение, что и когда покидает ваше устройство и какой у вас есть выбор. В приложении нет аккаунтов, аналитики, рекламы и какого-либо отслеживания.</string>
     <string name="policy_one_head">Обзор</string>
     <string name="terms_six_body">Поставщики ИИ, GitHub, Git-хостинги и Maven-репозитории работают у третьих лиц по их собственным условиям. Их доступность, ограничения и ответы не зависят от разработчика. Код, предложенный ассистентом, может быть ошибочным; проверяйте и тестируйте его перед выпуском.</string>
     <string name="terms_six_head">Сторонние сервисы</string>
@@ -235,14 +235,14 @@
     <string name="terms_four_head">Допустимое использование</string>
     <string name="terms_three_body">Ваши проекты, исходный код, ресурсы и собранные пакеты принадлежат вам. Приложение не претендует на права на них и не использует их в своих целях.</string>
     <string name="terms_three_head">Ваша работа принадлежит вам</string>
-    <string name="terms_two_body">Apk Builder компилирует, упаковывает и подписывает Android-приложения на вашем устройстве. Компилятор, компилятор ресурсов, dex-конвертер, оптимизатор и подписыватель работают на процессоре вашего телефона; ни один шаг сборки не отправляется на сервер.</string>
+    <string name="terms_two_body">Code Builder компилирует, упаковывает и подписывает Android-приложения на вашем устройстве. Компилятор, компилятор ресурсов, dex-конвертер, оптимизатор и подписыватель работают на процессоре вашего телефона; ни один шаг сборки не отправляется на сервер.</string>
     <string name="terms_two_head">Что даёт приложение</string>
-    <string name="terms_one_body">Устанавливая или используя Apk Builder, вы принимаете эти условия. Если вы с ними не согласны, удалите приложение; после удаления ничего не сохраняется.</string>
+    <string name="terms_one_body">Устанавливая или используя Code Builder, вы принимаете эти условия. Если вы с ними не согласны, удалите приложение; после удаления ничего не сохраняется.</string>
     <string name="terms_one_head">Принятие условий</string>
     <string name="about_contact">Связь</string>
     <string name="about_developer">Разработчик</string>
     <string name="about_developer_name">Eaquel</string>
-    <string name="about_rights">© %1$s Eaquel · Apk Builder</string>
+    <string name="about_rights">© %1$s Eaquel · Code Builder</string>
     <string name="counted">%1$d/%2$d</string>
     <string name="feedback_title">Отзыв</string>
     <string name="feedback_send">Отправить отзыв</string>
@@ -267,7 +267,7 @@
     <string name="faq_search">Поиск вопросов…</string>
     <string name="terminal_search">Поиск по командам...</string>
     <string name="help_popular">Популярное:</string>
-    <string name="help_note">Здесь всё, что вы хотите знать об Apk Builder. Учитесь быстро, открывайте больше.</string>
+    <string name="help_note">Здесь всё, что вы хотите знать об Code Builder. Учитесь быстро, открывайте больше.</string>
     <string name="help_hello">Привет! 👋</string>
     <string name="help_none">Здесь этому ничто не отвечает.</string>
     <string name="help_band_all">Всё</string>
@@ -279,7 +279,7 @@
     <string name="help_band_terminal">Работа с терминалом</string>
     <string name="help_first">Первые шаги</string>
     <string name="help_first_note">Что это за приложение и с чего начать</string>
-    <string name="help_first_body">Apk Builder собирает пакеты Android на этом устройстве. Ни сервера, ни настольного набора средств: компилятор, упаковщик и подписывающий работают здесь. Создайте проект с главной, пишите свой код в Java, затем соберите его.</string>
+    <string name="help_first_body">Code Builder собирает пакеты Android на этом устройстве. Ни сервера, ни настольного набора средств: компилятор, упаковщик и подписывающий работают здесь. Создайте проект с главной, пишите свой код в Java, затем соберите его.</string>
     <string name="help_project">Новый проект</string>
     <string name="help_project_note">Имя, пакет, версия и значок</string>
     <string name="help_project_body">Проекту нужны имя, имя пакета вроде com.example.app, версия и версии Android, на которых он работает. Android узнаёт установленное приложение по имени пакета, поэтому выбирайте его до выпуска, а не после. Значок можно добавить в любое время из Файлов.</string>
@@ -361,7 +361,7 @@
     <string name="kinds_holds">Поддерживаемые языки:</string>
     <string name="kinds_holds_web">Поддерживаемые веб-технологии:</string>
     <string name="brand_note">Среда разработки Android</string>
-    <string name="app_shown">Apk Builder %1$s</string>
+    <string name="app_shown">Code Builder %1$s</string>
     <string name="raise_open">Открыть проект</string>
     <string name="import_none">Здесь ничто не смогло открыть этот файл.</string>
     <string name="import_done">%1$d файлов открыто в проект</string>
@@ -374,11 +374,11 @@
     <string name="rate_two">Вы помогаете нам найти больше разработчиков.</string>
     <string name="rate_one">Это мотивирует нас делать приложение лучше.</string>
     <string name="rate_why">Оценка в Play Store поддерживает нас. Так приложение находит больше людей.</string>
-    <string name="rate_ask">Вам понравился Apk Builder?</string>
-    <string name="about_head">Всё об Apk Builder.</string>
-    <string name="about_note">Apk Builder — мощная и дружелюбная среда\nдля написания, редактирования и тестирования\nприложений Android. Более свободная разработка\nдля всех и везде.</string>
+    <string name="rate_ask">Вам понравился Code Builder?</string>
+    <string name="about_head">Всё об Code Builder.</string>
+    <string name="about_note">Code Builder — мощная и дружелюбная среда\nдля написания, редактирования и тестирования\nприложений Android. Более свободная разработка\nдля всех и везде.</string>
     <string name="about_contact_note">Свяжитесь с нами.</string>
-    <string name="about_terms_note">Правила использования Apk Builder</string>
+    <string name="about_terms_note">Правила использования Code Builder</string>
     <string name="about_terms">Условия использования</string>
     <string name="about_policy_note">Что остаётся на устройстве и что его покидает</string>
     <string name="about_policy">Политика конфиденциальности</string>
@@ -451,7 +451,7 @@
     <string name="log_apps">Выбрать приложение</string>
     <string name="log_apps_find">Найти приложение</string>
     <string name="log_written">События</string>
-    <string name="log_empty_note">Выберите приложение, собранное в Apk Builder, и нажмите «Старт».</string>
+    <string name="log_empty_note">Выберите приложение, собранное в Code Builder, и нажмите «Старт».</string>
     <string name="log_about">Что сохраняет отладчик</string>
     <string name="log_guide">Открыть руководство</string>
     <string name="clone_title">Клонировать репозиторий</string>
@@ -555,7 +555,7 @@
     <string name="about_join">Участвовать</string>
     <string name="about_join_note">Вместе — к лучшему</string>
     <string name="about_reserved">Все права защищены.</string>
-    <string name="about_thanks">Спасибо, что пользуетесь Apk Builder!</string>
+    <string name="about_thanks">Спасибо, что пользуетесь Code Builder!</string>
     <string name="about_thanks_note">Мы здесь ради лучшей разработки.</string>
     <string name="feedback_kind_fault_note">Что-то не так</string>
     <string name="feedback_kind_idea_note">Новая мысль</string>
@@ -589,7 +589,7 @@
     <string name="policy_seven_head">Никакого стороннего кода</string>
     <string name="policy_seven_body">В приложении нет сторонних SDK: ни аналитики, ни службы отчётов о сбоях, ни рекламной сети. Записи о сбоях остаются на устройстве, и вы сами решаете, делиться ли ими через экран обратной связи. Ссылки на сайты открываются в выбранном вами браузере или приложении по правилам этого сайта.</string>
     <string name="policy_eight_head">Дети</string>
-    <string name="policy_eight_body">Apk Builder — инструмент для разработчиков и не предназначен для детей младше 13 лет. Приложение сознательно не собирает сведения ни о ком, включая детей.</string>
+    <string name="policy_eight_body">Code Builder — инструмент для разработчиков и не предназначен для детей младше 13 лет. Приложение сознательно не собирает сведения ни о ком, включая детей.</string>
     <string name="policy_nine_head">Удаление данных</string>
     <string name="policy_nine_body">Вы можете в любой момент удалить беседу, проект или ключ подписи из приложения. Удаление приложения стирает его закрытое хранилище, включая проекты, ключи и беседы. Проекты, экспортированные в общее хранилище, остаются там, куда вы их положили.</string>
     <string name="policy_ten_head">Изменения и связь</string>
@@ -603,19 +603,19 @@
     <string name="terms_ten_head">Изменения и связь</string>
     <string name="terms_ten_body">Эти условия могут обновляться вместе с приложением. Продолжая пользоваться приложением после обновления, вы принимаете новую версию. Вопросы можно отправить через экран обратной связи.</string>
     <string name="rights_one_head">Авторское право</string>
-    <string name="rights_one_body">© %1$s Eaquel. Apk Builder, его исходный код, дизайн, значки, иллюстрации и тексты защищены авторским правом. Все права защищены.</string>
+    <string name="rights_one_body">© %1$s Eaquel. Code Builder, его исходный код, дизайн, значки, иллюстрации и тексты защищены авторским правом. Все права защищены.</string>
     <string name="rights_two_head">Название и логотип</string>
-    <string name="rights_two_body">Название и логотип Apk Builder обозначают это приложение. Их нельзя использовать для другого продукта так, чтобы создавалось впечатление, что он создан или одобрен разработчиком.</string>
+    <string name="rights_two_body">Название и логотип Code Builder обозначают это приложение. Их нельзя использовать для другого продукта так, чтобы создавалось впечатление, что он создан или одобрен разработчиком.</string>
     <string name="rights_three_head">Созданное вами принадлежит вам</string>
     <string name="rights_three_body">Уведомление выше относится к самому приложению. Проекты, которые вы создаёте, и приложения, которые собираете с его помощью, принадлежат вам: вы можете публиковать, продавать и лицензировать их как угодно.</string>
     <string name="rights_four_head">Другие товарные знаки</string>
     <string name="rights_four_body">Android — товарный знак Google LLC. Java — зарегистрированный товарный знак Oracle и/или её дочерних компаний. Kotlin — товарный знак JetBrains s.r.o. GitHub и GitHub Copilot — товарные знаки GitHub, Inc. Другие названия принадлежат их владельцам и используются только для описания совместимости.</string>
     <string name="rights_five_head">Запрос разрешения</string>
     <string name="rights_five_body">Чтобы спросить об использовании какой-либо части приложения, напишите разработчику через экран обратной связи.</string>
-    <string name="developer_role">Независимый разработчик · Создатель Apk Builder</string>
+    <string name="developer_role">Независимый разработчик · Создатель Code Builder</string>
     <string name="developer_about_head">О разработчике</string>
-    <string name="developer_about">Eaquel проектирует и разрабатывает Apk Builder — полноценную среду разработки Android, которая работает прямо на телефоне. Компилятор, компилятор ресурсов, dex-конвертер, оптимизатор и подписыватель написаны с нуля на Rust, а интерфейс — на Kotlin, без сторонних библиотек.</string>
-    <string name="developer_work_head">Что внутри Apk Builder</string>
+    <string name="developer_about">Eaquel проектирует и разрабатывает Code Builder — полноценную среду разработки Android, которая работает прямо на телефоне. Компилятор, компилятор ресурсов, dex-конвертер, оптимизатор и подписыватель написаны с нуля на Rust, а интерфейс — на Kotlin, без сторонних библиотек.</string>
+    <string name="developer_work_head">Что внутри Code Builder</string>
     <string name="developer_core">Ядро на Rust</string>
     <string name="developer_core_note">Компилятор, dex, упаковка и подпись</string>
     <string name="developer_face">Интерфейс на Kotlin</string>
@@ -655,9 +655,9 @@
     <string name="vibe_custom_template_note">{{model}}, {{prompt}}, {{system}}, {{messages}}, {{max_tokens}} и {{effort}} подставляются перед отправкой.</string>
     <string name="vibe_custom_test">Проверить</string>
     <string name="vibe_custom_window">Контекстное окно</string>
-    <string name="vibe_disclaimer_1">1. ОТВЕТСТВЕННОСТЬ: Соблюдение условий обслуживания, политики конфиденциальности и правил использования выбранного провайдера — полностью ваша ответственность. APK Builder не является стороной отношений между вами и этими провайдерами.</string>
-    <string name="vibe_disclaimer_2">2. ПЕРЕДАЧА ДАННЫХ: После настройки провайдера ваши запросы и данные передаются на его серверы. APK Builder не хранит, не обрабатывает и не передаёт эти данные третьим лицам. Конфиденциальность ваших данных определяется политикой выбранного провайдера.</string>
-    <string name="vibe_disclaimer_3">3. РИСКИ ТРЕТЬИХ СТОРОН: APK Builder не несёт ответственности за сбои по вине провайдера, изменения API, ограничения частоты, изменения цен, блокировку аккаунта или утечку ключа.</string>
+    <string name="vibe_disclaimer_1">1. ОТВЕТСТВЕННОСТЬ: Соблюдение условий обслуживания, политики конфиденциальности и правил использования выбранного провайдера — полностью ваша ответственность. Code Builder не является стороной отношений между вами и этими провайдерами.</string>
+    <string name="vibe_disclaimer_2">2. ПЕРЕДАЧА ДАННЫХ: После настройки провайдера ваши запросы и данные передаются на его серверы. Code Builder не хранит, не обрабатывает и не передаёт эти данные третьим лицам. Конфиденциальность ваших данных определяется политикой выбранного провайдера.</string>
+    <string name="vibe_disclaimer_3">3. РИСКИ ТРЕТЬИХ СТОРОН: Code Builder не несёт ответственности за сбои по вине провайдера, изменения API, ограничения частоты, изменения цен, блокировку аккаунта или утечку ключа.</string>
     <string name="vibe_disclaimer_4">4. ОТВЕТСТВЕННОСТЬ ЗА РЕЗУЛЬТАТ: Ответы ИИ могут быть ошибочными, неполными или вводящими в заблуждение («галлюцинация»). Проверка правильности, безопасности и законности созданного кода — полностью ваша ответственность.</string>
     <string name="vibe_disclaimer_5">5. СОБЛЮДЕНИЕ ЗАКОНОВ: Соблюдение законов страны провайдера и вашей страны — ваша ответственность.</string>
     <string name="vibe_disclaimer_accept">Я прочитал(а), понял(а) и принимаю.</string>
@@ -729,10 +729,10 @@
     <string name="agent_checking">Компиляция и проверка написанного…</string>
     <string name="debugger_title">Debugger</string>
     <string name="debugger_app_pick">Выберите собранное приложение</string>
-    <string name="debugger_app_none">Пока ни одно установленное приложение не содержит отладчик. Соберите приложение в Apk Builder, установите его и проверьте снова.</string>
+    <string name="debugger_app_none">Пока ни одно установленное приложение не содержит отладчик. Соберите приложение в Code Builder, установите его и проверьте снова.</string>
     <string name="debugger_linked">Подключено</string>
     <string name="debugger_unlinked">Не подключено</string>
-    <string name="debugger_refused">Приложение собрано Apk Builder с другой подписью, поэтому его отладчик здесь не отвечает.</string>
+    <string name="debugger_refused">Приложение собрано Code Builder с другой подписью, поэтому его отладчик здесь не отвечает.</string>
     <string name="debugger_gone">Приложение не установлено или собрано без отладчика.</string>
     <string name="debugger_level">Уровень</string>
     <string name="debugger_profile">Профиль сборки</string>
@@ -754,7 +754,7 @@
     <string name="debugger_kind_lifecycle">Жизненный цикл</string>
     <string name="debugger_kind_performance">Производительность</string>
     <string name="debugger_kind_log">Журнал</string>
-    <string name="debugger_privacy">Всё остаётся на устройстве, в личном хранилище приложения. Прочитать это может только Apk Builder с той же подписью; ничего никуда не отправляется, интернет не нужен. Пароли, контакты, местоположение и файлы не сохраняются.</string>
+    <string name="debugger_privacy">Всё остаётся на устройстве, в личном хранилище приложения. Прочитать это может только Code Builder с той же подписью; ничего никуда не отправляется, интернет не нужен. Пароли, контакты, местоположение и файлы не сохраняются.</string>
     <string name="debugger_collect_crashes">Сбои с полной трассировкой стека и всеми остальными потоками</string>
     <string name="debugger_collect_native">Нативные сбои в коде на C, C++ и Rust</string>
     <string name="debugger_collect_anr">Зависания главного потока</string>
