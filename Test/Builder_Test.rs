@@ -1662,7 +1662,12 @@ mod core {
 
     #[test]
     fn a_resource_name_must_be_usable_as_an_identifier() {
-        for bad in ["1abc", "has space", "has-dash", "", "has/slash"] {
+        let (_, sink) = values("<resources><string name=\"has-dash\">x</string></resources>");
+        assert!(
+            !sink.entries().iter().any(|d| d.code == "E9005"),
+            "aapt2 takes a hyphen in a resource name and writes it as an underscore in R"
+        );
+        for bad in ["1abc", "has space", "", "has/slash"] {
             let (_, sink) = values(&format!(
                 "<resources><string name=\"{bad}\">x</string></resources>"
             ));
@@ -16981,6 +16986,229 @@ public final class App extends Activity {
     }
 
     #[test]
+    fn a_gradle_copy_task_is_carried_out_when_the_project_is_adopted() {
+        let groovy = "final String[] ROOT_TO_RAW_COPYFILES = [\"README.md\", \"LICENSE.txt\"]\ntask copyRepoFiles(type: Copy) {\n    from rootProject.files(ROOT_TO_RAW_COPYFILES)\n    into \"app/src/main/res/raw\"\n    rename { String fileName -> fileName.replace(fileName, fileName.toLowerCase()) }\n}\n";
+        let tasks = crate::gradle::copy_tasks(groovy);
+        assert_eq!(tasks.len(), 1, "{tasks:?}");
+        assert_eq!(tasks[0].from, vec!["README.md", "LICENSE.txt"]);
+        assert!(tasks[0].from_root && tasks[0].lowercase);
+        assert_eq!(tasks[0].into, "app/src/main/res/raw");
+        let kotlin = "val copyRawQwertyUS by tasks.registering(Copy::class) {\n  from(\"srcs/layouts/latn_qwerty_us.xml\")\n  into(\"build/generated-resources/raw\")\n}\nval copyLayoutDefinitions by tasks.registering(Copy::class) {\n  from(\"srcs/layouts\")\n  include(\"*.xml\")\n  into(\"build/generated-resources/xml\")\n}\nval escape by tasks.registering(Copy::class) {\n  from(\"srcs\")\n  into(\"../outside\")\n}\n";
+        let tasks = crate::gradle::copy_tasks(kotlin);
+        assert_eq!(tasks.len(), 3, "{tasks:?}");
+        assert_eq!(tasks[1].include, vec!["*.xml"]);
+
+        let root = temp_directory("builder-copy-task");
+        std::fs::create_dir_all(root.join("srcs/layouts")).unwrap();
+        std::fs::write(root.join("srcs/layouts/latn_qwerty_us.xml"), "<keyboard/>").unwrap();
+        std::fs::write(root.join("srcs/layouts/notes.txt"), "not a layout").unwrap();
+        std::fs::write(root.join("README.md"), "# readme").unwrap();
+        std::fs::write(root.join("LICENSE.txt"), "license").unwrap();
+        let copied = crate::gradle::run_copy_tasks(&root, &root, kotlin).expect("the tasks run");
+        assert_eq!(copied, 2);
+        assert!(root.join("build/generated-resources/raw/latn_qwerty_us.xml").is_file());
+        assert!(root.join("build/generated-resources/xml/latn_qwerty_us.xml").is_file());
+        assert!(!root.join("build/generated-resources/xml/notes.txt").exists());
+        assert!(!root.parent().unwrap().join("outside").exists(), "nothing leaves the project");
+        let copied = crate::gradle::run_copy_tasks(&root, &root, groovy).expect("the tasks run");
+        assert_eq!(copied, 2);
+        assert!(root.join("app/src/main/res/raw/readme.md").is_file());
+        assert!(root.join("app/src/main/res/raw/license.txt").is_file());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn the_main_source_set_folders_are_read_in_both_build_languages() {
+        let kotlin = r#"android {
+  sourceSets {
+    named("main") {
+      manifest.srcFile("AndroidManifest.xml")
+      java.srcDirs("srcs/juloo.keyboard2", "vendor/cdict/java/juloo.cdict")
+      res.srcDirs("res", "build/generated-resources")
+      assets.srcDirs("assets")
+    }
+    named("test") { java.srcDirs("test") }
+  }
+}
+"#;
+        assert_eq!(
+            crate::gradle::main_source_folders(kotlin),
+            vec![
+                ("manifest".to_string(), "AndroidManifest.xml".to_string()),
+                ("java".to_string(), "srcs/juloo.keyboard2".to_string()),
+                ("java".to_string(), "vendor/cdict/java/juloo.cdict".to_string()),
+                ("res".to_string(), "res".to_string()),
+                ("res".to_string(), "build/generated-resources".to_string()),
+                ("assets".to_string(), "assets".to_string()),
+            ]
+        );
+        let groovy = "android {\n    sourceSets {\n        main {\n            manifest.srcFile 'AndroidManifest.xml'\n            java.srcDirs = ['src', '../shared/src']\n            res.srcDirs = ['res']\n            jniLibs { srcDir 'libs' }\n        }\n        main.aidl.srcDirs = ['aidl']\n    }\n}\n";
+        assert_eq!(
+            crate::gradle::main_source_folders(groovy),
+            vec![
+                ("manifest".to_string(), "AndroidManifest.xml".to_string()),
+                ("java".to_string(), "src".to_string()),
+                ("res".to_string(), "res".to_string()),
+                ("aidl".to_string(), "aidl".to_string()),
+                ("jniLibs".to_string(), "libs".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_open_flavor_is_chosen_and_an_unreadable_version_name_is_not_written() {
+        assert_eq!(crate::gradle::flavor_rank("fdroid"), 0);
+        assert_eq!(crate::gradle::flavor_rank("flavorDefault"), 0);
+        assert_eq!(crate::gradle::flavor_rank("nonfree"), 2);
+        assert_eq!(crate::gradle::flavor_rank("flavorAtest"), 2);
+        assert_eq!(crate::gradle::flavor_rank("flavorGplay"), 2);
+        assert_eq!(crate::gradle::flavor_rank("standard"), 1);
+        let android = "android {\n    flavorDimensions = [\"default\"]\n    productFlavors {\n        flavorAtest {\n            versionName = defaultConfig.versionName + \"-\" + new Date().format('HHmm')\n        }\n        flavorDefault {\n        }\n        flavorGplay {\n        }\n    }\n}\n";
+        let (chosen, left) = crate::gradle::selected_flavors(android);
+        assert_eq!(
+            chosen.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(),
+            vec!["flavorDefault"]
+        );
+        assert_eq!(left, vec!["flavorAtest", "flavorGplay"]);
+
+        let directory = temp_directory("builder-flavor-version");
+        let root = directory.join("Versioned");
+        std::fs::create_dir_all(root.join("app/src/main")).unwrap();
+        std::fs::write(root.join("settings.gradle"), "include ':app'\n").unwrap();
+        std::fs::write(
+            root.join("app/build.gradle"),
+            "apply plugin: 'com.android.application'\nandroid {\n    defaultConfig {\n        applicationId \"com.example.versioned\"\n        versionCode 7\n        versionName \"2.5\"\n        buildConfigField \"String[]\", \"LOCALES\", \"${findUsedAndroidLocales()}\"\n    }\n    productFlavors {\n        flavorAtest {\n            versionName = defaultConfig.versionName + \"-\" + new Date().format('HHmm')\n        }\n    }\n}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("app/src/main/AndroidManifest.xml"),
+            "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"><application /></manifest>",
+        )
+        .unwrap();
+        let found = crate::gradle::read(root.to_str().unwrap(), "app").expect("the build reads");
+        assert_eq!(found.settings.version_name, "2.5");
+        let locales = found
+            .settings
+            .build_config
+            .iter()
+            .find(|one| one.name == "LOCALES")
+            .expect("the field is still declared");
+        assert_eq!(locales.value, "{}");
+        let source = crate::builder::build_config_source(
+            "com.example.versioned",
+            "com.example.versioned",
+            &found.settings,
+        );
+        crate::compilers::java::compile(&source, &crate::compilers::java::Classpath::new())
+            .expect("a field whose value Gradle code computes still compiles");
+        std::fs::remove_dir_all(&directory).ok();
+
+        let mut settings = found.settings.clone();
+        settings.version_name = "1.0 \"quoted\" & <more>".to_string();
+        let written = crate::settings::over_manifest(
+            "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"com.example.versioned\"><application /></manifest>",
+            &settings,
+        );
+        let mut sink = crate::diag::Sink::new();
+        let parsed = crate::xml::parse(&written, "AndroidManifest.xml", &mut sink)
+            .expect("the written manifest still reads");
+        assert_eq!(
+            parsed.attribute("android:versionName"),
+            Some("1.0 \"quoted\" & <more>")
+        );
+    }
+
+    #[test]
+    fn a_kotlin_build_type_named_by_call_and_a_qualified_id_resolve() {
+        let directory = temp_directory("builder-named-build-type");
+        let root = directory.join("Named");
+        std::fs::create_dir_all(root.join("app/src/main")).unwrap();
+        std::fs::write(root.join("settings.gradle.kts"), "include(\":app\")\n").unwrap();
+        std::fs::write(
+            root.join("app/build.gradle.kts"),
+            r#"plugins { id("com.android.application") }
+android {
+    namespace = "com.example.named"
+    compileSdk = 36
+    defaultConfig {
+        applicationId = "com.example.named"
+        minSdk = 23
+        targetSdk = 36
+        versionCode = 4
+        versionName = "1.4"
+    }
+    buildTypes {
+        named("release") {
+            isMinifyEnabled = true
+            resValue("string", "app_name", "@string/app_name_release")
+            resValue(
+                "string",
+                "search_authority",
+                defaultConfig.applicationId + ".SuggestionsProvider"
+            )
+        }
+        named("debug") {
+            applicationIdSuffix = ".debug"
+            resValue("string", "app_name", "@string/app_name_debug")
+        }
+    }
+}
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("app/src/main/AndroidManifest.xml"),
+            "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"><application /></manifest>",
+        )
+        .unwrap();
+        let found = crate::gradle::read(root.to_str().unwrap(), "app").expect("the build reads");
+        let values: Vec<String> = found
+            .settings
+            .res_values
+            .iter()
+            .map(|one| format!("{} {} = {}", one.kind, one.name, one.value))
+            .collect();
+        assert!(
+            values.contains(&"string app_name = @string/app_name_release".to_string()),
+            "{values:?}"
+        );
+        assert!(
+            values.contains(
+                &"string search_authority = com.example.named.SuggestionsProvider".to_string()
+            ),
+            "{values:?}"
+        );
+        assert!(found.settings.shrink, "the release block named by call is read");
+
+        std::fs::write(
+            root.join("app/build.gradle"),
+            "apply plugin: 'com.android.application'\nandroid {\n    defaultConfig { applicationId \"com.example.named\" }\n}\ndependencies {\n    ext.version_library_markdown = \"0.64.8\"\n    implementation \"org.example:markdown:${version_library_markdown}\"\n}\n",
+        )
+        .unwrap();
+        std::fs::remove_file(root.join("app/build.gradle.kts")).unwrap();
+        std::fs::remove_file(root.join("settings.gradle.kts")).unwrap();
+        std::fs::write(root.join("settings.gradle"), "include ':app'\n").unwrap();
+        let found = crate::gradle::read(root.to_str().unwrap(), "app").expect("the build reads");
+        let named: Vec<String> = found
+            .settings
+            .dependencies
+            .iter()
+            .map(|one| format!("{}:{}", one.name, one.version))
+            .collect();
+        assert!(
+            named.contains(&"org.example:markdown:0.64.8".to_string()),
+            "{named:?}"
+        );
+        assert_eq!(
+            crate::gradle::modules(
+                "include(\"core\", \"tests\")\nif (getSdkPath() != null) include(\"android\")\nif (flag) { include(\":desktop\") }\n"
+            ),
+            vec!["core", "tests", "android", "desktop"]
+        );
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
     fn an_old_groovy_build_reads_the_way_gradle_reads_it() {
         let directory = temp_directory("builder-old-gradle");
         let root = directory.join("Old");
@@ -22793,10 +23021,15 @@ dependencies {
             ("Code Builder", Value::Text),
             ("com.code.builder.Main", Value::Text),
             ("1.0.0", Value::Text),
+            ("@", Value::Text),
+            ("@home", Value::Text),
+            ("?", Value::Text),
         ];
         for (raw, expected) in cases {
             assert_eq!(axml::classify(raw).unwrap(), *expected, "{raw}");
         }
+        assert_eq!(axml::classify("@null").unwrap_err().code, "EA021");
+        assert_eq!(axml::classify("@string/name").unwrap_err().code, "EA021");
     }
 
     #[test]
@@ -24737,6 +24970,326 @@ Viewbinding   = false
         assert!(document.contains("\"id\":\"com.demo\""));
         assert!(document.contains("\"profile\":\"Release\""));
         assert!(document.contains(&project.digest().to_hex()));
+    }
+
+    #[test]
+    fn library_r_class_keeps_only_the_fields_the_sources_name() {
+        let table = crate::builder::RTable {
+            fields: vec![
+                ("string".to_string(), "kept_title".to_string(), 0x7f010001),
+                ("string".to_string(), "never_named".to_string(), 0x7f010002),
+                ("drawable".to_string(), "kept_icon".to_string(), 0x7f020001),
+                ("color".to_string(), "unused_tint".to_string(), 0x7f030001),
+            ],
+            styleables: vec![(
+                "Gauge".to_string(),
+                vec![
+                    ("needle".to_string(), 0x7f040001),
+                    ("dial".to_string(), 0x7f040002),
+                ],
+            )],
+        };
+        let texts = vec![
+            "int a = R.string.kept_title; int b = CommonsR.drawable.kept_icon;".to_string(),
+            "TypedArray held = obtain(R.styleable.Gauge); int at = R.styleable.Gauge_dial;"
+                .to_string(),
+        ];
+        let mut texts = texts;
+        texts.push(
+            "import com.google.android.material.R.attr as mattr\nimport static com.lib.R.dimen.gap;\nimport com.lib.R.string.title\nval line = mattr.colorOutline\nval other = notmattr.colorSurface\n"
+                .to_string(),
+        );
+        let wanted = crate::builder::r_fields_named_in_sources(&texts);
+        assert!(wanted.contains(&("attr".to_string(), "colorOutline".to_string())));
+        assert!(wanted.contains(&("dimen".to_string(), "gap".to_string())));
+        assert!(wanted.contains(&("string".to_string(), "title".to_string())));
+        assert!(!wanted.contains(&("attr".to_string(), "colorSurface".to_string())));
+        assert!(wanted.contains(&("string".to_string(), "kept_title".to_string())));
+        assert!(wanted.contains(&("drawable".to_string(), "kept_icon".to_string())));
+        assert!(wanted.contains(&("styleable".to_string(), "Gauge".to_string())));
+        assert!(wanted.contains(&("styleable".to_string(), "Gauge_dial".to_string())));
+        assert!(!wanted.contains(&("string".to_string(), "never_named".to_string())));
+
+        let chosen = crate::builder::r_source_from("com.some.lib", &table, Some(&wanted));
+        assert!(chosen.contains("public static final int kept_title = 2130771969;"), "{chosen}");
+        assert!(chosen.contains("public static final int kept_icon = 2130837505;"), "{chosen}");
+        assert!(chosen.contains("public static final int[] Gauge = { 2130968577, 2130968578 };"), "{chosen}");
+        assert!(chosen.contains("public static final int Gauge_dial = 1;"), "{chosen}");
+        assert!(!chosen.contains("never_named"), "{chosen}");
+        assert!(!chosen.contains("Gauge_needle"), "{chosen}");
+        assert!(!chosen.contains("class color"), "a kind with no wanted field is left out: {chosen}");
+
+        let whole = crate::builder::r_source_from("com.some.lib", &table, None);
+        assert!(whole.contains("never_named") && whole.contains("unused_tint"));
+        assert!(whole.contains("Gauge_needle = 0;") && whole.contains("Gauge_dial = 1;"));
+        let compiled = crate::compilers::java::compile(
+            &chosen,
+            &crate::compilers::java::Classpath::new(),
+        )
+        .expect("the selected R class compiles");
+        assert!(compiled.iter().any(|(name, _)| name.contains("R$styleable")));
+    }
+
+    #[test]
+    fn a_theme_attribute_may_name_its_package_after_the_type() {
+        let (table, sink) = values(
+            "<resources><attr name=\"windowLightNavigationBar\" format=\"boolean\"/>\
+             <style name=\"BaseTheme\">\
+             <item name=\"windowLightNavigationBar\">?attr/android:isLightTheme</item>\
+             <item name=\"android:colorAccent\">?android:attr/colorPrimary</item>\
+             </style></resources>",
+        );
+        assert!(!sink.has_blocking(), "{:?}", sink.entries());
+        let mut sink = crate::diag::Sink::new();
+        let compiled = table.compile(&mut sink).expect("the table compiles");
+        crate::arsc::write("com.example.keys", &compiled)
+            .expect("both spellings of a framework attribute resolve");
+    }
+
+    #[test]
+    fn a_lone_at_or_question_mark_in_a_resource_attribute_stays_text() {
+        let directory = temp_directory("builder-lone-marks");
+        let res = directory.join(crate::scaffold::RES_FOLDER);
+        std::fs::create_dir_all(res.join("xml")).unwrap();
+        std::fs::create_dir_all(res.join("values")).unwrap();
+        std::fs::write(
+            res.join("values/strings.xml"),
+            "<resources><string name=\"app_name\">Keys</string></resources>",
+        )
+        .unwrap();
+        std::fs::write(
+            res.join("xml/number_row.xml"),
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<row><key key0=\"2\" se=\"@\" ne=\"?\" sw=\"@home\"/></row>\n",
+        )
+        .unwrap();
+        std::fs::write(directory.join("AndroidManifest.xml"), A_BARE_MANIFEST.trim_start()).unwrap();
+        let root = directory.to_str().unwrap().to_string();
+        let mut project =
+            crate::builder::from_manifest(A_BARE_MANIFEST).expect("the manifest reads");
+        project.values = crate::scaffold::values_files(&root);
+        project.resources = crate::scaffold::resource_files(&root);
+        let mut sink = crate::diag::Sink::new();
+        crate::builder::compile_resources_for_test(&project, &mut sink)
+            .expect("a lone @ or ? is text, the way aapt2 keeps it");
+        assert!(!sink.has_blocking(), "{:?}", sink.entries());
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn a_dependency_with_a_repeated_entry_reads_but_a_package_does_not() {
+        let mut built = crate::archive::Builder::new();
+        built.add("META-INF/first.txt", b"one".to_vec()).unwrap();
+        built.add("META-INF/other.txt", b"one".to_vec()).unwrap();
+        let mut bytes = built.finish().unwrap();
+        let from = b"META-INF/other.txt";
+        let to = b"META-INF/first.txt";
+        let mut at = 0usize;
+        while at + from.len() <= bytes.len() {
+            if &bytes[at..at + from.len()] == from {
+                bytes[at..at + from.len()].copy_from_slice(to);
+            }
+            at += 1;
+        }
+        let mut strict = crate::diag::Sink::new();
+        assert!(crate::archive::read(&bytes, &mut strict).is_none());
+        assert!(strict.entries().iter().any(|one| one.code == "EA011"));
+        let mut lenient = crate::diag::Sink::new();
+        let archive = crate::archive::read_dependency(&bytes, &mut lenient)
+            .expect("a dependency with a repeated entry is still read");
+        assert_eq!(archive.entries().len(), 1);
+        assert_eq!(archive.entries()[0].name, "META-INF/first.txt");
+    }
+
+    #[test]
+    fn resource_names_follow_the_rule_aapt2_applies() {
+        let mut table = crate::resources::Table::new();
+        let mut sink = crate::diag::Sink::new();
+        assert!(
+            table.read_values(
+                "<resources><string name=\"key_descr_º\">º</string><string name=\"große_taste\">ß</string><string name=\"with-hyphen\">h</string></resources>",
+                "values/strings.xml",
+                &mut sink
+            ),
+            "{:?}",
+            sink.entries()
+        );
+        assert_eq!(crate::builder::r_field("with-hyphen"), "with_hyphen");
+        let mut refused = crate::resources::Table::new();
+        let mut sink = crate::diag::Sink::new();
+        assert!(!refused.read_values(
+            "<resources><string name=\"9lives\">x</string></resources>",
+            "values/strings.xml",
+            &mut sink
+        ));
+        let mut refused = crate::resources::Table::new();
+        let mut sink = crate::diag::Sink::new();
+        assert!(!refused.read_values(
+            "<resources><string name=\"has space\">x</string></resources>",
+            "values/strings.xml",
+            &mut sink
+        ));
+    }
+
+    fn library_jar(sources: &[&str], extra: &[(&str, &str)]) -> Vec<u8> {
+        let classpath = crate::compilers::java::Classpath::new();
+        let mut jar = crate::archive::Builder::new();
+        let named: Vec<(String, String)> = sources
+            .iter()
+            .enumerate()
+            .map(|(at, source)| (format!("Library{at}.java"), source.to_string()))
+            .collect();
+        for (name, bytes) in crate::compilers::java::compile_together(&named, &classpath)
+            .expect("the library compiles")
+        {
+            let class = crate::jvm::read(&bytes).expect("the class reads back");
+            jar.add(format!("{}.class", class.name.replace('.', "/")), bytes)
+                .unwrap_or_else(|error| panic!("{name}: {error:?}"));
+        }
+        for (name, text) in extra {
+            jar.add(*name, text.as_bytes().to_vec()).unwrap();
+        }
+        jar.finish().unwrap()
+    }
+
+    fn translated(sources: &[&str]) -> Vec<crate::dexwrite::Class> {
+        let classpath = crate::compilers::java::Classpath::new();
+        let named: Vec<(String, String)> = sources
+            .iter()
+            .enumerate()
+            .map(|(at, source)| (format!("Unit{at}.java"), source.to_string()))
+            .collect();
+        let mut out = Vec::new();
+        for (_, bytes) in
+            crate::compilers::java::compile_together(&named, &classpath).expect("it compiles")
+        {
+            let class = crate::jvm::read(&bytes).expect("the class reads back");
+            out.extend(crate::dalvik::translate_class(&class).expect("it translates"));
+        }
+        out
+    }
+
+    #[test]
+    fn library_classes_are_packaged_only_when_something_reaches_them() {
+        let root = temp_directory("library-reach");
+        let libraries = root.join(crate::scaffold::LIBRARY_FOLDER);
+        std::fs::create_dir_all(&libraries).unwrap();
+        let jar = library_jar(
+            &[
+                "package lib; public class Used { public static int twice(int value) { return Helper.add(value, value); } }",
+                "package lib; class Helper { static int add(int left, int right) { return left + right; } }",
+                "package lib; public class Unreached { public static int none() { return 0; } }",
+                "package lib; public class Ruled { public void hold() { } }",
+                "package lib; public interface Plugin { void start(); }",
+                "package lib; public class Found implements Plugin { public void start() { } }",
+                "package lib; public class Named extends Object { }",
+                "package lib; public class Outer { public static class Inner { public static int one() { return 1; } } }",
+            ],
+            &[
+                ("META-INF/services/lib.Plugin", "# a provider\nlib.Found\n"),
+                ("META-INF/proguard/lib.pro", "-keep class lib.Ruled { *; }\n"),
+            ],
+        );
+        std::fs::write(libraries.join("lib.jar"), jar).unwrap();
+
+        let mut classpath_for_project = crate::compilers::java::Classpath::new();
+        classpath_for_project
+            .register_jar(&std::fs::read(libraries.join("lib.jar")).unwrap())
+            .expect("the library is known to the project");
+        let project: Vec<crate::dexwrite::Class> = crate::compilers::java::compile(
+            "package app; public class Main { public int run() { return lib.Used.twice(2) + lib.Outer.Inner.one(); } }",
+            &classpath_for_project,
+        )
+        .expect("the project compiles against the library")
+        .into_iter()
+        .flat_map(|(_, bytes)| {
+            let class = crate::jvm::read(&bytes).expect("the class reads back");
+            crate::dalvik::translate_class(&class).expect("it translates")
+        })
+        .collect();
+        let reach = crate::builder::LibraryReach {
+            texts: vec![
+                "<manifest package=\"app\"><application><activity android:name=\"lib.Named\" /></application></manifest>"
+                    .to_string(),
+            ],
+            keep_rules: Vec::new(),
+            package: "app".to_string(),
+            library_r: None,
+        };
+        let packaged =
+            crate::builder::library_classes_reached(root.to_str().unwrap(), &project, &reach)
+                .expect("the libraries are read");
+        let names: Vec<&str> = packaged.iter().map(|one| one.descriptor.as_str()).collect();
+        for wanted in [
+            "Llib/Used;",
+            "Llib/Helper;",
+            "Llib/Ruled;",
+            "Llib/Found;",
+            "Llib/Plugin;",
+            "Llib/Named;",
+            "Llib/Outer$Inner;",
+            "Llib/Outer;",
+        ] {
+            assert!(names.contains(&wanted), "{wanted} is packaged: {names:?}");
+        }
+        assert!(!names.contains(&"Llib/Unreached;"), "nothing reaches Unreached: {names:?}");
+        let mut sorted = names.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), names.len(), "each class is packaged once");
+
+        let clash = translated(&["package lib; public class Used { }"]);
+        let refused =
+            crate::builder::library_classes_reached(root.to_str().unwrap(), &clash, &reach)
+                .expect_err("a library class the project also declares is refused");
+        assert_eq!(refused.code, "EB055");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn borrowed_shrinking_keeps_what_owned_shrinking_keeps() {
+        let all = translated(&[
+            "package app; public class Start { public static int go() { return Middle.step(); } static int unused() { return 3; } }",
+            "package app; class Middle { static int step() { return 1; } }",
+            "package app; class Lonely { static int alone() { return 2; } }",
+        ]);
+        let roots = vec!["Lapp/Start;".to_string()];
+        let keep = crate::shrink::Keep {
+            whole: vec!["Lapp/Start;".to_string()],
+            handlers: Vec::new(),
+        };
+        let (owned, owned_summary) = crate::shrink::apply_deep(all.clone(), &roots, &keep);
+        let (borrowed, borrowed_summary) = crate::shrink::apply_deep_borrowed(&all, &roots, &keep);
+        let shape = |classes: Vec<&crate::dexwrite::Class>| -> Vec<(String, Vec<String>)> {
+            let mut out: Vec<(String, Vec<String>)> = classes
+                .iter()
+                .map(|one| {
+                    let mut methods: Vec<String> = one
+                        .direct_methods
+                        .iter()
+                        .chain(one.virtual_methods.iter())
+                        .map(|method| method.reference.name.clone())
+                        .collect();
+                    methods.sort();
+                    (one.descriptor.clone(), methods)
+                })
+                .collect();
+            out.sort();
+            out
+        };
+        let owned_shape = shape(owned.iter().collect());
+        let borrowed_shape = shape(borrowed.iter().map(|one| &**one).collect());
+        assert_eq!(owned_shape, borrowed_shape);
+        assert_eq!(format!("{owned_summary:?}"), format!("{borrowed_summary:?}"));
+        let descriptors: Vec<&str> = owned_shape.iter().map(|(name, _)| name.as_str()).collect();
+        assert!(descriptors.contains(&"Lapp/Middle;"), "{descriptors:?}");
+        assert!(!descriptors.contains(&"Lapp/Lonely;"), "{descriptors:?}");
+        assert!(
+            borrowed
+                .iter()
+                .filter(|one| one.descriptor == "Lapp/Start;")
+                .all(|one| matches!(one, std::borrow::Cow::Borrowed(_))),
+            "a class kept whole is not copied"
+        );
     }
 
     fn temp_directory(label: &str) -> std::path::PathBuf {
@@ -41159,6 +41712,215 @@ mod java_real_world {
     }
 
     #[test]
+    fn a_method_reference_to_collection_stream_carries_the_element_type() {
+        let names = compiles(
+            "package p; \
+             import java.util.*; import java.util.stream.*; \
+             public class Invite { \
+                 static class Attendee { String mEmail; Attendee(String email) { mEmail = email; } } \
+                 ArrayList<Attendee> accepted = new ArrayList<>(); \
+                 ArrayList<Attendee> declined = new ArrayList<>(); \
+                 String everyone() { \
+                     return Stream.of(accepted, declined) \
+                         .flatMap(Collection::stream) \
+                         .map(attendee -> attendee.mEmail) \
+                         .collect(Collectors.joining(\",\")); \
+                 } \
+                 public static void main(String[] args) { \
+                     Invite invite = new Invite(); \
+                     invite.accepted.add(new Attendee(\"a@x\")); \
+                     invite.declined.add(new Attendee(\"b@x\")); \
+                     System.out.println(invite.everyone()); \
+                 } \
+             }",
+        );
+        assert!(names.iter().any(|name| name == "p/Invite.class"));
+        let made = compile(
+            "package p; \
+             import java.util.*; import java.util.stream.*; \
+             public class Joined { \
+                 public static void main(String[] args) { \
+                     List<List<String>> parts = List.of(List.of(\"a\", \"b\"), List.of(\"c\")); \
+                     System.out.println(parts.stream().flatMap(Collection::stream).map(one -> one.toUpperCase()).collect(Collectors.joining(\"\"))); \
+                 } \
+             }",
+            &Classpath::new(),
+        )
+        .unwrap_or_else(|why| panic!("{} {}", why.code, why.message));
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("java: no java 25 to run the classes");
+            return;
+        };
+        let directory =
+            std::env::temp_dir().join(format!("java-flat-map-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(&directory)
+            .arg("p.Joined")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "ABC\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
+    fn a_method_reference_picks_the_instance_method_when_the_static_one_does_not_fit() {
+        let made = compile(
+            "package p; \
+             import java.util.*; \
+             public class Task { \
+                 interface Getter<R, A> { R callback(A arg); } \
+                 private final String name; \
+                 Task(String name) { this.name = name; } \
+                 public List<String> getProjects() { return Collections.singletonList(\"+\" + name); } \
+                 public static List<String> getProjects(final List<Task> tasks) { return Collections.singletonList(\"all\" + tasks.size()); } \
+                 static String keys(List<Task> tasks, Getter<List<String>, Task> getter) { \
+                     StringBuilder out = new StringBuilder(); \
+                     for (Task one : tasks) { out.append(getter.callback(one)); } \
+                     return out.toString(); \
+                 } \
+                 static String every(Getter<List<String>, List<Task>> getter, List<Task> tasks) { return getter.callback(tasks).toString(); } \
+                 public static void main(String[] args) { \
+                     List<Task> tasks = Arrays.asList(new Task(\"a\"), new Task(\"b\")); \
+                     System.out.println(keys(tasks, Task::getProjects) + \" \" + every(Task::getProjects, tasks)); \
+                 } \
+             }",
+            &Classpath::new(),
+        )
+        .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("java: no java 25 to run the classes");
+            return;
+        };
+        let directory =
+            std::env::temp_dir().join(format!("java-unbound-reference-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(&directory)
+            .arg("p.Task")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "[+a][+b] [all2]\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
+    fn a_variadic_overload_is_chosen_with_no_extra_arguments_when_the_fixed_one_does_not_fit() {
+        let made = compile(
+            "package p; \
+             public class Strings { \
+                 public String rstr(Object context, int id) { return \"id\" + id; } \
+                 public String rstr(final Object context, final String key, Object... fallback) { return \"key:\" + key + fallback.length; } \
+                 public String used(final Object context) { String pkg = rstr(context, \"manifest\"); return pkg; } \
+                 public static void main(String[] args) { \
+                     Strings strings = new Strings(); \
+                     System.out.println(strings.used(null) + \" \" + strings.rstr(null, 7) + \" \" + strings.rstr(null, \"x\", 1, 2)); \
+                 } \
+             }",
+            &Classpath::new(),
+        )
+        .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("java: no java 25 to run the classes");
+            return;
+        };
+        let directory =
+            std::env::temp_dir().join(format!("java-variadic-none-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(&directory)
+            .arg("p.Strings")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "key:manifest0 id7 key:x2\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
+    fn a_char_sequence_need_not_write_is_empty_which_has_a_default() {
+        let names = compiles(
+            "package p; \
+             public class Chunked implements CharSequence { \
+                 private final String text; \
+                 public Chunked(String text) { this.text = text; } \
+                 public int length() { return text.length(); } \
+                 public char charAt(int index) { return text.charAt(index); } \
+                 public CharSequence subSequence(int start, int end) { return text.substring(start, end); } \
+                 public String toString() { return text; } \
+                 public static boolean blank(Chunked chunk) { return chunk.isEmpty(); } \
+             }",
+        );
+        assert!(names.iter().any(|name| name == "p/Chunked.class"));
+    }
+
+    #[test]
+    fn a_private_field_of_a_superclass_leaves_the_name_to_the_enclosing_class() {
+        let sources = vec![
+            (
+                "q/Service.java".to_string(),
+                "package q; public class Service { private Service mHandler = this; public String start(String what) { return what + (mHandler == this); } }".to_string(),
+            ),
+            (
+                "p/Fragment.java".to_string(),
+                "package p; import q.Service; public class Fragment { \
+                     private Handler mHandler; \
+                     public Fragment() { mHandler = new Handler(); } \
+                     private class Handler extends Service { String complete() { return mHandler.start(\"handled:\"); } } \
+                     public static void main(String[] args) { System.out.println(new Fragment().mHandler.complete()); } \
+                 }".to_string(),
+            ),
+        ];
+        let made = compile_together(&sources, &Classpath::new())
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("java: no java 25 to run the classes");
+            return;
+        };
+        let directory =
+            std::env::temp_dir().join(format!("java-private-field-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(&directory)
+            .arg("p.Fragment")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "handled:true\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
     fn a_field_of_the_enclosing_superclass_is_read_through_a_qualified_super() {
         let names = compiles(
             "package p; \
@@ -41445,6 +42207,334 @@ mod kotlin_real_world {
     }
 
     #[test]
+    fn iterating_a_fully_qualified_java_list_yields_its_element_type() {
+        let Some((_, library)) = super::kotlin::standard_library() else {
+            eprintln!("kotlin: no kotlin-stdlib to compile against");
+            return;
+        };
+        let kotlin = vec![(
+            "p/A.kt".to_string(),
+            "package p\nclass Cell { var solution: Int = 0 }\nclass Board(val cells: Array<Array<Cell>>) {\n    fun getCell(row: Int, column: Int): Cell = cells[row][column]\n    fun setSolution(validSolution: java.util.ArrayList<Array<Int>>) {\n        for (rowColumnValue in validSolution) {\n            val row = rowColumnValue[0]\n            val column = rowColumnValue[1]\n            getCell(row, column).solution = rowColumnValue[2]\n        }\n        val first: Array<Int> = validSolution[0]\n        val held: java.util.HashMap<String, java.util.ArrayList<Int>> = java.util.HashMap()\n        for ((key, values) in held) { getCell(key.length, values[0] + first[0]) }\n    }\n}\nclass Spot(val rowIndex: Int, val columnIndex: Int)\nfun ordered(spots: List<Spot>): List<Spot> = spots.sortedWith(compareBy(Spot::rowIndex, Spot::columnIndex))\n".to_string(),
+        )];
+        let made = super::kotlin::compiled(&kotlin, &[], &library)
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        assert!(made.iter().any(|(name, _)| name.ends_with("Board.class")));
+    }
+
+    #[test]
+    fn a_companion_property_imported_by_name_is_read_and_assigned() {
+        let Some((path, library)) = super::kotlin::standard_library() else {
+            eprintln!("kotlin: no kotlin-stdlib to compile against");
+            return;
+        };
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("kotlin: no java 25 to run the classes");
+            return;
+        };
+        let kotlin = vec![
+            (
+                "q/RenameDialog.kt".to_string(),
+                "package q\nclass RenameDialog {\n    companion object {\n        var renameFolderID: Long = -1\n        var renameFolderName: String = \"\"\n    }\n}\nobject Settings { var level = 1 }\n".to_string(),
+            ),
+            (
+                "p/A.kt".to_string(),
+                "package p\nimport q.RenameDialog.Companion.renameFolderID\nimport q.RenameDialog.Companion.renameFolderName\nimport q.Settings.level\nfun rename(id: Long): String {\n    renameFolderID = id\n    renameFolderName = \"folder$renameFolderID\"\n    level += 2\n    return renameFolderName + \" \" + level\n}\nfun main() { println(rename(7)) }\n".to_string(),
+            ),
+        ];
+        let made = super::kotlin::compiled(&kotlin, &[], &library)
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let directory =
+            std::env::temp_dir().join(format!("kotlin-imported-var-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(format!("{}:{}", directory.display(), path.display()))
+            .arg("p.AKt")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "folder7 3\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
+    fn a_labelled_return_leaves_a_synchronized_block_with_its_value() {
+        let Some((path, library)) = super::kotlin::standard_library() else {
+            eprintln!("kotlin: no kotlin-stdlib to compile against");
+            return;
+        };
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("kotlin: no java 25 to run the classes");
+            return;
+        };
+        let kotlin = vec![(
+            "p/A.kt".to_string(),
+            "package p\nclass Contour(val points: Int) { fun copy(): Contour = Contour(points + 1) }\nclass Scanner {\n    var last: Contour? = null\n    fun current(): Contour? {\n        val found = synchronized(this) {\n            val held = last ?: return@synchronized null\n            held.copy()\n        }\n        return found\n    }\n    fun count(): Int = synchronized(this) {\n        if (last == null) return@synchronized -1\n        last!!.points\n    }\n}\nfun main() {\n    val scanner = Scanner()\n    println(\"${scanner.current()?.points} ${scanner.count()}\")\n    scanner.last = Contour(4)\n    println(\"${scanner.current()?.points} ${scanner.count()}\")\n}\n".to_string(),
+        )];
+        let made = super::kotlin::compiled(&kotlin, &[], &library)
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let directory =
+            std::env::temp_dir().join(format!("kotlin-sync-return-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(format!("{}:{}", directory.display(), path.display()))
+            .arg("p.AKt")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "null -1\n5 4\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
+    fn the_smallest_int_written_with_a_minus_is_an_int_constant() {
+        let Some((path, library)) = super::kotlin::standard_library() else {
+            eprintln!("kotlin: no kotlin-stdlib to compile against");
+            return;
+        };
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("kotlin: no java 25 to run the classes");
+            return;
+        };
+        let kotlin = vec![(
+            "p/Preferences.kt".to_string(),
+            "package p\nclass Preferences {\n    companion object {\n        const val NO_REMINDER = -2147483648\n        const val BIG = -2147483649\n    }\n}\n".to_string(),
+        )];
+        let java_sources = vec![(
+            "p/Main.java".to_string(),
+            "package p;\npublic class Main {\n    public static void main(String[] args) {\n        int minutes = Integer.MIN_VALUE;\n        long big = Preferences.BIG;\n        System.out.println((minutes == Preferences.NO_REMINDER) + \" \" + big);\n    }\n}\n".to_string(),
+        )];
+        let made = super::kotlin::compiled(&kotlin, &java_sources, &library)
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let directory =
+            std::env::temp_dir().join(format!("kotlin-min-int-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(format!("{}:{}", directory.display(), path.display()))
+            .arg("p.Main")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "true -2147483649\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
+    fn a_superclass_companion_function_is_called_inside_a_receiver_lambda() {
+        let Some((path, library)) = super::kotlin::standard_library() else {
+            eprintln!("kotlin: no kotlin-stdlib to compile against");
+            return;
+        };
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("kotlin: no java 25 to run the classes");
+            return;
+        };
+        let kotlin = vec![(
+            "p/A.kt".to_string(),
+            "package p\nabstract class InputMethod {\n    companion object {\n        fun makeColors(level: Int): String = \"colors$level\"\n    }\n}\nopen class InsertOnTap : InputMethod()\nclass Popup : InsertOnTap() {\n    fun build(): String = StringBuilder().apply {\n        append(makeColors(2))\n        append(\" \")\n        append(InputMethod.makeColors(3))\n    }.toString()\n}\nfun main() { println(Popup().build()) }\n".to_string(),
+        )];
+        let made = super::kotlin::compiled(&kotlin, &[], &library)
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let directory =
+            std::env::temp_dir().join(format!("kotlin-super-companion-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(format!("{}:{}", directory.display(), path.display()))
+            .arg("p.AKt")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "colors2 colors3\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
+    fn a_named_regex_group_is_read_through_the_extension_in_another_jvm_package() {
+        let Some((path, library)) = super::kotlin::standard_library() else {
+            eprintln!("kotlin: no kotlin-stdlib to compile against");
+            return;
+        };
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("kotlin: no java 25 to run the classes");
+            return;
+        };
+        let kotlin = vec![(
+            "p/A.kt".to_string(),
+            "package p\nval pattern = Regex(\"^(?<cellValues>[0-9]{3}):(?<rest>.*)$\")\nfun cells(line: String): String? = pattern.find(line)?.groups[\"cellValues\"]?.value\nfun main() { println(cells(\"123:x\") + \" \" + cells(\"nope\")) }\n".to_string(),
+        )];
+        let made = super::kotlin::compiled(&kotlin, &[], &library)
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let directory =
+            std::env::temp_dir().join(format!("kotlin-named-group-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(format!("{}:{}", directory.display(), path.display()))
+            .arg("p.AKt")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "123 null\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
+    fn a_generic_branch_takes_its_type_from_the_other_branch() {
+        let Some((path, library)) = super::kotlin::standard_library() else {
+            eprintln!("kotlin: no kotlin-stdlib to compile against");
+            return;
+        };
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("kotlin: no java 25 to run the classes");
+            return;
+        };
+        let kotlin = vec![(
+            "p/A.kt".to_string(),
+            "package p\nimport q.Intent\nimport q.Uri\nfun scheme(intent: Intent, modern: Boolean): String {\n    val dataUri = if (modern) {\n        intent.getParcelableExtra(\"uri\", Uri::class.java)\n    } else {\n        @Suppress(\"DEPRECATION\")\n        intent.getParcelableExtra(\"uri\")\n    }\n    if (dataUri == null) return \"none\"\n    return dataUri.scheme\n}\nfun main() { val intent = Intent(); println(scheme(intent, true) + \" \" + scheme(intent, false) + \" \" + scheme(Intent.empty(), false)) }\n".to_string(),
+        )];
+        let java_sources = vec![
+            ("q/Parcelable.java".to_string(), "package q;\npublic interface Parcelable {}\n".to_string()),
+            ("q/Uri.java".to_string(), "package q;\npublic class Uri implements Parcelable {\n    public String getScheme() { return \"content\"; }\n}\n".to_string()),
+            ("q/Intent.java".to_string(), "package q;\npublic class Intent {\n    private final Object held;\n    public Intent() { held = new Uri(); }\n    private Intent(Object held) { this.held = held; }\n    public static Intent empty() { return new Intent(null); }\n    @SuppressWarnings(\"unchecked\")\n    public <T extends Parcelable> T getParcelableExtra(String name) { return (T) held; }\n    public <T> T getParcelableExtra(String name, Class<T> kind) { return kind.cast(held); }\n}\n".to_string()),
+        ];
+        let made = super::kotlin::compiled(&kotlin, &java_sources, &library)
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let directory =
+            std::env::temp_dir().join(format!("kotlin-branch-generic-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(format!("{}:{}", directory.display(), path.display()))
+            .arg("p.AKt")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "content content none\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
+    fn an_inner_class_assigns_a_protected_java_field_of_its_outer_class() {
+        let Some((path, library)) = super::kotlin::standard_library() else {
+            eprintln!("kotlin: no kotlin-stdlib to compile against");
+            return;
+        };
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("kotlin: no java 25 to run the classes");
+            return;
+        };
+        let kotlin = vec![(
+            "p/A.kt".to_string(),
+            "package p\nimport q.Picker\nclass ColorPicker : Picker() {\n    private inner class Service {\n        fun done(value: Int) {\n            mSelectedColor = value * 2\n            mSelectedColor += 1\n            label = \"picked $mSelectedColor\"\n        }\n    }\n    fun run(value: Int): String { Service().done(value); return label + \" \" + mSelectedColor }\n}\nfun main() { println(ColorPicker().run(20)) }\n".to_string(),
+        )];
+        let java_sources = vec![(
+            "q/Picker.java".to_string(),
+            "package q;\npublic class Picker {\n    protected int mSelectedColor;\n    protected String label = \"\";\n}\n".to_string(),
+        )];
+        let made = super::kotlin::compiled(&kotlin, &java_sources, &library)
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let directory =
+            std::env::temp_dir().join(format!("kotlin-outer-java-field-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(format!("{}:{}", directory.display(), path.display()))
+            .arg("p.AKt")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "picked 41 41\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
+    fn a_property_imported_from_an_object_extends_the_implicit_receiver() {
+        let Some((path, library)) = super::kotlin::standard_library() else {
+            eprintln!("kotlin: no kotlin-stdlib to compile against");
+            return;
+        };
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("kotlin: no java 25 to run the classes");
+            return;
+        };
+        let kotlin = vec![
+            (
+                "q/ThemeUtils.kt".to_string(),
+                "package q\nopen class Context(val mode: Int)\nobject ThemeUtils {\n    val Context.isPureBlack: Boolean\n        get() = mode == 2\n    fun Context.suffix(): String = if (isPureBlack) \"_black\" else \"_dark\"\n}\n".to_string(),
+            ),
+            (
+                "p/A.kt".to_string(),
+                "package p\nimport q.Context\nimport q.ThemeUtils.isPureBlack\nimport q.ThemeUtils.suffix\nclass Screen(mode: Int) : Context(mode)\nfun Screen.describe(): String = if (isPureBlack) \"black\" + suffix() else \"plain\" + suffix()\nfun main() { println(Screen(2).describe()); println(Screen(1).describe()); println(Context(2).isPureBlack) }\n".to_string(),
+            ),
+        ];
+        let made = super::kotlin::compiled(&kotlin, &[], &library)
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let directory =
+            std::env::temp_dir().join(format!("kotlin-object-extension-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(format!("{}:{}", directory.display(), path.display()))
+            .arg("p.AKt")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "black_black\nplain_dark\ntrue\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
     fn a_function_imported_from_a_companion_object_extends_its_receiver() {
         let Some((_, library)) = super::kotlin::standard_library() else {
             eprintln!("kotlin: no kotlin-stdlib to compile against");
@@ -41495,6 +42585,41 @@ mod kotlin_real_world {
         assert_eq!(
             said.replace("\r\n", "\n"),
             "11\n4.5\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
+    fn sorting_by_two_property_references_orders_the_way_kotlin_does() {
+        let Some((path, library)) = super::kotlin::standard_library() else {
+            eprintln!("kotlin: no kotlin-stdlib to compile against");
+            return;
+        };
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("kotlin: no java 25 to run the classes");
+            return;
+        };
+        let source = "package p\nclass Spot(val rowIndex: Int, val columnIndex: Int)\nfun ordered(spots: List<Spot>): List<Spot> = spots.sortedWith(compareBy(Spot::rowIndex, Spot::columnIndex))\nfun main() {\n    val spots = listOf(Spot(2, 1), Spot(1, 5), Spot(1, 2), Spot(0, 9))\n    println(ordered(spots).map { \"${it.rowIndex}:${it.columnIndex}\" })\n    val solution: java.util.ArrayList<Array<Int>> = java.util.ArrayList()\n    solution.add(arrayOf(3, 4, 5))\n    var total = 0\n    for (one in solution) { total += one[0] * one[1] + one[2] }\n    println(total)\n}\n";
+        let kotlin = vec![("p/A.kt".to_string(), source.to_string())];
+        let made = super::kotlin::compiled(&kotlin, &[], &library)
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let directory =
+            std::env::temp_dir().join(format!("kotlin-compare-by-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(format!("{}:{}", directory.display(), path.display()))
+            .arg("p.AKt")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        let said = String::from_utf8_lossy(&done.stdout).to_string();
+        assert_eq!(
+            said.replace("\r\n", "\n"),
+            "[0:9, 1:2, 1:5, 2:1]\n17\n",
             "{}",
             String::from_utf8_lossy(&done.stderr)
         );

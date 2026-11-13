@@ -5963,7 +5963,7 @@ impl Signature {
 
 #[derive(Clone, Debug, Default)]
 pub struct Classpath {
-    known: std::collections::BTreeMap<String, KnownClass>,
+    known: std::collections::BTreeMap<String, std::sync::Arc<KnownClass>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -5974,6 +5974,8 @@ pub struct KnownClass {
     pub interfaces: Vec<String>,
     pub methods: Vec<Signature>,
     pub fields: Vec<(String, Type, bool)>,
+
+    pub private_fields: Vec<String>,
 
     pub constants: Vec<(String, Expression)>,
     pub field_standings: Vec<(String, TypePosition)>,
@@ -6050,7 +6052,11 @@ impl Classpath {
                 found.fill_in(unit);
             }
 
-            if let Some(held) = found.known.get_mut("java/lang/Object") {
+            if let Some(held) = found
+                .known
+                .get_mut("java/lang/Object")
+                .map(std::sync::Arc::make_mut)
+            {
                 held.superclass = None;
             }
             found
@@ -6061,7 +6067,7 @@ impl Classpath {
         let internal = unit.internal_name();
         self.known.insert(
             internal.clone(),
-            KnownClass {
+            std::sync::Arc::new(KnownClass {
                 name: internal,
                 superclass: Some(match &unit.extends {
                     Some(named) => named.replace('.', "/"),
@@ -6072,7 +6078,7 @@ impl Classpath {
                 outer: unit.outer.clone(),
                 kept_at_runtime: has_runtime_retention(unit),
                 ..KnownClass::default()
-            },
+            }),
         );
     }
 
@@ -6086,7 +6092,11 @@ impl Classpath {
             .iter()
             .filter_map(|named| resolve_named(self, unit, named))
             .collect();
-        if let Some(known) = self.known.get_mut(&unit.internal_name()) {
+        if let Some(known) = self
+            .known
+            .get_mut(&unit.internal_name())
+            .map(std::sync::Arc::make_mut)
+        {
             if superclass.is_some() {
                 known.superclass = superclass;
             }
@@ -6098,11 +6108,11 @@ impl Classpath {
 
     pub fn fill_in(&mut self, unit: &Unit) {
         let internal = unit.internal_name();
-        let Some(before) = self.known.get(&internal).cloned() else {
+        let Some(before) = self.known.get(&internal).map(|held| (**held).clone()) else {
             return self.declare(unit);
         };
         self.declare(unit);
-        if let Some(after) = self.known.get_mut(&internal) {
+        if let Some(after) = self.known.get_mut(&internal).map(std::sync::Arc::make_mut) {
             after.superclass = before.superclass;
             let mut interfaces = before.interfaces;
             for one in std::mem::take(&mut after.interfaces) {
@@ -6123,7 +6133,7 @@ impl Classpath {
     pub fn declare(&mut self, unit: &Unit) {
         let internal = unit.internal_name();
         let mut known = match self.known.get(&internal) {
-            Some(found) => found.clone(),
+            Some(found) => (**found).clone(),
             None => KnownClass {
                 name: internal.clone(),
                 superclass: Some("java/lang/Object".to_string()),
@@ -6182,6 +6192,9 @@ impl Classpath {
 
         for field in &unit.fields {
             if let Some(what) = shallow(&field.what) {
+                if field.modifiers.private && !known.private_fields.contains(&field.name) {
+                    known.private_fields.push(field.name.clone());
+                }
                 known
                     .fields
                     .push((field.name.clone(), what, field.modifiers.static_));
@@ -6252,12 +6265,12 @@ impl Classpath {
                 }
             }
         }
-        self.known.insert(internal, known);
+        self.known.insert(internal, std::sync::Arc::new(known));
     }
 
     pub fn register_jar(&mut self, bytes: &[u8]) -> Result<usize, Diagnostic> {
         let mut sink = crate::diag::Sink::new();
-        let Some(archive) = crate::archive::read(bytes, &mut sink) else {
+        let Some(archive) = crate::archive::read_dependency(bytes, &mut sink) else {
             return Err(at("EJ255", 1, 1, "That is not an archive this can read.")
                 .with_suggestion("A dependency is a jar, which is a zip of class files."));
         };
@@ -6309,7 +6322,7 @@ impl Classpath {
                     Some((field.name.clone(), constant_of(field.constant.as_ref()?)?))
                 })
                 .collect();
-            if let Some(known) = self.known.get_mut(&internal) {
+            if let Some(known) = self.known.get_mut(&internal).map(std::sync::Arc::make_mut) {
                 for (name, held) in written {
                     if !known.constants.iter().any(|(one, _)| *one == name) {
                         known.constants.push((name, held));
@@ -6432,6 +6445,9 @@ impl Classpath {
             let Some(what) = read_type(&field.descriptor, &mut 0) else {
                 continue;
             };
+            if field.access_flags & 0x0002 != 0 && !known.private_fields.contains(&field.name) {
+                known.private_fields.push(field.name.clone());
+            }
             if let Some(signature) = field.signature.as_deref() {
                 let variables = class
                     .signature
@@ -6467,7 +6483,7 @@ impl Classpath {
                 .fields
                 .push((field.name.clone(), what, field.access_flags & 0x0008 != 0));
         }
-        self.known.insert(internal, known);
+        self.known.insert(internal, std::sync::Arc::new(known));
         Ok(())
     }
 
@@ -6476,11 +6492,12 @@ impl Classpath {
     }
 
     pub fn add(&mut self, class: KnownClass) {
-        self.known.insert(class.name.clone(), class);
+        self.known
+            .insert(class.name.clone(), std::sync::Arc::new(class));
     }
 
     pub fn get(&self, name: &str) -> Option<&KnownClass> {
-        self.known.get(name)
+        self.known.get(name).map(|held| &**held)
     }
 
     pub fn type_arguments_seen_from(&self, from: &str, held: &[Type], owner: &str) -> Vec<Type> {
@@ -6626,8 +6643,11 @@ impl Classpath {
             let Some(known) = self.known.get(&current) else {
                 continue;
             };
+            let inherited = current != owner;
             if let Some(found) = known.fields.iter().find(|(held, _, _)| held == name) {
-                return Some((known, found));
+                if !(inherited && known.private_fields.iter().any(|held| held == name)) {
+                    return Some((known, found));
+                }
             }
             waiting.extend(known.superclass.clone());
             waiting.extend(known.interfaces.iter().rev().cloned());
@@ -9338,7 +9358,7 @@ public interface CharSequence {
     char charAt(int index);
     CharSequence subSequence(int start, int end);
     String toString();
-    boolean isEmpty();
+    default boolean isEmpty() { return length() == 0; }
 }
 
 public interface Comparable<T> {
@@ -14914,17 +14934,14 @@ impl Emitter<'_> {
                 .cloned()
                 .collect();
 
-            if theirs.is_empty() {
-                theirs = mine
-                    .iter()
-                    .filter(|held| {
-                        held.name == name
-                            && held.variadic
-                            && !held.parameters.is_empty()
-                            && held.parameters.len() - 1 <= arguments.len()
-                    })
-                    .cloned()
-                    .collect();
+            for held in mine.iter().filter(|held| {
+                held.name == name
+                    && held.variadic
+                    && !held.parameters.is_empty()
+                    && held.parameters.len() - 1 <= arguments.len()
+                    && held.parameters.len() != arguments.len()
+            }) {
+                theirs.push(held.clone());
             }
             let inherited = self
                 .unit
@@ -15882,10 +15899,21 @@ impl Emitter<'_> {
                     Type::Object(owner, Vec::new())
                 } else {
                     let takes = shaped.parameters.len();
-                    let found = self
-                        .find_signature(&owner, name, takes)
+                    let direct = self.find_signature(&owner, name, takes);
+                    let unbound = direct.is_none();
+                    let found = direct
                         .or_else(|| self.find_signature(&owner, name, takes.saturating_sub(1)))?;
-                    found.returns
+                    match shaped.parameters.first() {
+                        Some(Type::Object(have, held_arguments))
+                            if unbound && !found.static_ && !held_arguments.is_empty() =>
+                        {
+                            let seen =
+                                self.classpath
+                                    .type_arguments_seen_from(have, held_arguments, &owner);
+                            as_written(&found, &seen).returns
+                        }
+                        _ => found.returns,
+                    }
                 }
             }
             _ => return None,
@@ -19330,7 +19358,7 @@ impl Emitter<'_> {
                     outer: None,
                 }
             }
-        } else if self.is_invoked_on_first_argument(on, name, arguments.len()) {
+        } else if self.is_invoked_on_first_argument(on, name, &single.parameters) {
             let receiver = arguments.remove(0);
             Expression::Call {
                 on: Some(Box::new(receiver)),
@@ -19358,23 +19386,52 @@ impl Emitter<'_> {
         self.lambda(&parameters, &body, true, line)
     }
 
-    fn is_invoked_on_first_argument(&mut self, on: &Expression, name: &str, handed: usize) -> bool {
+    fn is_invoked_on_first_argument(&mut self, on: &Expression, name: &str, given: &[Type]) -> bool {
+        let handed = given.len();
         if handed == 0 {
             return false;
         }
         let Some(owner) = self.class_a_reference_names(on) else {
             return false;
         };
-        if self
+        let statics: Vec<Signature> = self
             .candidates(&owner, name, handed)
-            .iter()
-            .any(|one| one.static_)
-        {
+            .into_iter()
+            .filter(|one| one.static_)
+            .collect();
+        let instances: Vec<Signature> = self
+            .candidates(&owner, name, handed - 1)
+            .into_iter()
+            .filter(|one| !one.static_)
+            .collect();
+        if instances.is_empty() {
             return false;
         }
-        self.candidates(&owner, name, handed - 1)
+        if statics.is_empty() {
+            return true;
+        }
+        let accepts = |this: &Self, wanted: &[Type], handed: &[Type]| -> bool {
+            wanted.len() == handed.len()
+                && wanted
+                    .iter()
+                    .zip(handed.iter())
+                    .all(|(want, have)| {
+                        if have.is_reference() && want.is_reference() {
+                            this.is_subtype(have, want)
+                        } else {
+                            have.may_be_given_to(want)
+                        }
+                    })
+        };
+        let static_fits = statics
             .iter()
-            .any(|one| !one.static_)
+            .any(|one| accepts(self, &one.parameters, given));
+        let receiver = Type::Object(owner.clone(), Vec::new());
+        let instance_fits = self.is_subtype(&given[0], &receiver)
+            && instances
+                .iter()
+                .any(|one| accepts(self, &one.parameters, &given[1..]));
+        instance_fits && !static_fits
     }
 
     fn class_a_reference_names(&mut self, on: &Expression) -> Option<String> {
