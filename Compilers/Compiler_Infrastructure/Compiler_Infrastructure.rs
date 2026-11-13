@@ -10562,7 +10562,7 @@ pub mod optimizer {
         Some((Operation::Compare(mapped), vec![ga, gb]))
     }
 
-    enum Threaded {
+    enum ThreadedValue {
         Existing(Value),
         Constant(u128, Type),
     }
@@ -10587,7 +10587,7 @@ pub mod optimizer {
         scratch: &mut [Lattice],
         block: usize,
         edge: &[Value],
-    ) -> Option<(Block, Vec<Threaded>)> {
+    ) -> Option<(Block, Vec<ThreadedValue>)> {
         let data = &function.blocks[block];
         if data.parameters.len() != edge.len() {
             return None;
@@ -10621,11 +10621,11 @@ pub mod optimizer {
             let mut arguments = Vec::with_capacity(call.arguments.len());
             for argument in &call.arguments {
                 if definition[argument.index()] as usize != block {
-                    arguments.push(Threaded::Existing(*argument));
+                    arguments.push(ThreadedValue::Existing(*argument));
                 } else if let Some(at) = data.parameters.iter().position(|held| held == argument) {
-                    arguments.push(Threaded::Existing(edge[at]));
+                    arguments.push(ThreadedValue::Existing(edge[at]));
                 } else if let Lattice::Constant(value) = scratch[argument.index()] {
-                    arguments.push(Threaded::Constant(value, function.type_of(*argument)));
+                    arguments.push(ThreadedValue::Constant(value, function.type_of(*argument)));
                 } else {
                     return None;
                 }
@@ -10737,8 +10737,8 @@ pub mod optimizer {
                     let mut arguments = Vec::with_capacity(threaded.len());
                     for entry in threaded {
                         match entry {
-                            Threaded::Existing(value) => arguments.push(value),
-                            Threaded::Constant(value, ty) => {
+                            ThreadedValue::Existing(value) => arguments.push(value),
+                            ThreadedValue::Constant(value, ty) => {
                                 let bits = integer_type(ty).unwrap_or(32);
                                 let made = function.new_value(ty);
                                 function.instructions.push(Instruction {

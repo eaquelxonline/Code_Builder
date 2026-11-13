@@ -2105,7 +2105,7 @@ mod core {
             A_LIBRARYS_VALUES.trim_start().to_string(),
         )];
         project.library_values_names = vec!["lib-1.0.aar: res/values/values.xml".to_string()];
-        project.library_resources = vec![crate::scaffold::Supplied {
+        project.library_resources = vec![crate::scaffold::ProvidedFile {
             folder: "layout".to_string(),
             name: "lib_row.xml".to_string(),
             bytes: A_LIBRARYS_ROW.trim_start().as_bytes().to_vec(),
@@ -11343,12 +11343,12 @@ public class Walk {
             assert_eq!(dex::shape_of(gone).name, "unused", "0x{gone:02x}");
         }
 
-        assert_eq!(dex::points_at(0x1a), dex::Points::Strings);
-        assert_eq!(dex::points_at(0x22), dex::Points::Types);
-        assert_eq!(dex::points_at(0x52), dex::Points::Fields);
-        assert_eq!(dex::points_at(0x71), dex::Points::Methods);
-        assert_eq!(dex::points_at(0xff), dex::Points::Prototypes);
-        assert_eq!(dex::points_at(0x01), dex::Points::Nowhere);
+        assert_eq!(dex::points_at(0x1a), dex::IndexTarget::Strings);
+        assert_eq!(dex::points_at(0x22), dex::IndexTarget::Types);
+        assert_eq!(dex::points_at(0x52), dex::IndexTarget::Fields);
+        assert_eq!(dex::points_at(0x71), dex::IndexTarget::Methods);
+        assert_eq!(dex::points_at(0xff), dex::IndexTarget::Prototypes);
+        assert_eq!(dex::points_at(0x01), dex::IndexTarget::Nowhere);
     }
 
     #[test]
@@ -16833,7 +16833,7 @@ public final class App extends Activity {
             }
         }
 
-        let need = |coordinate: &str| crate::maven::Need {
+        let need = |coordinate: &str| crate::maven::DependencyRequest {
             coordinate: crate::maven::Coordinate::parse(coordinate).unwrap(),
             strictly: false,
             excluded: Vec::new(),
@@ -19789,8 +19789,8 @@ dependencies {
             &PRETEND_CONTRACT
         }
 
-        fn probe(&self) -> crate::compiler::Probe {
-            crate::compiler::Probe::usable(
+        fn probe(&self) -> crate::compiler::CompilerProbe {
+            crate::compiler::CompilerProbe::usable(
                 crate::compiler::Identity::new("pretend", "pretend", "1.0.0", "any"),
                 crate::compiler::Reproducibility::Always,
             )
@@ -19799,10 +19799,10 @@ dependencies {
         fn plan(
             &self,
             request: &crate::compiler::Request,
-        ) -> Result<crate::compiler::Plan, crate::diag::Diagnostic> {
+        ) -> Result<crate::compiler::BuildPlan, crate::diag::Diagnostic> {
             let identity = self.probe().identity.unwrap();
-            Ok(crate::compiler::Plan {
-                key: crate::compiler::Plan::key_for(&identity, request),
+            Ok(crate::compiler::BuildPlan {
+                key: crate::compiler::BuildPlan::key_for(&identity, request),
                 identity,
                 expected: self
                     .outputs
@@ -19818,7 +19818,7 @@ dependencies {
 
         fn compile(
             &self,
-            plan: &crate::compiler::Plan,
+            plan: &crate::compiler::BuildPlan,
             _request: &crate::compiler::Request,
             mut session: crate::compiler::Session<'_>,
         ) -> Result<crate::compiler::Compiled, crate::diag::Diagnostic> {
@@ -19977,7 +19977,7 @@ dependencies {
 
     #[test]
     fn the_same_everything_plans_to_the_same_key_and_anything_else_does_not() {
-        use crate::compiler::{Abi, Identity, Plan, Request, Source};
+        use crate::compiler::{Abi, BuildPlan, Identity, Request, Source};
 
         let identity = Identity::new("kotlin", "build.kotlin", "2.4.10", "aarch64-linux-android");
         let base = Request::new(Abi::Arm64V8a, 30)
@@ -19985,21 +19985,21 @@ dependencies {
             .with_source(Source::of("B.kt", b"fun other() {}"));
 
         assert_eq!(
-            Plan::key_for(&identity, &base),
-            Plan::key_for(&identity, &base)
+            BuildPlan::key_for(&identity, &base),
+            BuildPlan::key_for(&identity, &base)
         );
 
         let reordered = Request::new(Abi::Arm64V8a, 30)
             .with_source(Source::of("B.kt", b"fun other() {}"))
             .with_source(Source::of("A.kt", b"fun main() {}"));
         assert_eq!(
-            Plan::key_for(&identity, &base),
-            Plan::key_for(&identity, &reordered),
+            BuildPlan::key_for(&identity, &base),
+            BuildPlan::key_for(&identity, &reordered),
             "the order sources were handed over in must not decide anything"
         );
 
         let mut seen = std::collections::BTreeSet::new();
-        seen.insert(Plan::key_for(&identity, &base).to_hex());
+        seen.insert(BuildPlan::key_for(&identity, &base).to_hex());
 
         let encoded = base.canonical().encode();
         assert!(
@@ -20012,28 +20012,28 @@ dependencies {
         let mut changed = base.clone();
         changed.api_level = 36;
         assert!(
-            seen.insert(Plan::key_for(&identity, &changed).to_hex()),
+            seen.insert(BuildPlan::key_for(&identity, &changed).to_hex()),
             "api"
         );
 
         let mut changed = base.clone();
         changed.optimise = !changed.optimise;
         assert!(
-            seen.insert(Plan::key_for(&identity, &changed).to_hex()),
+            seen.insert(BuildPlan::key_for(&identity, &changed).to_hex()),
             "optimise"
         );
 
         let mut changed = base.clone();
         changed.debug_info = !changed.debug_info;
         assert!(
-            seen.insert(Plan::key_for(&identity, &changed).to_hex()),
+            seen.insert(BuildPlan::key_for(&identity, &changed).to_hex()),
             "debug info"
         );
 
         let mut changed = base.clone();
         changed.dependencies.push(crate::hash::sha256(b"a library"));
         assert!(
-            seen.insert(Plan::key_for(&identity, &changed).to_hex()),
+            seen.insert(BuildPlan::key_for(&identity, &changed).to_hex()),
             "dependencies"
         );
 
@@ -20042,7 +20042,7 @@ dependencies {
             .options
             .push(("jvmTarget".to_string(), "25".to_string()));
         assert!(
-            seen.insert(Plan::key_for(&identity, &changed).to_hex()),
+            seen.insert(BuildPlan::key_for(&identity, &changed).to_hex()),
             "options"
         );
 
@@ -20050,7 +20050,7 @@ dependencies {
             .with_source(Source::of("A.kt", b"fun main() { }"))
             .with_source(Source::of("B.kt", b"fun other() {}"));
         assert!(
-            seen.insert(Plan::key_for(&identity, &changed).to_hex()),
+            seen.insert(BuildPlan::key_for(&identity, &changed).to_hex()),
             "source bytes"
         );
 
@@ -20058,7 +20058,7 @@ dependencies {
             .with_source(Source::of("Renamed.kt", b"fun main() {}"))
             .with_source(Source::of("B.kt", b"fun other() {}"));
         assert!(
-            seen.insert(Plan::key_for(&identity, &changed).to_hex()),
+            seen.insert(BuildPlan::key_for(&identity, &changed).to_hex()),
             "source name"
         );
 
@@ -20075,7 +20075,7 @@ dependencies {
             identity.clone().with("stdlib", "2.4.10"),
         ] {
             assert!(
-                seen.insert(Plan::key_for(&moved, &base).to_hex()),
+                seen.insert(BuildPlan::key_for(&moved, &base).to_hex()),
                 "{moved:?} planned to a key something else already had"
             );
         }
@@ -23898,7 +23898,7 @@ dependencies {
         most: std::sync::Arc<std::sync::atomic::AtomicUsize>,
     }
 
-    impl crate::scheduler::Crew for TogetherCrew {
+    impl crate::scheduler::ExecutorPool for TogetherCrew {
         fn hand(&self) -> Box<dyn crate::scheduler::NodeExecutor + Send> {
             Box::new(Together {
                 inside: std::sync::Arc::clone(&self.inside),
@@ -23977,7 +23977,7 @@ dependencies {
         }
     }
 
-    impl crate::scheduler::Crew for Chatty {
+    impl crate::scheduler::ExecutorPool for Chatty {
         fn hand(&self) -> Box<dyn crate::scheduler::NodeExecutor + Send> {
             Box::new(self.clone())
         }
@@ -25671,7 +25671,10 @@ Viewbinding   = false
             keep_entries: 10,
             stale_after_seconds: 0,
         };
-        assert_eq!(index.sweep(budget, 300), crate::cache::Swept::default());
+        assert_eq!(
+            index.sweep(budget, 300),
+            crate::cache::CacheSweep::default()
+        );
         assert_eq!(index.len(), 3);
         assert_eq!(index.bytes(), 60);
     }
@@ -26524,11 +26527,11 @@ Viewbinding   = false
             "dependencies {\n    implementation(fileTree(\"libs\") { include(\"*.jar\") })\n}\n",
             "dependencies {\n    implementation fileTree(include: ['*.jar', '*.aar'], dir: 'libs')\n}\n",
         ] {
-            let mut found = crate::gradle::Read::default();
+            let mut found = crate::gradle::GradleBuild::default();
             crate::gradle::dependencies(written, &held, &mut found);
             assert!(found.unread.is_empty(), "{written} -> {:?}", found.unread);
         }
-        let mut found = crate::gradle::Read::default();
+        let mut found = crate::gradle::GradleBuild::default();
         crate::gradle::dependencies(
             "dependencies {\n    implementation(fileTree(mapOf(\"dir\" to \"vendor\")))\n}\n",
             &held,
@@ -26544,7 +26547,7 @@ Viewbinding   = false
     #[test]
     fn a_platform_named_once_gives_its_versions_to_the_libraries_that_name_none() {
         let held = crate::settings::Catalogue::default();
-        let mut found = crate::gradle::Read::default();
+        let mut found = crate::gradle::GradleBuild::default();
         crate::gradle::dependencies(
             "dependencies {\n\
              \x20   val bom = platform(\"androidx.compose:compose-bom:2024.12.01\")\n\
@@ -27119,12 +27122,12 @@ Viewbinding   = false
 </animation-list>
 "#;
         let files = vec![
-            crate::scaffold::Supplied {
+            crate::scaffold::ProvidedFile {
                 folder: "drawable-v24".to_string(),
                 name: "wave.xml".to_string(),
                 bytes: written.as_bytes().to_vec(),
             },
-            crate::scaffold::Supplied {
+            crate::scaffold::ProvidedFile {
                 folder: "layout".to_string(),
                 name: "plain.xml".to_string(),
                 bytes: b"<FrameLayout />".to_vec(),
@@ -41765,7 +41768,7 @@ fun main() {
     #[test]
     fn exclusions_inside_a_gradle_dependency_block_are_read() {
         let text = "dependencies {\n implementation ('com.rapid7.client:dcerpc:0.12.13') {\n // c\n exclude group: 'com.google.guava', module: 'guava'\n exclude group: 'com.hierynomus', module: 'smbj'\n exclude(group = \"x\")\n }\n implementation 'a:b:1'\n}\n";
-        let mut into = crate::gradle::Read::default();
+        let mut into = crate::gradle::GradleBuild::default();
         crate::gradle::dependencies_of(
             text,
             &Default::default(),
@@ -56006,8 +56009,8 @@ mod vibe_coding {
     use crate::json::{self, Json};
     use crate::vibe_coding::{
         answer, backoff, blocked_endpoint, chain, classify, fill, json_path_text, provider, route,
-        setting, settle, Ask, Custom, Effort, Filling, Ledger, Outcome, Task, Tier, Verdict,
-        BARRED, PROVIDERS,
+        setting, settle, AccessTier, Ask, Custom, Effort, Ledger, Outcome, PromptFields, Task,
+        Verdict, BARRED, PROVIDERS,
     };
 
     fn efforts_of(provider_id: &str, model_id: &str) -> Vec<Effort> {
@@ -56231,7 +56234,7 @@ mod vibe_coding {
         assert!(bare
             .choices
             .iter()
-            .all(|one| one.provider.tier != Tier::Own));
+            .all(|one| one.provider.tier != AccessTier::Own));
         let owned = route(
             &wide,
             &keys(&["anthropic", "deepseek"]),
@@ -56420,7 +56423,7 @@ mod vibe_coding {
     fn a_raw_template_is_filled_and_its_reply_is_found() {
         let body = fill(
             r#"{"model": {{model}}, "input": {{prompt}}, "most": {{max_tokens}}, "history": {{messages}}}"#,
-            &Filling {
+            &PromptFields {
                 model: "m-1",
                 prompt: "say \"hi\"\n",
                 system: "",
@@ -56510,7 +56513,7 @@ mod vibe_coding {
         std::fs::remove_dir_all(&folder).ok();
     }
 
-    fn listed_ids(tier: Tier, reply: &str) -> Vec<String> {
+    fn listed_ids(tier: AccessTier, reply: &str) -> Vec<String> {
         crate::vibe_coding::usable_models(tier, &json::read(reply).unwrap())
             .into_iter()
             .map(|one| one.id)
@@ -56537,11 +56540,11 @@ mod vibe_coding {
     #[test]
     fn a_free_gateway_lists_only_the_free_chat_models() {
         assert_eq!(
-            listed_ids(Tier::Keyless, GATEWAY),
+            listed_ids(AccessTier::Keyless, GATEWAY),
             vec!["kilo-auto/free", "qwen/qwen3.8-27b:free"]
         );
         assert_eq!(
-            listed_ids(Tier::Free, GATEWAY),
+            listed_ids(AccessTier::Free, GATEWAY),
             vec!["kilo-auto/free", "qwen/qwen3.8-27b:free"]
         );
     }
@@ -56549,7 +56552,7 @@ mod vibe_coding {
     #[test]
     fn an_own_key_lists_the_paid_chat_models_too() {
         assert_eq!(
-            listed_ids(Tier::Own, GATEWAY),
+            listed_ids(AccessTier::Own, GATEWAY),
             vec![
                 "anthropic/claude-sonnet-5",
                 "kilo-auto/efficient",
@@ -56568,7 +56571,10 @@ mod vibe_coding {
              "pricing":{"input":0.02,"output":0.04},"context_window":{"tokens":400000}},
             {"id":"wan-2","model_type":"video","usage_based_only":false,"context_window":{"tokens":8000}}
         ]}"#;
-        assert_eq!(listed_ids(Tier::Keyless, reply), vec!["GLM-5.3-Flash"]);
+        assert_eq!(
+            listed_ids(AccessTier::Keyless, reply),
+            vec!["GLM-5.3-Flash"]
+        );
     }
 
     #[test]
@@ -56578,7 +56584,7 @@ mod vibe_coding {
             {"name":"openai-large","tier":"seed","output_modalities":["text"]},
             {"name":"midjourney","tier":"anonymous","output_modalities":["image"]}
         ]"#;
-        assert_eq!(listed_ids(Tier::Keyless, reply), vec!["openai-fast"]);
+        assert_eq!(listed_ids(AccessTier::Keyless, reply), vec!["openai-fast"]);
     }
 
     #[test]
@@ -56591,7 +56597,10 @@ mod vibe_coding {
             {"name":"models/gemini-2.5-flash-preview-tts","inputTokenLimit":8192,
              "supportedGenerationMethods":["generateContent"]}
         ]}"#;
-        assert_eq!(listed_ids(Tier::Free, reply), vec!["gemini-2.5-flash"]);
+        assert_eq!(
+            listed_ids(AccessTier::Free, reply),
+            vec!["gemini-2.5-flash"]
+        );
     }
 
     #[test]
@@ -56603,9 +56612,9 @@ mod vibe_coding {
              "billing":{"is_premium":true}},
             {"id":"text-embedding-3-small","capabilities":{"type":"embeddings"}}
         ]}"#;
-        assert_eq!(listed_ids(Tier::Free, reply), vec!["gpt-4.1"]);
+        assert_eq!(listed_ids(AccessTier::Free, reply), vec!["gpt-4.1"]);
         assert_eq!(
-            listed_ids(Tier::Own, reply),
+            listed_ids(AccessTier::Own, reply),
             vec!["claude-opus-5.5", "gpt-4.1"]
         );
     }
@@ -56639,7 +56648,7 @@ mod vibe_coding {
 
 mod databinding {
     use crate::compilers::java::{compile_together, Classpath};
-    use crate::databinding::{generate, is_bound, Layout, Made};
+    use crate::databinding::{generate, is_bound, GeneratedBindings, Layout};
     use crate::diag::Diagnostic;
 
     const RUNTIME: &[(&str, &str)] = &[
@@ -57200,7 +57209,7 @@ public final class R {
         .collect()
     }
 
-    fn made_from(main: &str) -> Result<Made, Diagnostic> {
+    fn made_from(main: &str) -> Result<GeneratedBindings, Diagnostic> {
         generate(
             "com.example.bound",
             &[layout("main", main), layout("footer", FOOTER)],
@@ -57210,7 +57219,7 @@ public final class R {
         )
     }
 
-    fn source_of<'a>(made: &'a Made, path: &str) -> &'a str {
+    fn source_of<'a>(made: &'a GeneratedBindings, path: &str) -> &'a str {
         made.sources
             .iter()
             .find(|(name, _)| name == path)

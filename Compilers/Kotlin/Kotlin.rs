@@ -27,7 +27,7 @@ pub mod syntax {
     pub enum Piece {
         Text(String),
         Name(String, u32, u32),
-        Code(Vec<Spelled>),
+        Code(Vec<SpannedToken>),
     }
 
     #[derive(Clone, Debug, PartialEq)]
@@ -65,7 +65,7 @@ pub mod syntax {
     }
 
     #[derive(Clone, Debug, PartialEq)]
-    pub struct Spelled {
+    pub struct SpannedToken {
         pub token: Token,
         pub line: u32,
         pub column: u32,
@@ -213,7 +213,7 @@ pub mod syntax {
             }
         }
 
-        pub fn tokens(mut self) -> Result<Vec<Spelled>, Diagnostic> {
+        pub fn tokens(mut self) -> Result<Vec<SpannedToken>, Diagnostic> {
             if self.rest().starts_with("#!") {
                 while let Some(ch) = self.peek_char(0) {
                     if ch == '\n' {
@@ -222,7 +222,7 @@ pub mod syntax {
                     self.bump();
                 }
             }
-            let mut out: Vec<Spelled> = Vec::new();
+            let mut out: Vec<SpannedToken> = Vec::new();
             loop {
                 let (newline_before, space_before) = self.skip_space()?;
                 if let Some(last) = out.last_mut() {
@@ -230,7 +230,7 @@ pub mod syntax {
                 }
                 let (line, column) = (self.line, self.column);
                 let Some(ch) = self.peek_char(0) else {
-                    out.push(Spelled {
+                    out.push(SpannedToken {
                         token: Token::End,
                         line,
                         column,
@@ -241,7 +241,7 @@ pub mod syntax {
                     return Ok(out);
                 };
                 let token = self.token(ch, line, column)?;
-                out.push(Spelled {
+                out.push(SpannedToken {
                     token,
                     line,
                     column,
@@ -578,7 +578,7 @@ pub mod syntax {
                     let (line, column) = (self.line, self.column);
                     self.bump();
                     self.bump();
-                    let mut inner: Vec<Spelled> = Vec::new();
+                    let mut inner: Vec<SpannedToken> = Vec::new();
                     let mut depth = 0usize;
                     loop {
                         let (newline_before, space_before) = self.skip_space()?;
@@ -604,7 +604,7 @@ pub mod syntax {
                             Token::Mark("}") => depth = depth.saturating_sub(1),
                             _ => {}
                         }
-                        inner.push(Spelled {
+                        inner.push(SpannedToken {
                             token,
                             line: l,
                             column: c,
@@ -613,7 +613,7 @@ pub mod syntax {
                             space_after: false,
                         });
                     }
-                    inner.push(Spelled {
+                    inner.push(SpannedToken {
                         token: Token::End,
                         line: self.line,
                         column: self.column,
@@ -803,7 +803,7 @@ pub mod syntax {
             .collect()
     }
 
-    pub fn tokens(source: &str) -> Result<Vec<Spelled>, Diagnostic> {
+    pub fn tokens(source: &str) -> Result<Vec<SpannedToken>, Diagnostic> {
         Lexer::new(source).tokens()
     }
 }
@@ -1584,7 +1584,7 @@ pub mod tree {
 
 pub mod parse {
     use super::at;
-    use super::syntax::{Piece, Spelled, Token};
+    use super::syntax::{Piece, SpannedToken, Token};
     use super::tree::*;
     use crate::diag::Diagnostic;
     use std::rc::Rc;
@@ -1629,7 +1629,7 @@ pub mod parse {
     const ASSIGNMENT: u8 = 11;
 
     pub struct Parser {
-        tokens: Vec<Spelled>,
+        tokens: Vec<SpannedToken>,
         at: usize,
         newlines: Vec<bool>,
         delegating: Option<usize>,
@@ -1638,7 +1638,7 @@ pub mod parse {
     }
 
     impl Parser {
-        pub fn new(tokens: Vec<Spelled>) -> Parser {
+        pub fn new(tokens: Vec<SpannedToken>) -> Parser {
             Parser {
                 tokens,
                 at: 0,
@@ -1649,7 +1649,7 @@ pub mod parse {
             }
         }
 
-        fn current_token(&self) -> &Spelled {
+        fn current_token(&self) -> &SpannedToken {
             &self.tokens[self.at.min(self.tokens.len() - 1)]
         }
 
@@ -1661,7 +1661,7 @@ pub mod parse {
             &self.tokens[(self.at + ahead).min(self.tokens.len() - 1)].token
         }
 
-        fn peek_spelled(&self, ahead: usize) -> &Spelled {
+        fn peek_spelled(&self, ahead: usize) -> &SpannedToken {
             &self.tokens[(self.at + ahead).min(self.tokens.len() - 1)]
         }
 
@@ -1791,7 +1791,7 @@ pub mod parse {
             self.tokens[self.at].token = Token::Mark(first);
             self.tokens.insert(
                 self.at + 1,
-                Spelled {
+                SpannedToken {
                     token: Token::Mark(rest),
                     line: here.line,
                     column: here.column + first.len() as u32,
@@ -4739,7 +4739,7 @@ pub mod model {
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    pub enum Visible {
+    pub enum DeclaredVisibility {
         Public,
         Protected,
         Internal,
@@ -4793,7 +4793,7 @@ pub mod model {
         pub java: bool,
         pub constructor: bool,
         pub synthetic: bool,
-        pub visibility: Visible,
+        pub visibility: DeclaredVisibility,
         pub has_defaults: bool,
         pub source: Option<Rc<crate::compilers::kotlin::tree::Function>>,
         pub source_file: Option<usize>,
@@ -4827,7 +4827,7 @@ pub mod model {
                 java: false,
                 constructor: false,
                 synthetic: false,
-                visibility: Visible::Public,
+                visibility: DeclaredVisibility::Public,
                 has_defaults: false,
                 source: None,
                 source_file: None,
@@ -4862,7 +4862,7 @@ pub mod model {
         pub java_field: bool,
         pub static_: bool,
         pub interface: bool,
-        pub visibility: Visible,
+        pub visibility: DeclaredVisibility,
         pub source: Option<Rc<crate::compilers::kotlin::tree::Property>>,
         pub source_file: Option<usize>,
         pub getter_inline: bool,
@@ -4891,7 +4891,7 @@ pub mod model {
                 java_field: false,
                 static_: false,
                 interface: false,
-                visibility: Visible::Public,
+                visibility: DeclaredVisibility::Public,
                 source: None,
                 source_file: None,
                 getter_inline: false,
@@ -4910,7 +4910,7 @@ pub mod model {
         pub name: String,
         pub kind: Kind,
         pub modality: Modality,
-        pub visibility: Visible,
+        pub visibility: DeclaredVisibility,
         pub type_parameters: Vec<TypeParam>,
         pub supertypes: Vec<Ty>,
         pub functions: Vec<Rc<FunctionInfo>>,
@@ -4939,7 +4939,7 @@ pub mod model {
                 name: name.to_string(),
                 kind,
                 modality: Modality::Final,
-                visibility: Visible::Public,
+                visibility: DeclaredVisibility::Public,
                 type_parameters: Vec::new(),
                 supertypes: Vec::new(),
                 functions: Vec::new(),
@@ -5742,7 +5742,7 @@ pub mod world {
     use std::rc::Rc;
 
     #[derive(Clone)]
-    struct Stored {
+    struct JarEntryLocation {
         jar: usize,
         offset: usize,
         size: usize,
@@ -5752,7 +5752,7 @@ pub mod world {
     pub struct World<'a> {
         pub classpath: &'a java::Classpath,
         jars: Vec<Rc<Vec<u8>>>,
-        stored: HashMap<String, Stored>,
+        stored: HashMap<String, JarEntryLocation>,
         facades: HashMap<String, Vec<String>>,
         units: HashMap<String, Rc<java::Unit>>,
         defined: RefCell<HashMap<String, Rc<ClassInfo>>>,
@@ -5765,7 +5765,7 @@ pub mod world {
 
     pub struct ValueScan {
         jars: Vec<Rc<Vec<u8>>>,
-        stored: HashMap<String, Stored>,
+        stored: HashMap<String, JarEntryLocation>,
         known: RefCell<HashMap<String, Option<(Ty, String)>>>,
     }
 
@@ -6051,7 +6051,7 @@ pub mod world {
                 };
                 found.push((
                     name,
-                    Stored {
+                    JarEntryLocation {
                         jar: index,
                         offset: entry.data_offset as usize,
                         size: entry.compressed_size as usize,
@@ -6266,10 +6266,10 @@ pub mod world {
                             && Some(&method.descriptor) == info.descriptor.as_ref()
                             && method.access_flags & 0x0002 != 0
                     });
-                    if private_here && info.visibility != Visible::Private {
+                    if private_here && info.visibility != DeclaredVisibility::Private {
                         info.inline_only = true;
                     }
-                    if info.visibility == Visible::Private {
+                    if info.visibility == DeclaredVisibility::Private {
                         continue;
                     }
                     members.functions.push(Rc::new(info));
@@ -6277,7 +6277,7 @@ pub mod world {
             }
             for property in &package.properties {
                 if let Some(mut info) = reader.property(property, &owner, &[], true) {
-                    if info.visibility == Visible::Private {
+                    if info.visibility == DeclaredVisibility::Private {
                         continue;
                     }
                     if let Some((_, field, _)) = &info.field {
@@ -6434,7 +6434,7 @@ pub mod world {
                             && Some(&method.descriptor) == built.descriptor.as_ref()
                             && method.access_flags & 0x0002 != 0
                     });
-                    if private_here && built.visibility != Visible::Private {
+                    if private_here && built.visibility != DeclaredVisibility::Private {
                         built.inline_only = true;
                     }
                     let static_here = raw.methods.iter().any(|method| {
@@ -6568,7 +6568,7 @@ pub mod world {
                     if let Some(java::Type::Object(named, _)) = java::resolve_in(
                         self.classpath,
                         unit,
-                        &java::Written::Named(parent.clone(), Vec::new()),
+                        &java::TypeSyntax::Named(parent.clone(), Vec::new()),
                     ) {
                         {
                             supertypes.push(Ty::class(&named));
@@ -6579,7 +6579,7 @@ pub mod world {
                     if let Some(java::Type::Object(named, _)) = java::resolve_in(
                         self.classpath,
                         unit,
-                        &java::Written::Named(one.clone(), Vec::new()),
+                        &java::TypeSyntax::Named(one.clone(), Vec::new()),
                     ) {
                         supertypes.push(Ty::class(&named));
                     }
@@ -6593,7 +6593,7 @@ pub mod world {
                     if let Some(java::Type::Object(found, _)) = java::resolve_in(
                         self.classpath,
                         unit,
-                        &java::Written::Named(parent.clone(), Vec::new()),
+                        &java::TypeSyntax::Named(parent.clone(), Vec::new()),
                     ) {
                         if !named.contains(&found) {
                             supertypes.push(Ty::class(&found));
@@ -6605,7 +6605,7 @@ pub mod world {
                     if let Some(java::Type::Object(found, _)) = java::resolve_in(
                         self.classpath,
                         unit,
-                        &java::Written::Named(one.clone(), Vec::new()),
+                        &java::TypeSyntax::Named(one.clone(), Vec::new()),
                     ) {
                         if !named.contains(&found) {
                             supertypes.push(Ty::class(&found));
@@ -6649,11 +6649,11 @@ pub mod world {
                 built.abstract_ =
                     method.body.is_none() && !method.modifiers.native_ && !method.constructor;
                 built.visibility = if method.modifiers.public || interface {
-                    Visible::Public
+                    DeclaredVisibility::Public
                 } else if method.modifiers.protected {
-                    Visible::Protected
+                    DeclaredVisibility::Protected
                 } else {
-                    Visible::Internal
+                    DeclaredVisibility::Internal
                 };
                 built.type_parameters = own.clone();
                 let count = method.parameters.len();
@@ -6701,11 +6701,11 @@ pub mod world {
                 let mut built = PropertyInfo::new(&field.name, &name, ty);
                 built.java_field = true;
                 built.visibility = if field.modifiers.public || interface {
-                    Visible::Public
+                    DeclaredVisibility::Public
                 } else if field.modifiers.protected {
-                    Visible::Protected
+                    DeclaredVisibility::Protected
                 } else {
-                    Visible::Internal
+                    DeclaredVisibility::Internal
                 };
                 built.static_ = field.modifiers.static_ || interface;
                 built.mutable = !field.modifiers.final_;
@@ -6739,30 +6739,30 @@ pub mod world {
         pub fn written(
             &self,
             unit: &java::Unit,
-            written: &java::Written,
+            written: &java::TypeSyntax,
             class_scope: &[TypeParam],
             own: &[TypeParam],
         ) -> Ty {
             match written {
-                java::Written::Void => Ty::unit(),
-                java::Written::Boolean => Ty::boolean(),
-                java::Written::Byte => Ty::class(BYTE),
-                java::Written::Short => Ty::class(SHORT),
-                java::Written::Char => Ty::char(),
-                java::Written::Int => Ty::int(),
-                java::Written::Long => Ty::long(),
-                java::Written::Float => Ty::float(),
-                java::Written::Double => Ty::double(),
-                java::Written::Inferred => Ty::any().with_null(Null::Unknown),
-                java::Written::Array(of) => {
+                java::TypeSyntax::Void => Ty::unit(),
+                java::TypeSyntax::Boolean => Ty::boolean(),
+                java::TypeSyntax::Byte => Ty::class(BYTE),
+                java::TypeSyntax::Short => Ty::class(SHORT),
+                java::TypeSyntax::Char => Ty::char(),
+                java::TypeSyntax::Int => Ty::int(),
+                java::TypeSyntax::Long => Ty::long(),
+                java::TypeSyntax::Float => Ty::float(),
+                java::TypeSyntax::Double => Ty::double(),
+                java::TypeSyntax::Inferred => Ty::any().with_null(Null::Unknown),
+                java::TypeSyntax::Array(of) => {
                     let element = self.written(unit, of, class_scope, own);
                     Ty::array_of(element).with_null(Null::Unknown)
                 }
-                java::Written::Variable(at, bound) => match class_scope.get(*at) {
+                java::TypeSyntax::Variable(at, bound) => match class_scope.get(*at) {
                     Some(param) => param.as_ty().with_null(Null::Unknown),
                     None => self.written(unit, bound, class_scope, own),
                 },
-                java::Written::OwnVariable(name, bound) => {
+                java::TypeSyntax::OwnVariable(name, bound) => {
                     match own
                         .iter()
                         .chain(class_scope.iter())
@@ -6772,11 +6772,11 @@ pub mod world {
                         None => self.written(unit, bound, class_scope, own),
                     }
                 }
-                java::Written::Named(named, arguments) => {
+                java::TypeSyntax::Named(named, arguments) => {
                     let resolved = java::resolve_in(
                         self.classpath,
                         unit,
-                        &java::Written::Named(named.clone(), Vec::new()),
+                        &java::TypeSyntax::Named(named.clone(), Vec::new()),
                     );
                     let internal = match resolved {
                         Some(java::Type::Object(found, _)) => found,
@@ -6966,13 +6966,13 @@ pub mod world {
         })
     }
 
-    fn visibility_of(flags: i32) -> Visible {
+    fn visibility_of(flags: i32) -> DeclaredVisibility {
         match (flags >> 1) & 7 {
-            1 | 4 => Visible::Private,
-            2 => Visible::Protected,
-            0 => Visible::Internal,
-            5 => Visible::Private,
-            _ => Visible::Public,
+            1 | 4 => DeclaredVisibility::Private,
+            2 => DeclaredVisibility::Protected,
+            0 => DeclaredVisibility::Internal,
+            5 => DeclaredVisibility::Private,
+            _ => DeclaredVisibility::Public,
         }
     }
 
@@ -7452,11 +7452,11 @@ pub mod world {
             built.abstract_ = access & 0x0400 != 0;
             built.synthetic = access & 0x1000 != 0;
             built.visibility = if access & 0x0001 != 0 {
-                Visible::Public
+                DeclaredVisibility::Public
             } else if access & 0x0004 != 0 {
-                Visible::Protected
+                DeclaredVisibility::Protected
             } else {
-                Visible::Internal
+                DeclaredVisibility::Internal
             };
             built.type_parameters = own;
             built.descriptor = Some(method.descriptor.clone());
@@ -7500,11 +7500,11 @@ pub mod world {
             let mut built = PropertyInfo::new(&field.name, &name, ty);
             built.java_field = true;
             built.visibility = if access & 0x0001 != 0 {
-                Visible::Public
+                DeclaredVisibility::Public
             } else if access & 0x0004 != 0 {
-                Visible::Protected
+                DeclaredVisibility::Protected
             } else {
-                Visible::Internal
+                DeclaredVisibility::Internal
             };
             built.static_ = static_;
             built.mutable = access & 0x0010 == 0;
@@ -7778,7 +7778,9 @@ pub mod lower {
     use super::model::*;
     use super::tree::{self, Expr, Spot, TypeRef};
     use super::world::*;
-    use crate::compilers::java::{self, Expression as J, Positioned, Statement as S, Written as W};
+    use crate::compilers::java::{
+        self, Expression as J, Positioned, Statement as S, TypeSyntax as W,
+    };
     use crate::diag::Diagnostic;
     use std::cell::{Cell, RefCell};
     use std::collections::HashMap;
@@ -7882,7 +7884,7 @@ pub mod lower {
     }
 
     #[derive(Clone, Debug)]
-    pub enum Pending {
+    pub enum PendingDeclaration {
         Function {
             decl: Rc<tree::Function>,
             file: usize,
@@ -7900,13 +7902,13 @@ pub mod lower {
     }
 
     #[derive(Clone, Debug)]
-    pub enum Inferring {
+    pub enum InferenceTarget {
         Function(Rc<tree::Function>),
         Property(Rc<tree::Property>),
     }
 
     #[derive(Clone, Debug, Default)]
-    pub struct TypeCx {
+    pub struct TypeContext {
         pub file: usize,
         pub classes: Vec<String>,
         pub params: Vec<TypeParam>,
@@ -7926,7 +7928,7 @@ pub mod lower {
         pub units: RefCell<Vec<(String, java::Unit)>>,
         pub super_accessors: RefCell<Vec<(String, java::Method)>>,
         pub blocking_used: std::cell::Cell<bool>,
-        pub pending: RefCell<Vec<Pending>>,
+        pub pending: RefCell<Vec<PendingDeclaration>>,
         pub temp: Cell<usize>,
         pub prelude_files: usize,
         pub unsupported: RefCell<Vec<(String, String)>>,
@@ -8356,7 +8358,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             None
         }
 
-        fn imported_elsewhere(&self, cx: &TypeCx, simple: &str) -> bool {
+        fn imported_elsewhere(&self, cx: &TypeContext, simple: &str) -> bool {
             let Some(scope) = self.files.get(cx.file) else {
                 return false;
             };
@@ -8373,7 +8375,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             })
         }
 
-        pub fn resolve_class_simple(&self, cx: &TypeCx, simple: &str) -> Option<String> {
+        pub fn resolve_class_simple(&self, cx: &TypeContext, simple: &str) -> Option<String> {
             if let Some((_, jvm)) = cx
                 .local_classes
                 .iter()
@@ -8451,7 +8453,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             None
         }
 
-        pub fn alias_for(&self, cx: &TypeCx, simple: &str) -> Option<Rc<AliasInfo>> {
+        pub fn alias_for(&self, cx: &TypeContext, simple: &str) -> Option<Rc<AliasInfo>> {
             let scope = self.files.get(cx.file)?;
             let mut packages: Vec<String> = Vec::new();
             for (local, path) in &scope.imports {
@@ -8488,7 +8490,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             None
         }
 
-        pub fn resolve_type(&self, cx: &TypeCx, type_ref: &TypeRef) -> Lowered<Ty> {
+        pub fn resolve_type(&self, cx: &TypeContext, type_ref: &TypeRef) -> Lowered<Ty> {
             match type_ref {
                 TypeRef::Dynamic(_) => Ok(Ty::any().nullable()),
                 TypeRef::NotNull(inner) => Ok(self.resolve_type(cx, inner)?.non_null()),
@@ -8675,7 +8677,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
 
         pub fn type_params_of(
             &self,
-            cx: &TypeCx,
+            cx: &TypeContext,
             params: &[tree::TypeParameter],
             constraints: &[(String, TypeRef)],
         ) -> Lowered<Vec<TypeParam>> {
@@ -8739,12 +8741,12 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         }
     }
 
-    pub fn visible_of(modifiers: &tree::Modifiers) -> Visible {
+    pub fn visible_of(modifiers: &tree::Modifiers) -> DeclaredVisibility {
         match modifiers.visibility() {
-            tree::Visibility::Public => Visible::Public,
-            tree::Visibility::Internal => Visible::Internal,
-            tree::Visibility::Protected => Visible::Protected,
-            tree::Visibility::Private => Visible::Private,
+            tree::Visibility::Public => DeclaredVisibility::Public,
+            tree::Visibility::Internal => DeclaredVisibility::Internal,
+            tree::Visibility::Protected => DeclaredVisibility::Protected,
+            tree::Visibility::Private => DeclaredVisibility::Private,
         }
     }
 
@@ -8774,8 +8776,8 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             }
         }
 
-        pub fn class_cx(&self, jvm: &str) -> TypeCx {
-            let mut cx = TypeCx::default();
+        pub fn class_cx(&self, jvm: &str) -> TypeContext {
+            let mut cx = TypeContext::default();
             let mut walking = Some(jvm.to_string());
             let mut first = true;
             let mut through_inner = true;
@@ -8854,9 +8856,9 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             for (index, file) in trees.iter().enumerate() {
                 let package = self.files[index].package.clone();
                 let facade = self.files[index].facade.clone();
-                let cx = TypeCx {
+                let cx = TypeContext {
                     file: index,
-                    ..TypeCx::default()
+                    ..TypeContext::default()
                 };
                 let members = self.world.package(&package);
                 let library = index < self.prelude_files;
@@ -9164,7 +9166,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     property.visibility = visible_of(&parameter.modifiers);
                     property.jvm_field = parameter.modifiers.annotated("JvmField").is_some();
                     property.field = Some((owner.clone(), parameter.name.clone(), false));
-                    if !property.jvm_field && property.visibility != Visible::Private {
+                    if !property.jvm_field && property.visibility != DeclaredVisibility::Private {
                         property.getter = Some((
                             self.getter_jvm_name(&parameter.name, &parameter.modifiers),
                             String::new(),
@@ -9234,8 +9236,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         built.visibility = visible_of(&primary.modifiers);
                         built.parameters = self.parameters_of(&primary.parameters, &cx)?;
                     }
-                    if tree.modifiers.has("sealed") && built.visibility == Visible::Public {
-                        built.visibility = Visible::Protected;
+                    if tree.modifiers.has("sealed")
+                        && built.visibility == DeclaredVisibility::Public
+                    {
+                        built.visibility = DeclaredVisibility::Protected;
                     }
                     built.has_defaults = built.parameters.iter().any(|one| one.default);
                     built.returns = this_ty.clone();
@@ -9356,7 +9360,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub fn parameters_of(
             &self,
             parameters: &[tree::Parameter],
-            cx: &TypeCx,
+            cx: &TypeContext,
         ) -> Lowered<Vec<ParamInfo>> {
             let mut out = Vec::new();
             for parameter in parameters {
@@ -9380,7 +9384,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             &self,
             function: &Rc<tree::Function>,
             owner: &str,
-            cx: &TypeCx,
+            cx: &TypeContext,
             top_level: bool,
             file: usize,
         ) -> Lowered<FunctionInfo> {
@@ -9401,7 +9405,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 (None, Some(tree::Body::Expression(_))) => {
                     let mut pending = self.pending.borrow_mut();
                     built.infer = Some(pending.len());
-                    pending.push(Pending::Function {
+                    pending.push(PendingDeclaration::Function {
                         decl: function.clone(),
                         file,
                         class: (!top_level).then(|| owner.to_string()),
@@ -9486,7 +9490,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             &self,
             property: &Rc<tree::Property>,
             owner: &str,
-            cx: &TypeCx,
+            cx: &TypeContext,
             top_level: bool,
             file: usize,
         ) -> Lowered<PropertyInfo> {
@@ -9498,7 +9502,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 None => {
                     let mut pending = self.pending.borrow_mut();
                     let slot = pending.len();
-                    pending.push(Pending::Property {
+                    pending.push(PendingDeclaration::Property {
                         decl: property.clone(),
                         file,
                         class: (!top_level).then(|| owner.to_string()),
@@ -9537,7 +9541,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             mut built: PropertyInfo,
             property: &Rc<tree::Property>,
             owner: &str,
-            cx: &TypeCx,
+            cx: &TypeContext,
             top_level: bool,
             file: usize,
             type_parameters: Vec<TypeParam>,
@@ -9914,57 +9918,62 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
     }
 
     #[derive(Clone, Debug, PartialEq)]
-    pub enum Rep {
+    pub enum Representation {
         Prim(&'static str),
         Ref(String),
-        Value(String, Box<Rep>),
+        Value(String, Box<Representation>),
         Void,
         Never,
     }
 
-    impl Rep {
-        pub fn carried(&self) -> &Rep {
+    impl Representation {
+        pub fn carried(&self) -> &Representation {
             match self {
-                Rep::Value(_, inner) => inner.carried(),
+                Representation::Value(_, inner) => inner.carried(),
                 other => other,
             }
         }
     }
 
-    pub fn rep_descriptor(rep: &Rep) -> String {
+    pub fn rep_descriptor(rep: &Representation) -> String {
         match rep {
-            Rep::Prim(name) => descriptor_of_primitive(name).unwrap_or("I").to_string(),
-            Rep::Ref(name) if name.starts_with('[') => name.clone(),
-            Rep::Ref(name) => format!("L{name};"),
-            Rep::Value(_, inner) => rep_descriptor(inner),
-            Rep::Void => "V".to_string(),
-            Rep::Never => format!("L{OBJECT};"),
+            Representation::Prim(name) => descriptor_of_primitive(name).unwrap_or("I").to_string(),
+            Representation::Ref(name) if name.starts_with('[') => name.clone(),
+            Representation::Ref(name) => format!("L{name};"),
+            Representation::Value(_, inner) => rep_descriptor(inner),
+            Representation::Void => "V".to_string(),
+            Representation::Never => format!("L{OBJECT};"),
         }
     }
 
-    pub fn value_box(class: &str, inner: &Rep, j: J) -> J {
+    pub fn value_box(class: &str, inner: &Representation, j: J) -> J {
         J::Invoke {
             on: None,
             owner: class.to_string(),
             name: "box-impl".to_string(),
             descriptor: format!("({})L{class};", rep_descriptor(inner)),
-            through: java::Through::Static,
+            through: java::InvokeKind::Static,
             arguments: vec![j],
         }
     }
 
-    pub fn value_unbox(class: &str, inner: &Rep, holder: J) -> J {
+    pub fn value_unbox(class: &str, inner: &Representation, holder: J) -> J {
         J::Invoke {
             on: Some(Box::new(holder)),
             owner: class.to_string(),
             name: "unbox-impl".to_string(),
             descriptor: format!("(){}", rep_descriptor(inner)),
-            through: java::Through::Virtual,
+            through: java::InvokeKind::Virtual,
             arguments: Vec::new(),
         }
     }
 
-    pub fn value_static(class: &str, name: &str, arguments: Vec<(J, Rep)>, returns: &Rep) -> J {
+    pub fn value_static(
+        class: &str,
+        name: &str,
+        arguments: Vec<(J, Representation)>,
+        returns: &Representation,
+    ) -> J {
         let descriptor = format!(
             "({}){}",
             arguments
@@ -9978,7 +9987,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             owner: class.to_string(),
             name: name.to_string(),
             descriptor,
-            through: java::Through::Static,
+            through: java::InvokeKind::Static,
             arguments: arguments.into_iter().map(|(j, _)| j).collect(),
         }
     }
@@ -10178,7 +10187,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
     pub struct Val {
         pub j: J,
         pub ty: Ty,
-        pub rep: Rep,
+        pub rep: Representation,
         pub literal: Option<i64>,
         pub alt: Option<Box<Ty>>,
     }
@@ -10199,7 +10208,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             }
         }
 
-        pub fn with_rep(j: J, ty: Ty, rep: Rep) -> Val {
+        pub fn with_rep(j: J, ty: Ty, rep: Representation) -> Val {
             Val {
                 j,
                 ty,
@@ -10214,7 +10223,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         }
 
         pub fn never() -> Val {
-            Val::with_rep(J::Null, Ty::nothing(), Rep::Never)
+            Val::with_rep(J::Null, Ty::nothing(), Representation::Never)
         }
     }
 
@@ -10596,49 +10605,49 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         }
     }
 
-    pub fn rep_of(ty: &Ty) -> Rep {
+    pub fn rep_of(ty: &Ty) -> Representation {
         rep_within(ty, &mut Vec::new())
     }
 
-    fn rep_within(ty: &Ty, seen: &mut Vec<String>) -> Rep {
+    fn rep_within(ty: &Ty, seen: &mut Vec<String>) -> Representation {
         if let Ty::Class { name, .. } = ty {
             if !seen.contains(name) {
                 if let Some(inner) = unboxed_value(ty) {
                     seen.push(name.clone());
                     let held = rep_within(&inner, seen);
                     seen.pop();
-                    return Rep::Value(jvm_class_of(name), Box::new(held));
+                    return Representation::Value(jvm_class_of(name), Box::new(held));
                 }
             }
         }
         match ty {
-            Ty::Class { name, .. } if name == ARRAY => Rep::Ref(array_class(ty)),
+            Ty::Class { name, .. } if name == ARRAY => Representation::Ref(array_class(ty)),
             Ty::Class {
                 name,
                 null: Null::Not,
                 ..
-            } if descriptor_of_primitive(name).is_some() => Rep::Prim(
+            } if descriptor_of_primitive(name).is_some() => Representation::Prim(
                 primitive_names()
                     .into_iter()
                     .find(|one| *one == name)
                     .unwrap_or(INT),
             ),
-            Ty::Class { name, .. } => Rep::Ref(jvm_class_of(name)),
-            Ty::Param { erasure, .. } => Rep::Ref(erasure.clone()),
-            Ty::Function(parts, _) => Rep::Ref(function_class(parts)),
-            Ty::Nothing(Null::Not) => Rep::Never,
-            Ty::Nothing(_) => Rep::Ref(OBJECT.to_string()),
-            Ty::Error => Rep::Ref(OBJECT.to_string()),
+            Ty::Class { name, .. } => Representation::Ref(jvm_class_of(name)),
+            Ty::Param { erasure, .. } => Representation::Ref(erasure.clone()),
+            Ty::Function(parts, _) => Representation::Ref(function_class(parts)),
+            Ty::Nothing(Null::Not) => Representation::Never,
+            Ty::Nothing(_) => Representation::Ref(OBJECT.to_string()),
+            Ty::Error => Representation::Ref(OBJECT.to_string()),
         }
     }
 
-    pub fn rep_written(rep: &Rep) -> W {
+    pub fn rep_written(rep: &Representation) -> W {
         match rep {
-            Rep::Value(_, inner) => rep_written(inner),
-            Rep::Prim(name) => written_raw(&Ty::class(name)),
-            Rep::Ref(name) => class_written(name),
-            Rep::Void => W::Void,
-            Rep::Never => named(OBJECT),
+            Representation::Value(_, inner) => rep_written(inner),
+            Representation::Prim(name) => written_raw(&Ty::class(name)),
+            Representation::Ref(name) => class_written(name),
+            Representation::Void => W::Void,
+            Representation::Never => named(OBJECT),
         }
     }
 
@@ -10661,15 +10670,15 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         named(name)
     }
 
-    pub fn default_value(rep: &Rep) -> J {
+    pub fn default_value(rep: &Representation) -> J {
         match rep {
-            Rep::Value(_, inner) => default_value(inner),
-            Rep::Prim(LONG) => J::Long(0),
-            Rep::Prim(FLOAT) => J::Float(0.0),
-            Rep::Prim(DOUBLE) => J::Double(0.0),
-            Rep::Prim(BOOLEAN) => J::Boolean(false),
-            Rep::Prim(CHAR) => J::Char(0),
-            Rep::Prim(_) => J::Int(0),
+            Representation::Value(_, inner) => default_value(inner),
+            Representation::Prim(LONG) => J::Long(0),
+            Representation::Prim(FLOAT) => J::Float(0.0),
+            Representation::Prim(DOUBLE) => J::Double(0.0),
+            Representation::Prim(BOOLEAN) => J::Boolean(false),
+            Representation::Prim(CHAR) => J::Char(0),
+            Representation::Prim(_) => J::Int(0),
             _ => J::Null,
         }
     }
@@ -10696,13 +10705,13 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub loops: usize,
         pub inline: usize,
         pub hides: usize,
-        pub cx: TypeCx,
+        pub cx: TypeContext,
         pub file: usize,
         pub learned: RefCell<HashMap<String, Ty>>,
     }
 
     #[derive(Clone, Debug)]
-    pub struct Hide {
+    pub struct ScopeMarks {
         pub scopes: (usize, usize),
         pub receivers: (usize, usize),
         pub targets: (usize, usize),
@@ -10721,7 +10730,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub name: String,
         pub jvm: String,
         pub ty: Ty,
-        pub rep: Rep,
+        pub rep: Representation,
         pub mutable: bool,
         pub slot: Slot,
     }
@@ -10740,7 +10749,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub label: Option<String>,
         pub returns: Ty,
         pub real: bool,
-        pub result: Option<(String, Rep)>,
+        pub result: Option<(String, Representation)>,
         pub exit: Option<String>,
         pub lambda: bool,
         pub inferred: Vec<Ty>,
@@ -10763,7 +10772,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
 
     pub struct Method<'c, 'w, 'a> {
         pub c: &'c Compiler<'w, 'a>,
-        pub cx: TypeCx,
+        pub cx: TypeContext,
         pub blocks: Vec<Vec<Positioned<S>>>,
         pub dead: Vec<bool>,
         pub scopes: Vec<Vec<Local>>,
@@ -10788,7 +10797,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub suspend_lambda: bool,
         pub keep_facts: bool,
         pub static_context: bool,
-        pub hides: Vec<Hide>,
+        pub hides: Vec<ScopeMarks>,
         pub label_hint: Option<String>,
     }
 
@@ -10808,7 +10817,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             !hidden(&ranges, index)
         }
 
-        pub fn new(c: &'c Compiler<'w, 'a>, cx: TypeCx, unit_name: &str) -> Method<'c, 'w, 'a> {
+        pub fn new(
+            c: &'c Compiler<'w, 'a>,
+            cx: TypeContext,
+            unit_name: &str,
+        ) -> Method<'c, 'w, 'a> {
             let file = cx.file;
             Method {
                 c,
@@ -10952,7 +10965,12 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             self.c.fresh(stem)
         }
 
-        pub fn declare_temp(&mut self, stem: &str, rep: &Rep, value: Option<J>) -> String {
+        pub fn declare_temp(
+            &mut self,
+            stem: &str,
+            rep: &Representation,
+            value: Option<J>,
+        ) -> String {
             let name = self.temp_name(stem);
             let what = rep_written(rep);
             self.emit(S::Declare {
@@ -10965,7 +10983,9 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         }
 
         pub fn spill(&mut self, value: Val) -> Val {
-            if matches!(value.rep, Rep::Void | Rep::Never) || is_stable(&value.j) {
+            if matches!(value.rep, Representation::Void | Representation::Never)
+                || is_stable(&value.j)
+            {
                 return value;
             }
             let name = self.declare_temp("tmp", &value.rep, Some(value.j.clone()));
@@ -10978,7 +10998,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub fn spill_before(&mut self, mark: usize, value: Val) -> Val {
             if self.mark() == mark
                 || is_stable(&value.j)
-                || matches!(value.rep, Rep::Void | Rep::Never)
+                || matches!(value.rep, Representation::Void | Representation::Never)
             {
                 return value;
             }
@@ -11053,7 +11073,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     }),
                     fixed: false,
                 });
-            } else if !matches!(rep, Rep::Never | Rep::Void) {
+            } else if !matches!(rep, Representation::Never | Representation::Void) {
                 self.emit(S::Declare {
                     what: rep_written(&rep),
                     name: jvm,
@@ -11205,36 +11225,40 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             self.coerce_rep(value, &target)
         }
 
-        pub fn coerce_rep(&mut self, value: Val, target: &Rep) -> J {
+        pub fn coerce_rep(&mut self, value: Val, target: &Representation) -> J {
             match (&value.rep, target) {
-                (Rep::Never, _) => default_value(target),
-                (Rep::Void, Rep::Void) => value.j,
-                (Rep::Void, _) => {
+                (Representation::Never, _) => default_value(target),
+                (Representation::Void, Representation::Void) => value.j,
+                (Representation::Void, _) => {
                     self.emit(S::Express(value.j));
                     let unit = Val::unit();
                     self.coerce_rep(unit, target)
                 }
-                (_, Rep::Void) => value.j,
-                (_, Rep::Never) => value.j,
-                (Rep::Value(have, _), Rep::Value(want, _)) if have == want => value.j,
-                (Rep::Value(have, inner), _) => {
+                (_, Representation::Void) => value.j,
+                (_, Representation::Never) => value.j,
+                (Representation::Value(have, _), Representation::Value(want, _))
+                    if have == want =>
+                {
+                    value.j
+                }
+                (Representation::Value(have, inner), _) => {
                     let have = have.clone();
                     let boxed = Val::with_rep(
                         value_box(&have, inner, value.j),
                         value.ty.clone(),
-                        Rep::Ref(have),
+                        Representation::Ref(have),
                     );
                     self.coerce_rep(boxed, target)
                 }
-                (_, Rep::Value(want, inner)) => {
+                (_, Representation::Value(want, inner)) => {
                     if matches!(value.j, J::Null) {
                         return J::Null;
                     }
                     let (want, inner) = (want.clone(), inner.clone());
-                    let holder = self.coerce_rep(value, &Rep::Ref(want.clone()));
+                    let holder = self.coerce_rep(value, &Representation::Ref(want.clone()));
                     value_unbox(&want, &inner, holder)
                 }
-                (Rep::Prim(have), Rep::Prim(want)) => {
+                (Representation::Prim(have), Representation::Prim(want)) => {
                     if have == want {
                         value.j
                     } else if let (Some(literal), true) = (value.literal, *want != BOOLEAN) {
@@ -11243,7 +11267,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         cast(written_raw(&Ty::class(want)), value.j)
                     }
                 }
-                (Rep::Prim(have), Rep::Ref(want)) => {
+                (Representation::Prim(have), Representation::Ref(want)) => {
                     let (have, j) = match (value.literal, primitive_of_box(want)) {
                         (Some(literal), Some(wanted)) if wanted != BOOLEAN && wanted != *have => {
                             (wanted, literal_as(literal, wanted))
@@ -11258,7 +11282,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         cast(class_written(want), j)
                     }
                 }
-                (Rep::Ref(have), Rep::Prim(want)) => {
+                (Representation::Ref(have), Representation::Prim(want)) => {
                     let boxed = boxed_of(want).unwrap_or(OBJECT);
                     let j = if have == boxed {
                         value.j
@@ -11275,7 +11299,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     };
                     call(j, &format!("{}Value", primitive_word(want)), Vec::new())
                 }
-                (Rep::Ref(have), Rep::Ref(want)) => {
+                (Representation::Ref(have), Representation::Ref(want)) => {
                     let fits = have == want
                         || want == OBJECT
                         || matches!(value.j, J::Null)
@@ -11296,13 +11320,13 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 return;
             }
             match value.rep {
-                Rep::Never => {
+                Representation::Never => {
                     if statement_worthy(&value.j) {
                         self.emit(S::Express(value.j));
                     }
                     self.emit_nothing();
                 }
-                Rep::Void => {
+                Representation::Void => {
                     if statement_worthy(&value.j) {
                         self.emit(S::Express(value.j));
                     }
@@ -11472,7 +11496,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         ) || name.contains(|one: char| !(one.is_alphanumeric() || one == '_' || one == '$'))
     }
 
-    pub enum Thing {
+    pub enum ResolvedName {
         Value(Val),
         Class(String),
         Package(String),
@@ -11725,9 +11749,9 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 return;
             }
             let (function, source_file) = (&found[0].0, found[0].1);
-            let callee_cx = TypeCx {
+            let callee_cx = TypeContext {
                 file: source_file.unwrap_or(self.cx.file),
-                ..TypeCx::default()
+                ..TypeContext::default()
             };
             let Some(tree::Body::Block(body)) = &function.body else {
                 return;
@@ -11959,9 +11983,9 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 Expr::Template(parts, _) => self.template(parts),
                 Expr::Parenthesized(inner, _) => self.value(inner, expected),
                 Expr::Name(..) | Expr::Member { .. } => match self.thing(expr)? {
-                    Thing::Value(value) => Ok(value),
-                    Thing::Class(name) => self.class_as_value(&name),
-                    Thing::Package(package) => Err(self
+                    ResolvedName::Value(value) => Ok(value),
+                    ResolvedName::Class(name) => self.class_as_value(&name),
+                    ResolvedName::Package(package) => Err(self
                         .fail("EK201", "A package was used where a value belongs.")
                         .with_context(format!("Package: {}", package.replace('/', ".")))),
                 },
@@ -12017,7 +12041,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     let subject = if matches!(ty, Ty::Class { .. })
                         && !ty.is_nullable()
                         && subject.ty.is_nullable()
-                        && matches!(subject.rep, Rep::Ref(_))
+                        && matches!(subject.rep, Representation::Ref(_))
                     {
                         let held = self.spill(subject);
                         let message =
@@ -12056,7 +12080,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 Expr::Block(block) => {
                     self.open();
                     let value = self.block_value(block, expected)?;
-                    if matches!(value.rep, Rep::Never) || self.is_dead() {
+                    if matches!(value.rep, Representation::Never) || self.is_dead() {
                         let (body, _) = self.close();
                         self.emit(S::Block(body));
                         self.mark_dead();
@@ -12067,7 +12091,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     } else {
                         let rep = value.rep.clone();
                         let j = value.j.clone();
-                        if matches!(rep, Rep::Void) {
+                        if matches!(rep, Representation::Void) {
                             self.emit(S::Express(j));
                             Val::unit()
                         } else {
@@ -12228,7 +12252,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         .map(|held| held.nullable())
                         .unwrap_or(Ty::Nothing(Null::Yes));
                     let rep = match &ty {
-                        Ty::Nothing(_) => Rep::Ref(OBJECT.to_string()),
+                        Ty::Nothing(_) => Representation::Ref(OBJECT.to_string()),
                         other => rep_of(other),
                     };
                     Val::with_rep(J::Null, ty, rep)
@@ -12237,7 +12261,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         }
 
         fn template(&mut self, parts: &[tree::Part]) -> Lowered<Val> {
-            let mut pieces: Vec<(J, usize, Ty, Rep)> = Vec::new();
+            let mut pieces: Vec<(J, usize, Ty, Representation)> = Vec::new();
             for part in parts {
                 match part {
                     tree::Part::Text(text) => {
@@ -12249,15 +12273,15 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             J::Str(text.clone()),
                             self.mark(),
                             Ty::string(),
-                            Rep::Ref(STRING.to_string()),
+                            Representation::Ref(STRING.to_string()),
                         ))
                     }
                     tree::Part::Value(expr) => {
                         let mark = self.mark();
                         let value = self.value(expr, None)?;
                         let kept = match &value.rep {
-                            Rep::Prim(_) => true,
-                            Rep::Ref(name) => {
+                            Representation::Prim(_) => true,
+                            Representation::Ref(name) => {
                                 !name.starts_with('[')
                                     && name != "java/lang/Character"
                                     && !(name == OBJECT && value.ty.primitive_name() == Some(CHAR))
@@ -12267,7 +12291,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         let (ty, rep) = if kept {
                             (value.ty.clone(), value.rep.clone())
                         } else {
-                            (Ty::string(), Rep::Ref(STRING.to_string()))
+                            (Ty::string(), Representation::Ref(STRING.to_string()))
                         };
                         let j = self.string_piece(value);
                         if self.mark() != mark {
@@ -12302,19 +12326,19 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
 
         pub fn string_piece(&mut self, value: Val) -> J {
             match value.rep {
-                Rep::Value(ref held, ref inner) => {
+                Representation::Value(ref held, ref inner) => {
                     let boxed = value_box(held, inner, value.j.clone());
                     static_call(STRING, "valueOf", vec![cast(named(OBJECT), boxed)])
                 }
-                Rep::Void => {
+                Representation::Void => {
                     self.emit(S::Express(value.j));
                     J::Str("kotlin.Unit".to_string())
                 }
-                Rep::Never => J::Str(String::new()),
-                Rep::Ref(ref name) if name.starts_with('[') => {
+                Representation::Never => J::Str(String::new()),
+                Representation::Ref(ref name) if name.starts_with('[') => {
                     static_call(STRING, "valueOf", vec![cast(named(OBJECT), value.j)])
                 }
-                Rep::Ref(ref name)
+                Representation::Ref(ref name)
                     if name == "java/lang/Character"
                         || name == "java/lang/Object"
                             && value.ty.primitive_name() == Some(CHAR) =>
@@ -12340,7 +12364,9 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub fn cast_to(&mut self, value: Val, ty: &Ty) -> J {
             let target = rep_of(ty);
             match (&value.rep, &target) {
-                (Rep::Ref(have), Rep::Ref(want)) if have != want && want != OBJECT => {
+                (Representation::Ref(have), Representation::Ref(want))
+                    if have != want && want != OBJECT =>
+                {
                     cast(rep_written(&target), value.j)
                 }
                 _ => self.coerce_rep(value, &target),
@@ -12350,8 +12376,8 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub fn instance_test(&mut self, subject: Val, ty: &Ty) -> J {
             let rep = rep_of(&ty.non_null());
             let what = match &rep {
-                Rep::Prim(name) => named(boxed_of(name).unwrap_or(OBJECT)),
-                Rep::Ref(name) | Rep::Value(name, _) => class_written(name),
+                Representation::Prim(name) => named(boxed_of(name).unwrap_or(OBJECT)),
+                Representation::Ref(name) | Representation::Value(name, _) => class_written(name),
                 _ => named(OBJECT),
             };
             let nullable = ty.is_nullable();
@@ -12361,12 +12387,12 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 subject
             };
             let object = match &subject.rep {
-                Rep::Prim(name) => static_call(
+                Representation::Prim(name) => static_call(
                     boxed_of(name).unwrap_or(OBJECT),
                     "valueOf",
                     vec![subject.j.clone()],
                 ),
-                Rep::Value(held, inner) => value_box(held, inner, subject.j.clone()),
+                Representation::Value(held, inner) => value_box(held, inner, subject.j.clone()),
                 _ => subject.j.clone(),
             };
             let test = J::InstanceOf {
@@ -12471,7 +12497,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             match operator {
                 tree::Postfix::Sure => {
                     let value = self.value(operand, None)?;
-                    if matches!(value.rep, Rep::Prim(_)) {
+                    if matches!(value.rep, Representation::Prim(_)) {
                         return Ok(value);
                     }
                     let held = self.spill(value);
@@ -12564,7 +12590,8 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         };
                         return Ok(Val::new(binary(op, first, second), Ty::boolean()));
                     }
-                    let name = self.declare_temp("cond", &Rep::Prim(BOOLEAN), Some(first));
+                    let name =
+                        self.declare_temp("cond", &Representation::Prim(BOOLEAN), Some(first));
                     let mut body = body;
                     if !dead {
                         body.push(at_line(
@@ -12675,7 +12702,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             );
             if operator == O::Plus
                 && (first.ty.is(STRING) && !first.ty.is_nullable()
-                    || first.ty.is(STRING) && !matches!(first.rep, Rep::Prim(_)))
+                    || first.ty.is(STRING) && !matches!(first.rep, Representation::Prim(_)))
             {
                 let left = first.j.clone();
                 let right = self.string_piece(second);
@@ -12708,12 +12735,12 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         return Ok(Val::new(cast(W::Char, binary(op, x, y)), Ty::char()));
                     }
                     let wide = promoted(a, b);
-                    let first_target = if matches!(first.rep, Rep::Prim(_)) {
+                    let first_target = if matches!(first.rep, Representation::Prim(_)) {
                         wide
                     } else {
                         a
                     };
-                    let second_target = if matches!(second.rep, Rep::Prim(_)) {
+                    let second_target = if matches!(second.rep, Representation::Prim(_)) {
                         wide
                     } else {
                         b
@@ -12761,14 +12788,15 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let null_right = matches!(second.j, J::Null);
             if null_left || null_right {
                 let other = if null_left { second } else { first };
-                if matches!(other.rep, Rep::Prim(_)) {
+                if matches!(other.rep, Representation::Prim(_)) {
                     return Ok(Val::new(J::Boolean(negate), Ty::boolean()));
                 }
                 return Ok(Val::new(binary(op, other.j, J::Null), Ty::boolean()));
             }
             let a = first.ty.primitive_name();
             let b = second.ty.primitive_name();
-            let both_prim = matches!(first.rep, Rep::Prim(_)) && matches!(second.rep, Rep::Prim(_));
+            let both_prim = matches!(first.rep, Representation::Prim(_))
+                && matches!(second.rep, Representation::Prim(_));
             if let (Some(a), Some(b)) = (a, b) {
                 if both_prim || identity {
                     if a == BOOLEAN || b == BOOLEAN {
@@ -12832,7 +12860,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
 
         fn elvis(&mut self, left: &Expr, right: &Expr, expected: Option<&Ty>) -> Lowered<Val> {
             let first = self.value(left, expected.map(|held| held.nullable()).as_ref())?;
-            if matches!(first.rep, Rep::Prim(_)) {
+            if matches!(first.rep, Representation::Prim(_)) {
                 return Ok(first);
             }
             let first = self.spill(first);
@@ -12840,7 +12868,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             self.open();
             let second = self.value(right, Some(expected.unwrap_or(&non_null)))?;
             let second_ty = second.ty.clone();
-            if matches!(second.rep, Rep::Never) || self.is_dead() {
+            if matches!(second.rep, Representation::Never) || self.is_dead() {
                 let (body, _) = self.close();
                 self.emit(S::If {
                     condition: binary(java::Binary::Equal, first.j.clone(), J::Null),
@@ -12861,13 +12889,13 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 });
             }
             let ty = self.common_super(&non_null, &second_ty);
-            let rep = if ty.is_primitive() || matches!(rep_of(&ty), Rep::Prim(_)) {
+            let rep = if ty.is_primitive() || matches!(rep_of(&ty), Representation::Prim(_)) {
                 rep_of(&ty.nullable())
             } else {
                 rep_of(&ty)
             };
             let rep = match (&rep, &first.rep) {
-                (Rep::Ref(want), Rep::Ref(have))
+                (Representation::Ref(want), Representation::Ref(have))
                     if want == OBJECT
                         && have != OBJECT
                         && self.c.world.is_subclass(&jvm_or(&second.rep), have) =>
@@ -13259,8 +13287,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 self.discard(then)?;
                 None
             };
-            let then_dead =
-                self.is_dead() || first.as_ref().is_some_and(|held| held.rep == Rep::Never);
+            let then_dead = self.is_dead()
+                || first
+                    .as_ref()
+                    .is_some_and(|held| held.rep == Representation::Never);
             let mut then_end_facts: Vec<(String, Ty)> =
                 self.smart.last().cloned().unwrap_or_default();
             if matches!(then.unparenthesized(), Expr::Block(_)) {
@@ -13280,7 +13310,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 None => None,
             };
             let else_dead = otherwise.is_some()
-                && (self.is_dead() || second.as_ref().is_some_and(|held| held.rep == Rep::Never));
+                && (self.is_dead()
+                    || second
+                        .as_ref()
+                        .is_some_and(|held| held.rep == Representation::Never));
             let mut else_end_facts: Vec<(String, Ty)> =
                 self.smart.last().cloned().unwrap_or_default();
             if otherwise
@@ -13386,12 +13419,12 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 },
             };
             let rep = match (&first.rep, &second.rep, then_dead, else_dead) {
-                (_, _, true, true) => Rep::Never,
-                (Rep::Void, Rep::Void, _, _) => Rep::Void,
-                (a, b, _, _) if a == b && !matches!(a, Rep::Never) => a.clone(),
+                (_, _, true, true) => Representation::Never,
+                (Representation::Void, Representation::Void, _, _) => Representation::Void,
+                (a, b, _, _) if a == b && !matches!(a, Representation::Never) => a.clone(),
                 _ => rep_of(&ty),
             };
-            if rep == Rep::Never {
+            if rep == Representation::Never {
                 let first_block = self.finish_branch(then_body, None, None);
                 let second_block = self.finish_branch(else_body, None, None);
                 self.pop_frame();
@@ -13404,7 +13437,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 self.mark_dead();
                 return Ok(Val::never());
             }
-            if rep == Rep::Void {
+            if rep == Representation::Void {
                 let first_block = self.finish_branch(then_body, Some(first), None);
                 let second_block = self.finish_branch(else_body, Some(second), None);
                 self.pop_frame();
@@ -13478,12 +13511,12 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             &mut self,
             body: Vec<Positioned<S>>,
             value: Option<Val>,
-            into: Option<(&str, &Rep)>,
+            into: Option<(&str, &Representation)>,
         ) -> Vec<Positioned<S>> {
             self.blocks.push(body);
             self.dead.push(false);
             if let Some(value) = value {
-                if !matches!(value.rep, Rep::Never) {
+                if !matches!(value.rep, Representation::Never) {
                     match into {
                         Some((name, rep)) => {
                             let j = self.coerce_rep(value, rep);
@@ -13665,8 +13698,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     self.discard(&branch.body)?;
                     None
                 };
-                let dead =
-                    self.is_dead() || value.as_ref().is_some_and(|held| held.rep == Rep::Never);
+                let dead = self.is_dead()
+                    || value
+                        .as_ref()
+                        .is_some_and(|held| held.rep == Representation::Never);
                 let (body, _) = self.close_keep_open();
                 self.pop_frame();
                 if !dead {
@@ -13687,8 +13722,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         self.discard(held)?;
                         None
                     };
-                    let dead =
-                        self.is_dead() || value.as_ref().is_some_and(|one| one.rep == Rep::Never);
+                    let dead = self.is_dead()
+                        || value
+                            .as_ref()
+                            .is_some_and(|one| one.rep == Representation::Never);
                     let (body, _) = self.close_keep_open();
                     self.pop_frame();
                     if !dead {
@@ -13726,22 +13763,26 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     (None, _) => Ty::unit(),
                 }
             };
-            let all_void = used
-                && arms
-                    .iter()
-                    .filter(|arm| !arm.3)
-                    .all(|arm| arm.2.as_ref().is_none_or(|held| held.rep == Rep::Void))
-                && else_arm.as_ref().is_none_or(|arm| {
-                    arm.2 || arm.1.as_ref().is_none_or(|held| held.rep == Rep::Void)
+            let all_void =
+                used && arms.iter().filter(|arm| !arm.3).all(|arm| {
+                    arm.2
+                        .as_ref()
+                        .is_none_or(|held| held.rep == Representation::Void)
+                }) && else_arm.as_ref().is_none_or(|arm| {
+                    arm.2
+                        || arm
+                            .1
+                            .as_ref()
+                            .is_none_or(|held| held.rep == Representation::Void)
                 });
             let rep = if all_dead {
-                Rep::Never
+                Representation::Never
             } else if !used || all_void || ty.is_unit() && !ty.is_nullable() {
-                Rep::Void
+                Representation::Void
             } else {
                 rep_of(&ty)
             };
-            let result = if matches!(rep, Rep::Void | Rep::Never) {
+            let result = if matches!(rep, Representation::Void | Representation::Never) {
                 None
             } else {
                 Some(self.temp_name("when"))
@@ -13822,12 +13863,14 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
 
         fn when_equals(&mut self, subject: Val, candidate: Val) -> Lowered<J> {
             if matches!(candidate.j, J::Null) {
-                if matches!(subject.rep, Rep::Prim(_)) {
+                if matches!(subject.rep, Representation::Prim(_)) {
                     return Ok(J::Boolean(false));
                 }
                 return Ok(binary(java::Binary::Equal, subject.j, J::Null));
             }
-            if let (Rep::Prim(a), Rep::Prim(b)) = (&subject.rep, &candidate.rep) {
+            if let (Representation::Prim(a), Representation::Prim(b)) =
+                (&subject.rep, &candidate.rep)
+            {
                 let wide = if *a == CHAR && *b == CHAR {
                     CHAR
                 } else if *a == BOOLEAN || *b == BOOLEAN {
@@ -13845,7 +13888,9 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     widen(y, b, wide),
                 ));
             }
-            if let (Some(a), Rep::Prim(b)) = (subject.ty.primitive_name(), &candidate.rep) {
+            if let (Some(a), Representation::Prim(b)) =
+                (subject.ty.primitive_name(), &candidate.rep)
+            {
                 if a == *b {
                     let x = self.coerce(subject.clone(), &Ty::class(a).nullable());
                     let y = self.coerce(candidate, &Ty::class(a).nullable());
@@ -13881,7 +13926,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 self.statements(&body.statements)?;
                 None
             };
-            let dead = self.is_dead() || value.as_ref().is_some_and(|held| held.rep == Rep::Never);
+            let dead = self.is_dead()
+                || value
+                    .as_ref()
+                    .is_some_and(|held| held.rep == Representation::Never);
             let (main, _) = self.close_keep_open();
             self.pop_frame();
             if !dead {
@@ -13914,8 +13962,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     self.statements(&catch.body.statements)?;
                     None
                 };
-                let dead =
-                    self.is_dead() || value.as_ref().is_some_and(|held| held.rep == Rep::Never);
+                let dead = self.is_dead()
+                    || value
+                        .as_ref()
+                        .is_some_and(|held| held.rep == Representation::Never);
                 let (body, _) = self.close_keep_open();
                 self.pop_frame();
                 if !dead {
@@ -13948,18 +13998,19 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             } else {
                 joined.unwrap_or_else(Ty::unit)
             };
-            let all_void = arms
-                .iter()
-                .filter(|arm| !arm.2)
-                .all(|arm| arm.1.as_ref().is_none_or(|held| held.rep == Rep::Void));
+            let all_void = arms.iter().filter(|arm| !arm.2).all(|arm| {
+                arm.1
+                    .as_ref()
+                    .is_none_or(|held| held.rep == Representation::Void)
+            });
             let rep = if all_dead {
-                Rep::Never
+                Representation::Never
             } else if !used || all_void || ty.is_unit() {
-                Rep::Void
+                Representation::Void
             } else {
                 rep_of(&ty)
             };
-            let result = if matches!(rep, Rep::Void | Rep::Never) {
+            let result = if matches!(rep, Representation::Void | Representation::Never) {
                 None
             } else {
                 Some(self.temp_name("try"))
@@ -13986,7 +14037,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 .zip(finished)
                 .map(|((ty, name, spot), body)| java::Catch {
                     types: vec![match rep_of(&ty) {
-                        Rep::Ref(held) => named(&held),
+                        Representation::Ref(held) => named(&held),
                         _ => named(THROWABLE),
                     }],
                     name,
@@ -14221,14 +14272,14 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             }
             if target.real {
                 let boxed_unit = match &target.result {
-                    Some((_, rep)) if !matches!(rep, Rep::Void) && returns.is_unit() => {
+                    Some((_, rep)) if !matches!(rep, Representation::Void) && returns.is_unit() => {
                         Some(rep.clone())
                     }
                     _ => None,
                 };
                 if let Some(rep) = boxed_unit {
                     if let Some(held) = value {
-                        if !matches!(held.rep, Rep::Never) {
+                        if !matches!(held.rep, Representation::Never) {
                             self.statement_of(held);
                         }
                     }
@@ -14238,7 +14289,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     || returns.is_error() && value.is_none()
                 {
                     if let Some(held) = value {
-                        if !matches!(held.rep, Rep::Never) {
+                        if !matches!(held.rep, Representation::Never) {
                             self.statement_of(held);
                         }
                     }
@@ -14250,7 +14301,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             .result
                             .as_ref()
                             .map(|(_, rep)| rep.clone())
-                            .unwrap_or(Rep::Ref(OBJECT.to_string()));
+                            .unwrap_or(Representation::Ref(OBJECT.to_string()));
                         self.coerce_rep(held, &rep)
                     } else {
                         self.coerce(held, &returns)
@@ -14273,10 +14324,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         }
     }
 
-    pub fn jvm_or(rep: &Rep) -> String {
+    pub fn jvm_or(rep: &Representation) -> String {
         match rep {
-            Rep::Ref(name) | Rep::Value(name, _) => name.clone(),
-            Rep::Prim(name) => boxed_of(name).unwrap_or(OBJECT).to_string(),
+            Representation::Ref(name) | Representation::Value(name, _) => name.clone(),
+            Representation::Prim(name) => boxed_of(name).unwrap_or(OBJECT).to_string(),
             _ => OBJECT.to_string(),
         }
     }
@@ -14356,16 +14407,16 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
     }
 
     #[derive(Clone, Debug)]
-    pub struct Given {
+    pub struct CallArgument {
         pub name: Option<String>,
         pub spread: bool,
         pub value: ArgValue,
         pub trailing: bool,
     }
 
-    impl Given {
-        pub fn ready(value: Val) -> Given {
-            Given {
+    impl CallArgument {
+        pub fn ready(value: Val) -> CallArgument {
+            CallArgument {
                 name: None,
                 spread: false,
                 value: ArgValue::Ready(value),
@@ -14394,15 +14445,15 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
     }
 
     #[derive(Clone, Debug)]
-    pub enum Filled {
+    pub enum ArgumentSlot {
         Given(usize),
         Many(Vec<usize>),
         Default,
     }
 
     #[derive(Clone, Debug)]
-    pub struct Plan {
-        pub filled: Vec<Filled>,
+    pub struct CallPlan {
+        pub filled: Vec<ArgumentSlot>,
         pub cost: u32,
         pub defaults: bool,
         pub vararg: bool,
@@ -14416,7 +14467,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             class: String,
             name: String,
             ty: Ty,
-            rep: Rep,
+            rep: Representation,
         },
         Property {
             dispatch: Option<Val>,
@@ -14474,8 +14525,8 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
 
     pub fn jvm_erasure(ty: &Ty) -> String {
         match rep_of(ty) {
-            Rep::Prim(name) => name.to_string(),
-            Rep::Ref(name) => match ty {
+            Representation::Prim(name) => name.to_string(),
+            Representation::Ref(name) => match ty {
                 Ty::Class { name: kotlin, .. } if boxed_of(kotlin).is_some() => kotlin.clone(),
                 _ => name,
             },
@@ -14672,7 +14723,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 .with_context(format!("Class: {}", dotted(name))))
         }
 
-        pub fn thing(&mut self, expr: &Expr) -> Lowered<Thing> {
+        pub fn thing(&mut self, expr: &Expr) -> Lowered<ResolvedName> {
             let before = self.spot;
             if expr.spot().line > 0 {
                 self.spot = expr.spot();
@@ -14693,7 +14744,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             };
             let holders: Vec<Val> = match holder {
                 Some(held) => match self.thing(held)? {
-                    Thing::Value(value) => vec![value],
+                    ResolvedName::Value(value) => vec![value],
                     _ => Vec::new(),
                 },
                 None => self
@@ -14729,10 +14780,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             Ok(None)
         }
 
-        fn thing_inner(&mut self, expr: &Expr) -> Lowered<Thing> {
+        fn thing_inner(&mut self, expr: &Expr) -> Lowered<ResolvedName> {
             match expr {
                 Expr::Name(name, _) => self.name_thing(name),
-                Expr::Parenthesized(inner, _) => Ok(Thing::Value(self.value(inner, None)?)),
+                Expr::Parenthesized(inner, _) => Ok(ResolvedName::Value(self.value(inner, None)?)),
                 Expr::Member {
                     receiver,
                     name,
@@ -14740,27 +14791,29 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     ..
                 } => {
                     if let Expr::Super { qualifier, .. } = receiver.as_ref() {
-                        return Ok(Thing::Value(self.super_property(name, qualifier.as_ref())?));
+                        return Ok(ResolvedName::Value(
+                            self.super_property(name, qualifier.as_ref())?,
+                        ));
                     }
                     if name == "class" {
-                        return Ok(Thing::Value(self.class_literal(receiver, false)?));
+                        return Ok(ResolvedName::Value(self.class_literal(receiver, false)?));
                     }
                     if name == "isInitialized" {
                         if let Some(found) = self.lateinit_check(receiver)? {
-                            return Ok(Thing::Value(found));
+                            return Ok(ResolvedName::Value(found));
                         }
                     }
                     if name == "java" {
                         if let Expr::ClassLiteral(inner, _) = receiver.unparenthesized() {
-                            return Ok(Thing::Value(self.class_literal(inner, true)?));
+                            return Ok(ResolvedName::Value(self.class_literal(inner, true)?));
                         }
                     }
                     let holder = self.thing(receiver)?;
                     match holder {
-                        Thing::Package(package) => {
+                        ResolvedName::Package(package) => {
                             let candidate = format!("{package}/{name}");
                             if self.c.world.exists(&candidate) {
-                                return Ok(Thing::Class(candidate));
+                                return Ok(ResolvedName::Class(candidate));
                             }
                             let members = self.c.world.package(&package);
                             let property = members
@@ -14772,21 +14825,21 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             if let Some(property) = property {
                                 let value =
                                     self.read_property(None, None, &property, &HashMap::new())?;
-                                return Ok(Thing::Value(value));
+                                return Ok(ResolvedName::Value(value));
                             }
                             if self.c.world.package_exists(&candidate)
                                 || !self.c.world.exists(&candidate)
                             {
-                                return Ok(Thing::Package(candidate));
+                                return Ok(ResolvedName::Package(candidate));
                             }
                             Err(self.unresolved(name))
                         }
-                        Thing::Class(class) => self.static_member(&class, name),
-                        Thing::Value(value) => {
+                        ResolvedName::Class(class) => self.static_member(&class, name),
+                        ResolvedName::Value(value) => {
                             let path = stable_path(expr);
                             if *safe {
                                 self.safe_path = stable_path(receiver);
-                                return Ok(Thing::Value(
+                                return Ok(ResolvedName::Value(
                                     self.safe_access(value, |this, held| {
                                         this.property_of(held, name, false)
                                     })?,
@@ -14798,11 +14851,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                                     out.ty = ty;
                                 }
                             }
-                            Ok(Thing::Value(out))
+                            Ok(ResolvedName::Value(out))
                         }
                     }
                 }
-                other => Ok(Thing::Value(self.value(other, None)?)),
+                other => Ok(ResolvedName::Value(self.value(other, None)?)),
             }
         }
 
@@ -14879,7 +14932,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             value: Val,
             access: impl FnOnce(&mut Self, Val) -> Lowered<Val>,
         ) -> Lowered<Val> {
-            if matches!(value.rep, Rep::Prim(_)) {
+            if matches!(value.rep, Representation::Prim(_)) {
                 return access(self, value);
             }
             let held = self.spill(value);
@@ -14892,19 +14945,21 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 self.assume_type(&path, held.ty.non_null());
             }
             let inner = access(self, non_null)?;
-            let ty = if inner.ty.is_unit() && inner.rep == Rep::Void {
+            let ty = if inner.ty.is_unit() && inner.rep == Representation::Void {
                 Ty::unit().nullable()
             } else {
                 inner.ty.nullable()
             };
             let rep = match &inner.rep {
-                Rep::Prim(name) => Rep::Ref(boxed_of(name).unwrap_or(OBJECT).to_string()),
-                Rep::Void => Rep::Ref(UNIT.to_string()),
-                Rep::Never => Rep::Ref(OBJECT.to_string()),
+                Representation::Prim(name) => {
+                    Representation::Ref(boxed_of(name).unwrap_or(OBJECT).to_string())
+                }
+                Representation::Void => Representation::Ref(UNIT.to_string()),
+                Representation::Never => Representation::Ref(OBJECT.to_string()),
                 other => other.clone(),
             };
             let (body, dead) = self.close_keep_open();
-            if body.is_empty() && !dead && inner.rep != Rep::Void {
+            if body.is_empty() && !dead && inner.rep != Representation::Void {
                 self.pop_frame();
                 let j = self.coerce_rep(inner, &rep);
                 return Ok(Val::with_rep(
@@ -14940,7 +14995,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
 
         pub fn materialize_inline(&mut self, inline: &Rc<InlineLambda>) -> Lowered<Val> {
             let saved_hides = self.hides.split_off(inline.hides.min(self.hides.len()));
-            self.hides.push(Hide {
+            self.hides.push(ScopeMarks {
                 scopes: (inline.scopes, self.scopes.len()),
                 receivers: (inline.receivers, self.receivers.len()),
                 targets: (inline.targets, self.targets.len()),
@@ -14975,7 +15030,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             }
         }
 
-        pub fn name_thing(&mut self, name: &str) -> Lowered<Thing> {
+        pub fn name_thing(&mut self, name: &str) -> Lowered<ResolvedName> {
             if let Some(local) = self.lookup_local(name).cloned() {
                 if let Slot::Inline(inline) = &local.slot {
                     if !matches!(inline.function, Ty::Function(..)) {
@@ -14985,7 +15040,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         ));
                     }
                     let inline = inline.clone();
-                    return Ok(Thing::Value(self.materialize_inline(&inline)?));
+                    return Ok(ResolvedName::Value(self.materialize_inline(&inline)?));
                 }
                 let mut value = self.local_value(&local);
                 if let Some(ty) = self.smart_type(name) {
@@ -14997,11 +15052,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     }
                     value.ty = ty;
                 }
-                return Ok(Thing::Value(value));
+                return Ok(ResolvedName::Value(value));
             }
             if name == "field" {
                 if let Some((j, ty)) = self.field.clone() {
-                    return Ok(Thing::Value(Val::new(j, ty)));
+                    return Ok(ResolvedName::Value(Val::new(j, ty)));
                 }
             }
             let receivers = self.visible_receivers();
@@ -15025,12 +15080,12 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     if let Some(ty) = self.smart_type(name) {
                         found.ty = ty;
                     }
-                    return Ok(Thing::Value(found));
+                    return Ok(ResolvedName::Value(found));
                 }
                 if let Some(class) = &receiver.class {
                     if let Some(info) = self.c.world.class(class) {
                         if info.enum_entries.iter().any(|entry| entry == name) {
-                            return Ok(Thing::Value(Val::new(
+                            return Ok(ResolvedName::Value(Val::new(
                                 static_field(class, name),
                                 info.as_ty(),
                             )));
@@ -15046,7 +15101,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         .is_some_and(|info| info.java_source || !info.kotlin)
                     {
                         if let Some(found) = self.companion_property(&held, name)? {
-                            return Ok(Thing::Value(found));
+                            return Ok(ResolvedName::Value(found));
                         }
                     }
                 }
@@ -15055,7 +15110,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 let mut walking = Some(class);
                 while let Some(current) = walking {
                     if let Some(found) = self.companion_property(&current, name)? {
-                        return Ok(Thing::Value(found));
+                        return Ok(ResolvedName::Value(found));
                     }
                     let info = self.c.world.class(&current);
                     if let Some(held) = &info {
@@ -15065,7 +15120,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             }
                         }
                         if held.enum_entries.iter().any(|entry| entry == name) {
-                            return Ok(Thing::Value(Val::new(
+                            return Ok(ResolvedName::Value(Val::new(
                                 static_field(&current, name),
                                 held.as_ty(),
                             )));
@@ -15080,10 +15135,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 if let Some(ty) = self.smart_type(name) {
                     value.ty = ty;
                 }
-                return Ok(Thing::Value(value));
+                return Ok(ResolvedName::Value(value));
             }
             if let Some(class) = self.c.resolve_class_simple(&self.cx, name) {
-                return Ok(Thing::Class(class));
+                return Ok(ResolvedName::Class(class));
             }
             let imported_static = self.c.files.get(self.cx.file).and_then(|scope| {
                 scope
@@ -15099,11 +15154,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             }
             if let Some(alias) = self.c.alias_for(&self.cx, name) {
                 if let Some(class) = alias.expanded.name() {
-                    return Ok(Thing::Class(class.to_string()));
+                    return Ok(ResolvedName::Class(class.to_string()));
                 }
             }
             if self.c.world.package_exists(name) {
-                return Ok(Thing::Package(name.to_string()));
+                return Ok(ResolvedName::Package(name.to_string()));
             }
             Err(self.unresolved(name))
         }
@@ -15292,7 +15347,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             out
         }
 
-        pub fn static_member(&mut self, class: &str, name: &str) -> Lowered<Thing> {
+        pub fn static_member(&mut self, class: &str, name: &str) -> Lowered<ResolvedName> {
             if let Some(boxed) = boxed_of(class) {
                 let wanted = match name {
                     "SIZE_BITS" => "SIZE",
@@ -15302,25 +15357,25 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 return self.static_member(boxed, wanted);
             }
             if class == STRING && name == "CASE_INSENSITIVE_ORDER" {
-                return Ok(Thing::Value(Val::new(
+                return Ok(ResolvedName::Value(Val::new(
                     static_field(STRING, name),
                     Ty::of("java/util/Comparator", vec![Ty::string()]),
                 )));
             }
             if let Some(nested) = self.c.nested_in(class, name) {
-                return Ok(Thing::Class(nested));
+                return Ok(ResolvedName::Class(nested));
             }
             let info = self.c.world.class(class);
             if let Some(info) = &info {
                 if info.enum_entries.iter().any(|entry| entry == name) {
-                    return Ok(Thing::Value(Val::new(
+                    return Ok(ResolvedName::Value(Val::new(
                         static_field(class, name),
                         info.as_ty(),
                     )));
                 }
                 if let Some(companion) = &info.companion {
                     if companion.rsplit('$').next() == Some(name) {
-                        return Ok(Thing::Value(self.class_as_value(class)?));
+                        return Ok(ResolvedName::Value(self.class_as_value(class)?));
                     }
                 }
                 if let Some(property) = info
@@ -15329,7 +15384,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     .find(|one| one.name == name && one.static_)
                 {
                     let property = property.clone();
-                    return Ok(Thing::Value(self.read_property(
+                    return Ok(ResolvedName::Value(self.read_property(
                         None,
                         None,
                         &property,
@@ -15342,7 +15397,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         owner: class.to_string(),
                         name: "values".to_string(),
                         descriptor: format!("()[L{class};"),
-                        through: java::Through::Static,
+                        through: java::InvokeKind::Static,
                         arguments: Vec::new(),
                     };
                     let entries = J::Invoke {
@@ -15350,10 +15405,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         owner: "kotlin/enums/EnumEntriesKt".to_string(),
                         name: "enumEntries".to_string(),
                         descriptor: "([Ljava/lang/Enum;)Lkotlin/enums/EnumEntries;".to_string(),
-                        through: java::Through::Static,
+                        through: java::InvokeKind::Static,
                         arguments: vec![values],
                     };
-                    return Ok(Thing::Value(Val::new(
+                    return Ok(ResolvedName::Value(Val::new(
                         entries,
                         Ty::of("kotlin/enums/EnumEntries", vec![info.as_ty()]),
                     )));
@@ -15361,7 +15416,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 if info.kind == Kind::Object || info.companion.is_some() {
                     let holder = self.class_as_value(class)?;
                     if let Some(found) = self.try_property(holder, name)? {
-                        return Ok(Thing::Value(found));
+                        return Ok(ResolvedName::Value(found));
                     }
                 }
                 let mut waiting: Vec<String> = info
@@ -15382,7 +15437,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             .find(|one| one.name == name && one.static_)
                         {
                             let property = property.clone();
-                            return Ok(Thing::Value(self.read_property(
+                            return Ok(ResolvedName::Value(self.read_property(
                                 None,
                                 None,
                                 &property,
@@ -15503,10 +15558,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 .unwrap_or_default();
             let same_package = package_of(&info.owner) == here;
             match info.visibility {
-                Visible::Public => true,
-                Visible::Private => false,
-                Visible::Internal => same_package,
-                Visible::Protected => {
+                DeclaredVisibility::Public => true,
+                DeclaredVisibility::Private => false,
+                DeclaredVisibility::Internal => same_package,
+                DeclaredVisibility::Protected => {
                     same_package
                         || self
                             .class
@@ -15773,7 +15828,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     let unit_ty = Ty::class("kotlin/time/DurationUnit");
                     let constant =
                         Val::new(static_field("kotlin/time/DurationUnit", unit), unit_ty);
-                    let given = vec![Given::ready(constant)];
+                    let given = vec![CallArgument::ready(constant)];
                     return Ok(Some(self.finish_call(
                         candidates,
                         given,
@@ -16015,7 +16070,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 let j = self.coerce(receiver.clone(), &Ty::class(owner));
                 let rep = match result.primitive_name() {
                     Some(_) => rep_of(&result),
-                    None => Rep::Ref(Method::class_of_ty(&result)),
+                    None => Representation::Ref(Method::class_of_ty(&result)),
                 };
                 return Ok(Some(Val::with_rep(
                     call(j, method, Vec::new()),
@@ -16099,7 +16154,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                                 owner: info.owner.clone(),
                                 name: value_member_name(getter),
                                 descriptor: descriptor.clone(),
-                                through: java::Through::Static,
+                                through: java::InvokeKind::Static,
                                 arguments: vec![unboxed],
                             }
                         } else {
@@ -16203,7 +16258,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         owner: info.owner.clone(),
                         name: getter.clone(),
                         descriptor,
-                        through: java::Through::Virtual,
+                        through: java::InvokeKind::Virtual,
                         arguments,
                     },
                     None => call(j, getter, arguments),
@@ -16223,7 +16278,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             match (info.name.as_str(), receiver) {
                 ("javaClass", Some(held)) => {
                     let j = self.coerce(held, &Ty::any());
-                    Ok(Val::with_rep(call(j, "getClass", Vec::new()), ty, Rep::Ref("java/lang/Class".to_string())))
+                    Ok(Val::with_rep(call(j, "getClass", Vec::new()), ty, Representation::Ref("java/lang/Class".to_string())))
                 }
                 ("lastIndex", Some(held)) if held.ty.is_array() => {
                     let array = self.coerce(held.clone(), &held.ty.non_null());
@@ -16419,27 +16474,27 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let (decl, file, class, busy, state) = {
                 let pending = self.pending.borrow();
                 match &pending[slot] {
-                    Pending::Function {
+                    PendingDeclaration::Function {
                         decl,
                         file,
                         class,
                         state,
                         busy,
                     } => (
-                        Inferring::Function(decl.clone()),
+                        InferenceTarget::Function(decl.clone()),
                         *file,
                         class.clone(),
                         *busy,
                         state.clone(),
                     ),
-                    Pending::Property {
+                    PendingDeclaration::Property {
                         decl,
                         file,
                         class,
                         state,
                         busy,
                     } => (
-                        Inferring::Property(decl.clone()),
+                        InferenceTarget::Property(decl.clone()),
                         *file,
                         class.clone(),
                         *busy,
@@ -16452,8 +16507,8 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             }
             if busy {
                 let spot = match &decl {
-                    Inferring::Function(held) => held.spot,
-                    Inferring::Property(held) => held.spot,
+                    InferenceTarget::Function(held) => held.spot,
+                    InferenceTarget::Property(held) => held.spot,
                 };
                 return Err(at(
                     "EK214",
@@ -16472,7 +16527,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 Ok(ty) => {
                     let mut ty = self.approximate_local(ty);
                     if matches!(ty, Ty::Nothing(_)) {
-                        if let (Inferring::Function(function), Some(class)) =
+                        if let (InferenceTarget::Function(function), Some(class)) =
                             (&decl, class.as_deref())
                         {
                             if function.modifiers.has("override") {
@@ -16564,19 +16619,25 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         fn set_pending(&self, slot: usize, found: Option<Ty>, now_busy: bool) {
             let mut pending = self.pending.borrow_mut();
             match &mut pending[slot] {
-                Pending::Function { state, busy, .. } | Pending::Property { state, busy, .. } => {
+                PendingDeclaration::Function { state, busy, .. }
+                | PendingDeclaration::Property { state, busy, .. } => {
                     *state = found;
                     *busy = now_busy;
                 }
             }
         }
 
-        fn infer_now(&self, decl: &Inferring, file: usize, class: Option<&str>) -> Lowered<Ty> {
+        fn infer_now(
+            &self,
+            decl: &InferenceTarget,
+            file: usize,
+            class: Option<&str>,
+        ) -> Lowered<Ty> {
             let cx = match class {
                 Some(held) if self.class_decl(held).is_some() => self.class_cx(held),
-                _ => TypeCx {
+                _ => TypeContext {
                     file,
-                    ..TypeCx::default()
+                    ..TypeContext::default()
                 },
             };
             let unit_name = class
@@ -16594,7 +16655,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 }
             };
             match decl {
-                Inferring::Function(function) => {
+                InferenceTarget::Function(function) => {
                     let type_parameters = self.type_params_of(
                         &method.cx,
                         &function.type_parameters,
@@ -16645,7 +16706,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     let value = method.value(expr, None)?;
                     Ok(value.ty)
                 }
-                Inferring::Property(property) => {
+                InferenceTarget::Property(property) => {
                     if let Some(receiver) = &property.receiver {
                         let ty = self.resolve_type(&method.cx, receiver)?;
                         method.receivers.push(Receiver {
@@ -17041,11 +17102,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             &self,
             info: &FunctionInfo,
             subst: &HashMap<String, Ty>,
-            arguments: &[Given],
+            arguments: &[CallArgument],
             vars: &[String],
-        ) -> Option<Plan> {
+        ) -> Option<CallPlan> {
             let parameters = &info.parameters;
-            let mut filled: Vec<Option<Filled>> = vec![None; parameters.len()];
+            let mut filled: Vec<Option<ArgumentSlot>> = vec![None; parameters.len()];
             let mut cost = 0u32;
             let mut vararg_used = false;
             let mut position = 0usize;
@@ -17075,7 +17136,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     if filled[slot].is_some() {
                         return None;
                     }
-                    filled[slot] = Some(Filled::Given(index));
+                    filled[slot] = Some(ArgumentSlot::Given(index));
                     continue;
                 }
                 if let Some(name) = &argument.name {
@@ -17085,8 +17146,8 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     let slot = parameters.iter().position(|one| one.name == *name)?;
                     if parameters[slot].vararg {
                         match &mut filled[slot] {
-                            Some(Filled::Many(list)) => list.push(index),
-                            None => filled[slot] = Some(Filled::Many(vec![index])),
+                            Some(ArgumentSlot::Many(list)) => list.push(index),
+                            None => filled[slot] = Some(ArgumentSlot::Many(vec![index])),
                             _ => return None,
                         }
                         vararg_used = true;
@@ -17095,7 +17156,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     if filled[slot].is_some() {
                         return None;
                     }
-                    filled[slot] = Some(Filled::Given(index));
+                    filled[slot] = Some(ArgumentSlot::Given(index));
                     continue;
                 }
                 while position < parameters.len()
@@ -17110,20 +17171,20 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 if parameters[position].vararg {
                     vararg_used = true;
                     match &mut filled[position] {
-                        Some(Filled::Many(list)) => list.push(index),
-                        None => filled[position] = Some(Filled::Many(vec![index])),
+                        Some(ArgumentSlot::Many(list)) => list.push(index),
+                        None => filled[position] = Some(ArgumentSlot::Many(vec![index])),
                         _ => return None,
                     }
                     continue;
                 }
-                filled[position] = Some(Filled::Given(index));
+                filled[position] = Some(ArgumentSlot::Given(index));
                 position += 1;
             }
             let mut defaults = false;
             let mut out = Vec::new();
             for (slot, parameter) in parameters.iter().enumerate() {
                 match filled[slot].take() {
-                    Some(Filled::Given(index)) => {
+                    Some(ArgumentSlot::Given(index)) => {
                         let argument = &arguments[index];
                         let wanted = parameter.ty.substitute(subst);
                         let wanted = if parameter.vararg && argument.spread {
@@ -17142,9 +17203,9 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                                 }
                             }
                         }
-                        out.push(Filled::Given(index));
+                        out.push(ArgumentSlot::Given(index));
                     }
-                    Some(Filled::Many(list)) => {
+                    Some(ArgumentSlot::Many(list)) => {
                         let wanted = parameter.ty.substitute(subst);
                         for index in &list {
                             let argument = &arguments[*index];
@@ -17167,22 +17228,22 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             }
                         }
                         cost += 1;
-                        out.push(Filled::Many(list));
+                        out.push(ArgumentSlot::Many(list));
                     }
-                    Some(Filled::Default) | None => {
+                    Some(ArgumentSlot::Default) | None => {
                         if parameter.vararg {
                             vararg_used = true;
-                            out.push(Filled::Many(Vec::new()));
+                            out.push(ArgumentSlot::Many(Vec::new()));
                         } else if parameter.default {
                             defaults = true;
-                            out.push(Filled::Default);
+                            out.push(ArgumentSlot::Default);
                         } else {
                             return None;
                         }
                     }
                 }
             }
-            Some(Plan {
+            Some(CallPlan {
                 filled: out,
                 cost,
                 defaults,
@@ -17370,9 +17431,9 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub fn choose(
             &self,
             candidates: Vec<Candidate>,
-            arguments: &[Given],
-        ) -> Option<(Candidate, Plan)> {
-            let mut applicable: Vec<(Candidate, Plan)> = Vec::new();
+            arguments: &[CallArgument],
+        ) -> Option<(Candidate, CallPlan)> {
+            let mut applicable: Vec<(Candidate, CallPlan)> = Vec::new();
             let mut best_level = usize::MAX;
             for candidate in candidates {
                 if candidate.level > best_level {
@@ -17461,9 +17522,12 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             Some(applicable.swap_remove(pick))
         }
 
-        pub fn given_arguments(&mut self, arguments: &[tree::Argument]) -> Lowered<Vec<Given>> {
+        pub fn given_arguments(
+            &mut self,
+            arguments: &[tree::Argument],
+        ) -> Lowered<Vec<CallArgument>> {
             let defer_calls = std::mem::take(&mut self.arguments_expected);
-            let mut out: Vec<Given> = Vec::new();
+            let mut out: Vec<CallArgument> = Vec::new();
             let mut marks: Vec<usize> = Vec::new();
             for argument in arguments {
                 let deferred = matches!(
@@ -17479,7 +17543,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     || defer_calls && contains_lambda_call(&argument.value)
                     || branches_hold_lambda_call(&argument.value);
                 if deferred {
-                    out.push(Given {
+                    out.push(CallArgument {
                         name: argument.name.clone(),
                         spread: argument.spread,
                         value: ArgValue::Deferred(argument.value.clone()),
@@ -17528,7 +17592,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         out[index].value = ArgValue::Ready(spilled);
                     }
                 }
-                out.push(Given {
+                out.push(CallArgument {
                     name: argument.name.clone(),
                     spread: argument.spread,
                     value: ArgValue::Ready(value),
@@ -17623,7 +17687,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     }
                     let holder = self.thing(receiver)?;
                     match holder {
-                        Thing::Value(value) => {
+                        ResolvedName::Value(value) => {
                             if let Some(found) = self.intrinsic_call(
                                 name,
                                 Some(value.clone()),
@@ -17635,7 +17699,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             }
                             let value = if *safe { self.spill(value) } else { value };
                             let given = self.given_arguments(arguments)?;
-                            if *safe && !matches!(value.rep, Rep::Prim(_)) {
+                            if *safe && !matches!(value.rep, Representation::Prim(_)) {
                                 let name = name.clone();
                                 let explicit = explicit.clone();
                                 let expected = expected.cloned();
@@ -17646,11 +17710,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             }
                             self.call_on(value, name, given, &explicit, expected)
                         }
-                        Thing::Class(class) => {
+                        ResolvedName::Class(class) => {
                             let given = self.given_arguments(arguments)?;
                             self.call_static(&class, name, given, &explicit, expected)
                         }
-                        Thing::Package(package) => {
+                        ResolvedName::Package(package) => {
                             let class = format!("{package}/{name}");
                             let given = self.given_arguments(arguments)?;
                             if self.c.world.exists(&class) {
@@ -17698,7 +17762,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub fn invoke_value(
             &mut self,
             function: Val,
-            given: Vec<Given>,
+            given: Vec<CallArgument>,
             expected: Option<&Ty>,
         ) -> Lowered<Val> {
             if let Ty::Function(parts, _) = &function.ty {
@@ -17709,7 +17773,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         if let Some(receiver) = self.implicit_receiver(wanted) {
                             given.insert(
                                 0,
-                                Given {
+                                CallArgument {
                                     name: None,
                                     spread: false,
                                     value: ArgValue::Ready(receiver),
@@ -17759,7 +17823,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
 
         fn synchronized_block(
             &mut self,
-            given: &[Given],
+            given: &[CallArgument],
             expected: Option<&Ty>,
         ) -> Lowered<Option<Val>> {
             let [first, second] = given else {
@@ -17782,7 +17846,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let lambda = lambda.clone();
             self.open();
             let value = self.block_value(&lambda.body, expected)?;
-            let dead = self.is_dead() || value.rep == Rep::Never;
+            let dead = self.is_dead() || value.rep == Representation::Never;
             let (inner, _) = self.close_keep_open();
             self.pop_frame();
             let ty = if dead {
@@ -17791,13 +17855,13 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 value.ty.clone()
             };
             let rep = if dead {
-                Rep::Never
-            } else if value.rep == Rep::Void || ty.is_unit() {
-                Rep::Void
+                Representation::Never
+            } else if value.rep == Representation::Void || ty.is_unit() {
+                Representation::Void
             } else {
                 rep_of(&ty)
             };
-            let result = if matches!(rep, Rep::Void | Rep::Never) {
+            let result = if matches!(rep, Representation::Void | Representation::Never) {
                 None
             } else {
                 Some(self.temp_name("sync"))
@@ -17829,7 +17893,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub fn call_by_name(
             &mut self,
             name: &str,
-            given: Vec<Given>,
+            given: Vec<CallArgument>,
             explicit: &[Ty],
             expected: Option<&Ty>,
             spot: Spot,
@@ -18098,7 +18162,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             &mut self,
             value: Val,
             name: &str,
-            given: Vec<Given>,
+            given: Vec<CallArgument>,
             explicit: &[Ty],
             expected: Option<&Ty>,
         ) -> Lowered<Val> {
@@ -18205,7 +18269,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             .is_some_and(|parts| parts.receiver.is_some()),
                     };
                     if typed {
-                        let mut all = vec![Given::ready(value)];
+                        let mut all = vec![CallArgument::ready(value)];
                         all.extend(given);
                         return self.invoke_inline_lambda(&local, all, expected);
                     }
@@ -18223,7 +18287,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     {
                         let function =
                             self.read_property(None, None, &property, &HashMap::new())?;
-                        let mut all = vec![Given::ready(value)];
+                        let mut all = vec![CallArgument::ready(value)];
                         all.extend(given);
                         return self.invoke_value(function, all, expected);
                     }
@@ -18236,7 +18300,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             .function_parts()
                             .is_some_and(|parts| parts.receiver.is_some())
                         {
-                            let mut all = vec![Given::ready(value)];
+                            let mut all = vec![CallArgument::ready(value)];
                             all.extend(given);
                             return self.invoke_value(property, all, expected);
                         }
@@ -18255,7 +18319,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             &mut self,
             class: &str,
             name: &str,
-            given: Vec<Given>,
+            given: Vec<CallArgument>,
             explicit: &[Ty],
             expected: Option<&Ty>,
         ) -> Lowered<Val> {
@@ -18340,7 +18404,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             name: &str,
             qualifier: Option<&TypeRef>,
             label: Option<&str>,
-            given: Vec<Given>,
+            given: Vec<CallArgument>,
             expected: Option<&Ty>,
         ) -> Lowered<Val> {
             let mut class = self
@@ -18489,7 +18553,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub fn construct(
             &mut self,
             class: &str,
-            given: Vec<Given>,
+            given: Vec<CallArgument>,
             explicit: &[Ty],
             expected: Option<&Ty>,
             outer: Option<Val>,
@@ -18540,7 +18604,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         fn sam_constructor(
             &mut self,
             info: &ClassInfo,
-            given: &[Given],
+            given: &[CallArgument],
             explicit: &[Ty],
             expected: Option<&Ty>,
         ) -> Lowered<Option<Val>> {
@@ -18594,7 +18658,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub fn finish_call(
             &mut self,
             candidates: Vec<Candidate>,
-            given: Vec<Given>,
+            given: Vec<CallArgument>,
             explicit: &[Ty],
             expected: Option<&Ty>,
             name: &str,
@@ -18684,12 +18748,12 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
     }
 
     impl Method<'_, '_, '_> {
-        fn lambda_slot(candidate: &Candidate, plan: &Plan, index: usize) -> Option<Ty> {
+        fn lambda_slot(candidate: &Candidate, plan: &CallPlan, index: usize) -> Option<Ty> {
             plan.filled
                 .iter()
                 .zip(candidate.info.parameters.iter())
                 .find_map(|(slot, parameter)| match slot {
-                    Filled::Given(at) if *at == index => Some(parameter.ty.clone()),
+                    ArgumentSlot::Given(at) if *at == index => Some(parameter.ty.clone()),
                     _ => None,
                 })
         }
@@ -18697,7 +18761,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub fn by_lambda_result(
             &mut self,
             candidates: Vec<Candidate>,
-            given: &[Given],
+            given: &[CallArgument],
         ) -> Vec<Candidate> {
             if candidates.len() < 2 {
                 return candidates;
@@ -18741,7 +18805,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     let _ = value;
                 }
                 for (slot, parameter) in plan.filled.iter().zip(candidate.info.parameters.iter()) {
-                    if let Filled::Given(at) = slot {
+                    if let ArgumentSlot::Given(at) = slot {
                         if let ArgValue::Ready(held) = &given[*at].value {
                             self.bind(&parameter.ty, &held.ty, &vars, &mut subst);
                         }
@@ -18833,13 +18897,13 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         }
     }
 
-    pub fn mask_ints(plan: &Plan) -> Vec<J> {
+    pub fn mask_ints(plan: &CallPlan) -> Vec<J> {
         let count = plan.filled.len();
         let mut out = Vec::new();
         for chunk in 0..count.div_ceil(32).max(1) {
             let mut mask: i64 = 0;
             for (index, one) in plan.filled.iter().enumerate().skip(chunk * 32).take(32) {
-                if matches!(one, Filled::Default) {
+                if matches!(one, ArgumentSlot::Default) {
                     mask |= 1i64 << (index - chunk * 32);
                 }
             }
@@ -18852,8 +18916,8 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub fn emit_call(
             &mut self,
             candidate: Candidate,
-            plan: Plan,
-            given: Vec<Given>,
+            plan: CallPlan,
+            given: Vec<CallArgument>,
             explicit: &[Ty],
             expected: Option<&Ty>,
         ) -> Lowered<Val> {
@@ -18886,7 +18950,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             for (slot, parameter) in plan.filled.iter().zip(info.parameters.iter()) {
                 let formal = parameter.ty.substitute(&subst);
                 match slot {
-                    Filled::Given(index) => {
+                    ArgumentSlot::Given(index) => {
                         if let Some(ty) = given[*index].ty() {
                             let formal = if given[*index].spread {
                                 Ty::array_of(formal)
@@ -18898,7 +18962,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             }
                         }
                     }
-                    Filled::Many(list) => {
+                    ArgumentSlot::Many(list) => {
                         for index in list {
                             if let Some(ty) = given[*index].ty() {
                                 let formal = if given[*index].spread {
@@ -18910,7 +18974,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             }
                         }
                     }
-                    Filled::Default => {}
+                    ArgumentSlot::Default => {}
                 }
             }
             let declared_returns = if info.constructor {
@@ -18949,7 +19013,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             }
             let mut lowered: HashMap<usize, Val> = HashMap::new();
             for (slot, parameter) in plan.filled.iter().zip(info.parameters.iter()) {
-                if let Filled::Many(list) = slot {
+                if let ArgumentSlot::Many(list) = slot {
                     for index in list {
                         if let ArgValue::Deferred(expr) = &given[*index].value {
                             let formal = parameter.ty.substitute(&subst);
@@ -18959,7 +19023,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         }
                     }
                 }
-                if let Filled::Given(index) = slot {
+                if let ArgumentSlot::Given(index) = slot {
                     if let ArgValue::Deferred(expr) = &given[*index].value {
                         let formal = parameter.ty.substitute(&subst);
                         self.label_hint = Some(if info.name == "<init>" {
@@ -19008,7 +19072,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     erase_params(&parameter.ty)
                 };
                 match slot {
-                    Filled::Given(index) => {
+                    ArgumentSlot::Given(index) => {
                         let value = match lowered.remove(index) {
                             Some(held) => held,
                             None => match &given[*index].value {
@@ -19043,7 +19107,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             };
                         arguments.push(self.coerce(value, &target));
                     }
-                    Filled::Many(list) => {
+                    ArgumentSlot::Many(list) => {
                         let element_ty = erased.clone();
                         if list.len() == 1 && given[list[0]].spread {
                             let value = match &given[list[0]].value {
@@ -19075,7 +19139,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         }
                         arguments.push(self.array_literal(&element_ty, items));
                     }
-                    Filled::Default => arguments.push(default_value(&rep_of(&erased))),
+                    ArgumentSlot::Default => arguments.push(default_value(&rep_of(&erased))),
                 }
             }
             let returns = declared_returns.substitute(&subst);
@@ -19089,24 +19153,29 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 if value_class(&class).is_some() && !candidate.super_call {
                     rep_of(&Ty::class(&class))
                 } else {
-                    Rep::Ref(class)
+                    Representation::Ref(class)
                 }
             } else if declared_returns.is_unit() && !declared_returns.is_nullable() && !info.java
                 || info.java && info.returns.is_unit() && info.returns.null() == Null::Not
             {
-                Rep::Void
+                Representation::Void
             } else if declared_returns.is_nothing() {
-                Rep::Never
+                Representation::Never
             } else if candidate.invoke_on.is_some()
-                && matches!(rep_of(&erased_returns), Rep::Value(..) | Rep::Prim(_))
+                && matches!(
+                    rep_of(&erased_returns),
+                    Representation::Value(..) | Representation::Prim(_)
+                )
             {
-                Rep::Ref(OBJECT.to_string())
+                Representation::Ref(OBJECT.to_string())
             } else {
                 rep_of(&erased_returns)
             };
             let suspending = info.suspend && !info.constructor;
-            let rep = if suspending && matches!(rep, Rep::Prim(_) | Rep::Value(..)) {
-                Rep::Ref(OBJECT.to_string())
+            let rep = if suspending
+                && matches!(rep, Representation::Prim(_) | Representation::Value(..))
+            {
+                Representation::Ref(OBJECT.to_string())
             } else {
                 rep
             };
@@ -19114,7 +19183,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             if suspending {
                 let name = self.declare_temp(
                     "cont",
-                    &Rep::Ref(BLOCKING_CONTINUATION.to_string()),
+                    &Representation::Ref(BLOCKING_CONTINUATION.to_string()),
                     Some(J::New {
                         what: named(BLOCKING_CONTINUATION),
                         arguments: Vec::new(),
@@ -19130,7 +19199,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 let boxed: Vec<J> = arguments;
                 let invoked = call(holder, "invoke", boxed);
                 match &rep {
-                    Rep::Ref(class) if class != OBJECT && !suspending => {
+                    Representation::Ref(class) if class != OBJECT && !suspending => {
                         cast(named(class), invoked)
                     }
                     _ => invoked,
@@ -19171,7 +19240,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     ));
                 }
                 if value_class(class).is_some() && !candidate.super_call {
-                    let reps: Vec<Rep> = info
+                    let reps: Vec<Representation> = info
                         .parameters
                         .iter()
                         .map(|one| rep_of(&erase_params(&one.ty)))
@@ -19187,7 +19256,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                                 descriptor.rsplit_once(')').map_or("(", |(held, _)| held),
                                 rep_descriptor(&returns)
                             ),
-                            through: java::Through::Static,
+                            through: java::InvokeKind::Static,
                             arguments: all,
                         },
                         _ => value_static(
@@ -19230,7 +19299,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         owner: info.owner.clone(),
                         name,
                         descriptor: descriptor.clone(),
-                        through: java::Through::Static,
+                        through: java::InvokeKind::Static,
                         arguments: all,
                     },
                     (_, _, true) => {
@@ -19292,7 +19361,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 let dispatch = candidate.dispatch.clone().expect("dispatch");
                 let owner_ty = Ty::class(&info.owner);
                 let holder = match &dispatch.rep {
-                    Rep::Ref(have)
+                    Representation::Ref(have)
                         if *have != info.owner
                             && !info.java
                             && self
@@ -19303,7 +19372,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     {
                         self.cast_to(dispatch, &owner_ty)
                     }
-                    Rep::Ref(have)
+                    Representation::Ref(have)
                         if *have != info.owner
                             && info.java
                             && info.parameters.iter().any(|one| !one.ty.is_primitive()) =>
@@ -19319,7 +19388,9 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     let finished =
                         static_call(BLOCKING_CONTINUATION, "finish", vec![j, J::Name(name)]);
                     match &rep {
-                        Rep::Ref(class) if class != OBJECT => cast(named(class), finished),
+                        Representation::Ref(class) if class != OBJECT => {
+                            cast(named(class), finished)
+                        }
                         _ => finished,
                     }
                 }
@@ -19327,7 +19398,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             };
             if returns.is_unit()
                 && !returns.is_nullable()
-                && !matches!(rep, Rep::Void | Rep::Never)
+                && !matches!(rep, Representation::Void | Representation::Never)
                 && !info.constructor
             {
                 if statement_worthy(&j) {
@@ -19338,12 +19409,12 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 return Ok(Val::unit());
             }
             match rep {
-                Rep::Never => {
+                Representation::Never => {
                     self.emit(S::Express(j));
                     self.emit_nothing();
                     Ok(Val::never())
                 }
-                Rep::Void => Ok(Val::with_rep(j, Ty::unit(), Rep::Void)),
+                Representation::Void => Ok(Val::with_rep(j, Ty::unit(), Representation::Void)),
                 other => Ok(Val::with_rep(j, returns, other)),
             }
         }
@@ -19370,7 +19441,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             owner: info.owner.clone(),
                             name: info.jvm_name.clone(),
                             descriptor,
-                            through: java::Through::Virtual,
+                            through: java::InvokeKind::Virtual,
                             arguments,
                         };
                     }
@@ -19380,16 +19451,16 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             match (&info.descriptor, exact) {
                 (Some(descriptor), true) => {
                     let through = if info.static_ {
-                        java::Through::Static
+                        java::InvokeKind::Static
                     } else if self
                         .c
                         .world
                         .class(&info.owner)
                         .is_some_and(|held| held.is_interface())
                     {
-                        java::Through::Interface
+                        java::InvokeKind::Interface
                     } else {
-                        java::Through::Virtual
+                        java::InvokeKind::Virtual
                     };
                     J::Invoke {
                         on: if info.static_ { None } else { on.map(Box::new) },
@@ -19419,7 +19490,12 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             }
         }
 
-        fn spread_join(&mut self, element: &Ty, list: &[usize], given: &[Given]) -> Lowered<J> {
+        fn spread_join(
+            &mut self,
+            element: &Ty,
+            list: &[usize],
+            given: &[CallArgument],
+        ) -> Lowered<J> {
             let items = self.temp_name("spread");
             self.emit(S::Declare {
                 what: named("java/util/ArrayList"),
@@ -19501,7 +19577,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 vec![J::Name(counter.clone())],
             );
             let converted = self.coerce(
-                Val::with_rep(got, element.clone(), Rep::Ref(OBJECT.to_string())),
+                Val::with_rep(
+                    got,
+                    element.clone(),
+                    Representation::Ref(OBJECT.to_string()),
+                ),
                 element,
             );
             let body = vec![at_line(
@@ -19556,11 +19636,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 constructing: None,
                 invoke_on: None,
             };
-            let given: Vec<Given> = arguments.into_iter().map(Given::ready).collect();
+            let given: Vec<CallArgument> = arguments.into_iter().map(CallArgument::ready).collect();
             let plan = self
                 .plan(&candidate.info, &candidate.subst, &given, &[])
-                .unwrap_or(Plan {
-                    filled: (0..given.len()).map(Filled::Given).collect(),
+                .unwrap_or(CallPlan {
+                    filled: (0..given.len()).map(ArgumentSlot::Given).collect(),
                     cost: 0,
                     defaults: false,
                     vararg: false,
@@ -19574,7 +19654,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             name: &str,
             arguments: Vec<Val>,
         ) -> Lowered<Val> {
-            let given: Vec<Given> = arguments.into_iter().map(Given::ready).collect();
+            let given: Vec<CallArgument> = arguments.into_iter().map(CallArgument::ready).collect();
             if let Some(found) = self.builtin_call(&receiver, name, &given)? {
                 return Ok(found);
             }
@@ -19660,7 +19740,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             &mut self,
             receiver: &Val,
             name: &str,
-            given: &[Given],
+            given: &[CallArgument],
         ) -> Lowered<Option<Val>> {
             let ready: Vec<Val> = given
                 .iter()
@@ -19751,7 +19831,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                                         owner: "kotlin/jvm/internal/ArrayIteratorsKt".to_string(),
                                         name: "iterator".to_string(),
                                         descriptor,
-                                        through: java::Through::Static,
+                                        through: java::InvokeKind::Static,
                                         arguments: vec![array],
                                     },
                                     Ty::class(&iterator),
@@ -19764,7 +19844,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                                     name: "iterator".to_string(),
                                     descriptor: "([Ljava/lang/Object;)Ljava/util/Iterator;"
                                         .to_string(),
-                                    through: java::Through::Static,
+                                    through: java::InvokeKind::Static,
                                     arguments: vec![array],
                                 },
                                 Ty::of("kotlin/collections/Iterator", vec![element]),
@@ -19797,7 +19877,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 return Ok(Some(Val::with_rep(
                     call(j, "remove", vec![index]),
                     element,
-                    Rep::Ref(OBJECT.to_string()),
+                    Representation::Ref(OBJECT.to_string()),
                 )));
             }
             if matches!(
@@ -19844,7 +19924,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             }
             if name == "toString"
                 && ready.is_empty()
-                && (receiver.ty.is_nullable() || matches!(receiver.rep, Rep::Prim(_)))
+                && (receiver.ty.is_nullable() || matches!(receiver.rep, Representation::Prim(_)))
             {
                 let j = self.coerce(receiver.clone(), &Ty::any().nullable());
                 return Ok(Some(Val::new(
@@ -20205,10 +20285,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         Ty::object_array_of(element.clone())
                     };
                     if spread {
-                        let given: Vec<Given> = values
+                        let given: Vec<CallArgument> = values
                             .into_iter()
                             .zip(arguments.iter())
-                            .map(|(value, argument)| Given {
+                            .map(|(value, argument)| CallArgument {
                                 name: None,
                                 spread: argument.spread,
                                 value: ArgValue::Ready(value),
@@ -20409,20 +20489,22 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         name: String::new(),
                         jvm: String::new(),
                         ty: function.clone(),
-                        rep: Rep::Ref(OBJECT.to_string()),
+                        rep: Representation::Ref(OBJECT.to_string()),
                         mutable: false,
                         slot: Slot::Inline(inline),
                     };
-                    let given = arguments.into_iter().map(Given::ready).collect();
+                    let given = arguments.into_iter().map(CallArgument::ready).collect();
                     self.invoke_inline_lambda(&local, given, expected)?
                 }
                 other => {
                     let held = self.value(other, Some(function))?;
-                    let given = arguments.into_iter().map(Given::ready).collect();
+                    let given = arguments.into_iter().map(CallArgument::ready).collect();
                     self.invoke_value(held, given, expected)?
                 }
             };
-            let value = if matches!(value.rep, Rep::Void | Rep::Never) || is_stable(&value.j) {
+            let value = if matches!(value.rep, Representation::Void | Representation::Never)
+                || is_stable(&value.j)
+            {
                 value
             } else {
                 self.spill(value)
@@ -20553,13 +20635,16 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             types.push(held.clone());
                         }
                         types.extend(parts.parameters.iter().cloned());
-                        let reps = types.iter().map(|_| Rep::Ref(OBJECT.to_string())).collect();
+                        let reps = types
+                            .iter()
+                            .map(|_| Representation::Ref(OBJECT.to_string()))
+                            .collect();
                         (
                             function_class(parts),
                             types,
                             reps,
                             parts.returns.clone(),
-                            Rep::Ref(OBJECT.to_string()),
+                            Representation::Ref(OBJECT.to_string()),
                             parts.receiver.is_some(),
                         )
                     }
@@ -20578,16 +20663,16 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             .iter()
                             .map(|one| one.ty.substitute(&map))
                             .collect();
-                        let reps: Vec<Rep> = sam
+                        let reps: Vec<Representation> = sam
                             .parameters
                             .iter()
                             .map(|one| rep_of(&erase_params(&one.ty)))
                             .collect();
                         let returns = sam.returns.substitute(&map);
                         let return_rep = if sam.suspend {
-                            Rep::Ref(OBJECT.to_string())
+                            Representation::Ref(OBJECT.to_string())
                         } else if sam.returns.is_unit() && !sam.returns.is_nullable() {
-                            Rep::Void
+                            Representation::Void
                         } else {
                             rep_of(&erase_params(&sam.returns))
                         };
@@ -20600,13 +20685,16 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     } if name.starts_with("kotlin/jvm/functions/Function") => {
                         let mut types: Vec<Ty> = arguments.iter().map(Arg::ty).collect();
                         let returns = types.pop().unwrap_or_else(Ty::unit);
-                        let reps = types.iter().map(|_| Rep::Ref(OBJECT.to_string())).collect();
+                        let reps = types
+                            .iter()
+                            .map(|_| Representation::Ref(OBJECT.to_string()))
+                            .collect();
                         (
                             name.clone(),
                             types,
                             reps,
                             returns,
-                            Rep::Ref(OBJECT.to_string()),
+                            Representation::Ref(OBJECT.to_string()),
                             false,
                         )
                     }
@@ -20650,13 +20738,16 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             returns: Ty::Error,
                             suspend: false,
                         };
-                        let reps = types.iter().map(|_| Rep::Ref(OBJECT.to_string())).collect();
+                        let reps = types
+                            .iter()
+                            .map(|_| Representation::Ref(OBJECT.to_string()))
+                            .collect();
                         (
                             function_class(&parts),
                             types,
                             reps,
                             Ty::Error,
-                            Rep::Ref(OBJECT.to_string()),
+                            Representation::Ref(OBJECT.to_string()),
                             receiver_type.is_some(),
                         )
                     }
@@ -20716,7 +20807,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     )
                 }
             };
-            Ok(Val::with_rep(j, ty, Rep::Ref(interface)))
+            Ok(Val::with_rep(j, ty, Representation::Ref(interface)))
         }
 
         fn reference_shape(&mut self, expr: &Expr) -> Lowered<(Vec<Ty>, Ty)> {
@@ -20750,7 +20841,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 Some(held) => {
                     let thing = self.thing(held)?;
                     match thing {
-                        Thing::Class(class) => {
+                        ResolvedName::Class(class) => {
                             let ty = Ty::class(&class);
                             if let Some((info, _)) = self
                                 .find_functions(&ty, name)
@@ -20769,7 +20860,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             }
                             Ok((vec![ty], Ty::Error))
                         }
-                        Thing::Value(value) => {
+                        ResolvedName::Value(value) => {
                             if let Some((info, _)) = self.find_functions(&value.ty, name).first() {
                                 return Ok((
                                     info.parameters.iter().map(|one| one.ty.clone()).collect(),
@@ -20778,7 +20869,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             }
                             Ok((Vec::new(), Ty::Error))
                         }
-                        Thing::Package(_) => Ok((Vec::new(), Ty::Error)),
+                        ResolvedName::Package(_) => Ok((Vec::new(), Ty::Error)),
                     }
                 }
             }
@@ -20790,9 +20881,9 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             expr: &Expr,
             interface: &str,
             parameters: Vec<Ty>,
-            parameter_reps: Vec<Rep>,
+            parameter_reps: Vec<Representation>,
             returns: Ty,
-            return_rep: Rep,
+            return_rep: Representation,
             receiver: bool,
             label: &str,
         ) -> Lowered<(J, Ty, Vec<Ty>)> {
@@ -20801,7 +20892,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     receiver: Some(held),
                     ..
                 } => match self.thing(held)? {
-                    Thing::Value(value) => Some(self.spill(value)),
+                    ResolvedName::Value(value) => Some(self.spill(value)),
                     _ => None,
                 },
                 _ => None,
@@ -20849,7 +20940,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 } else {
                     "kotlin/coroutines/Continuation"
                 };
-                java_parameters.push((Some(rep_written(&Rep::Ref(held.to_string()))), name));
+                java_parameters.push((
+                    Some(rep_written(&Representation::Ref(held.to_string()))),
+                    name,
+                ));
             }
             let mut found_parameters: Vec<Ty> = parameters.clone();
             let outcome: Lowered<Val> = (|| -> Lowered<Val> {
@@ -20931,8 +21025,8 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         name,
                         ..
                     } => {
-                        let mut given: Vec<Given> =
-                            values.iter().cloned().map(Given::ready).collect();
+                        let mut given: Vec<CallArgument> =
+                            values.iter().cloned().map(CallArgument::ready).collect();
                         match reference_receiver {
                             None => {
                                 if let Some(class) = self.c.resolve_class_simple(&self.cx, name) {
@@ -20945,7 +21039,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             Some(held) => match &bound_reference {
                                 Some(bound) => self.call_on(bound.clone(), name, given, &[], None),
                                 None => {
-                                    if let Thing::Class(class) = self.thing(held)? {
+                                    if let ResolvedName::Class(class) = self.thing(held)? {
                                         let class_ty = self
                                             .c
                                             .world
@@ -20977,7 +21071,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                                         unreachable!()
                                     };
                                     let class = match self.thing(held)? {
-                                        Thing::Class(class) => class,
+                                        ResolvedName::Class(class) => class,
                                         _ => OBJECT.to_string(),
                                     };
                                     let class_ty = self
@@ -21029,7 +21123,8 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 .last()
                 .map(|one| one.inferred.clone())
                 .unwrap_or_default();
-            let mut found_returns = if matches!(value.rep, Rep::Never) || self.is_dead() {
+            let mut found_returns = if matches!(value.rep, Representation::Never) || self.is_dead()
+            {
                 inferred.first().cloned().unwrap_or(Ty::nothing())
             } else {
                 value.ty.clone()
@@ -21039,25 +21134,25 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             }
             if !self.is_dead() {
                 match &return_rep {
-                    Rep::Void => {
-                        if !matches!(value.rep, Rep::Never) {
+                    Representation::Void => {
+                        if !matches!(value.rep, Representation::Never) {
                             self.statement_of(value);
                         }
                     }
                     rep => {
                         if returns.is_unit()
                             && (interface.starts_with("kotlin/jvm/functions/Function")
-                                || matches!(rep, Rep::Ref(_)))
+                                || matches!(rep, Representation::Ref(_)))
                         {
-                            if !matches!(value.rep, Rep::Never) {
+                            if !matches!(value.rep, Representation::Never) {
                                 self.statement_of(value);
                             }
                             self.emit(S::Return(Some(unit_value())));
-                        } else if value.rep == Rep::Void {
+                        } else if value.rep == Representation::Void {
                             self.emit(S::Express(value.j));
                             let j = self.coerce_rep(Val::unit(), rep);
                             self.emit(S::Return(Some(j)));
-                        } else if !matches!(value.rep, Rep::Never) {
+                        } else if !matches!(value.rep, Representation::Never) {
                             let j = self.coerce_rep(value, rep);
                             self.emit(S::Return(Some(j)));
                         }
@@ -21154,7 +21249,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     Val::with_rep(
                         call(j, getter, Vec::new()),
                         ty,
-                        Rep::Ref(OBJECT.to_string()),
+                        Representation::Ref(OBJECT.to_string()),
                     )
                 } else {
                     self.operator_call(holder.clone(), &component, Vec::new())?
@@ -21172,8 +21267,8 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub fn inline_call(
             &mut self,
             candidate: Candidate,
-            plan: Plan,
-            given: Vec<Given>,
+            plan: CallPlan,
+            given: Vec<CallArgument>,
             subst: HashMap<String, Ty>,
             vars: Vec<String>,
             _expected: Option<&Ty>,
@@ -21199,7 +21294,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         .map(|held| held.type_parameters.clone())
                         .unwrap_or_default();
                     params.extend(info.type_parameters.iter().cloned());
-                    TypeCx {
+                    TypeContext {
                         file,
                         classes: Vec::new(),
                         params,
@@ -21219,7 +21314,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             for (slot, parameter) in plan.filled.iter().zip(info.parameters.iter()) {
                 let ty = parameter.ty.substitute(&subst);
                 match slot {
-                    Filled::Given(index) => match &given[*index].value {
+                    ArgumentSlot::Given(index) => match &given[*index].value {
                         ArgValue::Ready(value) => {
                             let value = if parameter.vararg && !given[*index].spread {
                                 let element = erase_params(&parameter.ty).nullable_if_boxed();
@@ -21284,7 +21379,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             }
                         }
                     },
-                    Filled::Many(list) => {
+                    ArgumentSlot::Many(list) => {
                         let element = erase_params(&parameter.ty).nullable_if_boxed();
                         let mut items = Vec::new();
                         let mut spread_value = None;
@@ -21322,7 +21417,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         };
                         bound.push((parameter.name.clone(), array_ty, Some(value), None, None));
                     }
-                    Filled::Default => {
+                    ArgumentSlot::Default => {
                         let default = decl
                             .parameters
                             .iter()
@@ -21379,19 +21474,19 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let unknown_returns = returns.mentions_any_param(&vars);
             let result_rep = if returns.is_unit() && !returns.is_nullable() || returns.is_nothing()
             {
-                Rep::Void
+                Representation::Void
             } else if unknown_returns {
-                Rep::Ref(OBJECT.to_string())
+                Representation::Ref(OBJECT.to_string())
             } else {
                 rep_of(&returns)
             };
-            let result_name = if result_rep == Rep::Void {
+            let result_name = if result_rep == Representation::Void {
                 None
             } else {
                 Some(self.declare_temp("result", &result_rep, Some(default_value(&result_rep))))
             };
             let exit = self.temp_name("inline");
-            self.hides.push(Hide {
+            self.hides.push(ScopeMarks {
                 scopes: (0, 0),
                 receivers: (0, receivers_at),
                 targets: (0, 0),
@@ -21476,7 +21571,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                                 name,
                                 jvm: String::new(),
                                 ty: ty.clone(),
-                                rep: Rep::Ref(OBJECT.to_string()),
+                                rep: Representation::Ref(OBJECT.to_string()),
                                 mutable: false,
                                 slot: Slot::Inline(inline),
                             });
@@ -21603,7 +21698,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub fn invoke_inline_lambda(
             &mut self,
             local: &Local,
-            given: Vec<Given>,
+            given: Vec<CallArgument>,
             expected: Option<&Ty>,
         ) -> Lowered<Val> {
             let Slot::Inline(inline) = &local.slot else {
@@ -21652,13 +21747,13 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let returns = self.reified(&parts.returns);
             let unknown = matches!(returns, Ty::Param { .. }) || returns.is_error();
             let result_rep = if returns.is_unit() && !returns.is_nullable() {
-                Rep::Void
+                Representation::Void
             } else if unknown {
-                Rep::Ref(OBJECT.to_string())
+                Representation::Ref(OBJECT.to_string())
             } else {
                 rep_of(&returns)
             };
-            let result_name = if result_rep == Rep::Void {
+            let result_name = if result_rep == Representation::Void {
                 None
             } else {
                 Some(self.declare_temp("lambda", &result_rep, Some(default_value(&result_rep))))
@@ -21666,7 +21761,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let exit = self.temp_name("lambda");
             let caller_cx = inline.cx.clone();
             let saved_hides = self.hides.split_off(inline.hides.min(self.hides.len()));
-            self.hides.push(Hide {
+            self.hides.push(ScopeMarks {
                 scopes: (inline.scopes, self.scopes.len()),
                 receivers: (inline.receivers, self.receivers.len()),
                 targets: (inline.targets, self.targets.len()),
@@ -21754,7 +21849,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 .last()
                 .map(|one| one.inferred.clone())
                 .unwrap_or_default();
-            if !self.is_dead() && !matches!(value.rep, Rep::Never) {
+            if !self.is_dead() && !matches!(value.rep, Representation::Never) {
                 inferred.push(value.ty.clone());
                 match &result_name {
                     Some(name) => {
@@ -21835,8 +21930,8 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let target = match receiver.unparenthesized() {
                 _ if own_parameter.is_some() => own_parameter,
                 Expr::Name(..) | Expr::Member { .. } => match self.thing(receiver) {
-                    Ok(Thing::Class(class)) => Some(Ty::class(&class)),
-                    Ok(Thing::Value(value)) => {
+                    Ok(ResolvedName::Class(class)) => Some(Ty::class(&class)),
+                    Ok(ResolvedName::Value(value)) => {
                         let object = self.coerce(value, &Ty::any());
                         let j = call(object, "getClass", Vec::new());
                         if java {
@@ -21936,7 +22031,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         }
     }
 
-    pub struct Counted {
+    pub struct CountedRange {
         pub first: Val,
         pub last: Val,
         pub step: Option<Val>,
@@ -22059,12 +22154,12 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 Expr::Member { receiver, name, .. } => {
                     let holder = self.thing(receiver)?;
                     match holder {
-                        Thing::Value(value) => {
+                        ResolvedName::Value(value) => {
                             let value = self.spill(value);
                             self.property_place(value, name)?
                                 .ok_or_else(|| self.unresolved(name))
                         }
-                        Thing::Class(class) => {
+                        ResolvedName::Class(class) => {
                             let info = self
                                 .c
                                 .world
@@ -22087,7 +22182,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             self.property_place(holder, name)?
                                 .ok_or_else(|| self.unresolved(name))
                         }
-                        Thing::Package(package) => {
+                        ResolvedName::Package(package) => {
                             let members = self.c.world.package(&package);
                             let found = members
                                 .borrow()
@@ -22215,7 +22310,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         return Ok(Val::with_rep(
                             call(holder.clone(), "getValue", Vec::new()),
                             ty.clone(),
-                            Rep::Ref(OBJECT.to_string()),
+                            Representation::Ref(OBJECT.to_string()),
                         ));
                     }
                     let mut value = self.local_value(local);
@@ -22613,7 +22708,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             }
         }
 
-        pub fn counted_range(&mut self, iterable: &Expr) -> Lowered<Option<Counted>> {
+        pub fn counted_range(&mut self, iterable: &Expr) -> Lowered<Option<CountedRange>> {
             let integral = |ty: &Ty| {
                 matches!(ty.primitive_name(), Some(INT | LONG | SHORT | BYTE | CHAR))
                     && !ty.is_nullable()
@@ -22641,7 +22736,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         INT
                     };
                     let last = self.spill(last);
-                    Ok(Some(Counted {
+                    Ok(Some(CountedRange {
                         first,
                         last,
                         step: None,
@@ -22670,7 +22765,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         INT
                     };
                     let last = self.spill(last);
-                    Ok(Some(Counted {
+                    Ok(Some(CountedRange {
                         first,
                         last,
                         step: None,
@@ -22725,7 +22820,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         return Err(self.fail("EK220", "A for loop cannot walk over this range."));
                     };
                     let last = self.spill(Val::new(size, Ty::int()));
-                    Ok(Some(Counted {
+                    Ok(Some(CountedRange {
                         first: Val::new(J::Int(0), Ty::int()),
                         last,
                         step: None,
@@ -22769,7 +22864,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let condition: J;
             if ty.is_array() {
                 let element = ty.array_element().unwrap_or_else(Ty::any);
-                let counter = self.declare_temp("i", &Rep::Prim(INT), Some(J::Int(0)));
+                let counter = self.declare_temp("i", &Representation::Prim(INT), Some(J::Int(0)));
                 let array = self.coerce(holder.clone(), &ty.non_null());
                 let array = self.spill(Val::new(array, ty.non_null()));
                 condition = binary(
@@ -22801,7 +22896,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             } else if self.c.world.is_subclass(&class, "java/lang/CharSequence")
                 && !self.c.world.is_subclass(&class, "java/lang/Iterable")
             {
-                let counter = self.declare_temp("i", &Rep::Prim(INT), Some(J::Int(0)));
+                let counter = self.declare_temp("i", &Representation::Prim(INT), Some(J::Int(0)));
                 let text = self.coerce(holder.clone(), &Ty::class("java/lang/CharSequence"));
                 let text = self.spill(Val::new(text, Ty::class("java/lang/CharSequence")));
                 condition = binary(
@@ -22867,13 +22962,16 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         });
                     let iterator_class = Method::class_of_ty(&made.ty);
                     let j = self.coerce(made, &Ty::class(&iterator_class));
-                    let name =
-                        self.declare_temp("iterator", &Rep::Ref(iterator_class.clone()), Some(j));
+                    let name = self.declare_temp(
+                        "iterator",
+                        &Representation::Ref(iterator_class.clone()),
+                        Some(j),
+                    );
                     let has_next = self.operator_call(
                         Val::with_rep(
                             J::Name(name.clone()),
                             Ty::class(&iterator_class),
-                            Rep::Ref(iterator_class.clone()),
+                            Representation::Ref(iterator_class.clone()),
                         ),
                         "hasNext",
                         Vec::new(),
@@ -22888,7 +22986,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             Val::with_rep(
                                 J::Name(name.clone()),
                                 Ty::class(&iterator_class2),
-                                Rep::Ref(iterator_class2.clone()),
+                                Representation::Ref(iterator_class2.clone()),
                             ),
                             "next",
                             Vec::new(),
@@ -22912,7 +23010,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 };
                 let name = self.declare_temp(
                     "iterator",
-                    &Rep::Ref("java/util/Iterator".to_string()),
+                    &Representation::Ref("java/util/Iterator".to_string()),
                     Some(iterator),
                 );
                 condition = call(J::Name(name.clone()), "hasNext", Vec::new());
@@ -22921,7 +23019,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     let value = Val::with_rep(
                         call(J::Name(name.clone()), "next", Vec::new()),
                         element.clone(),
-                        Rep::Ref(OBJECT.to_string()),
+                        Representation::Ref(OBJECT.to_string()),
                     );
                     Ok(this.spill(value))
                 });
@@ -23026,16 +23124,17 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             label: Option<&str>,
             variable: &tree::LoopVariable,
             body: &Expr,
-            counted: Counted,
+            counted: CountedRange,
             java: &str,
             inner: &str,
         ) -> Lowered<()> {
             let element = Ty::class(counted.element);
             let wide = if counted.element == LONG { LONG } else { INT };
             let first = self.coerce(counted.first, &Ty::class(wide));
-            let first_name = self.declare_temp("first", &Rep::Prim(wide), Some(first));
+            let first_name = self.declare_temp("first", &Representation::Prim(wide), Some(first));
             let last_value = self.coerce(counted.last, &Ty::class(wide));
-            let last_name = self.declare_temp("last", &Rep::Prim(wide), Some(last_value));
+            let last_name =
+                self.declare_temp("last", &Representation::Prim(wide), Some(last_value));
             if counted.until {
                 self.emit(S::If {
                     condition: binary(
@@ -23076,12 +23175,15 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let step = match counted.step {
                 Some(held) => {
                     let j = self.coerce(held, &Ty::class(wide));
-                    Some(self.declare_temp("step", &Rep::Prim(wide), Some(j)))
+                    Some(self.declare_temp("step", &Representation::Prim(wide), Some(j)))
                 }
                 None => None,
             };
-            let counter =
-                self.declare_temp("i", &Rep::Prim(wide), Some(J::Name(first_name.clone())));
+            let counter = self.declare_temp(
+                "i",
+                &Representation::Prim(wide),
+                Some(J::Name(first_name.clone())),
+            );
             let entered = if counted.down {
                 binary(
                     java::Binary::GreaterOrEqual,
@@ -23255,7 +23357,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 let j = self.coerce(holder, &Ty::class("kotlin/Lazy"));
                 let name = self.declare_temp(
                     &format!("{}$delegate", property.name),
-                    &Rep::Ref("kotlin/Lazy".to_string()),
+                    &Representation::Ref("kotlin/Lazy".to_string()),
                     Some(j),
                 );
                 let rep = rep_of(&ty);
@@ -23263,7 +23365,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     name: property.name.clone(),
                     jvm: name.clone(),
                     ty: ty.clone(),
-                    rep: Rep::Ref(OBJECT.to_string()),
+                    rep: Representation::Ref(OBJECT.to_string()),
                     mutable: false,
                     slot: Slot::Fixed(call(J::Name(name), "getValue", Vec::new())),
                 });
@@ -23274,13 +23376,13 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             match &property.initializer {
                 Some(initializer) => {
                     let value = self.value(initializer, declared.as_ref())?;
-                    if matches!(value.rep, Rep::Never) {
+                    if matches!(value.rep, Representation::Never) {
                         let ty = declared.unwrap_or(Ty::nothing());
                         self.bind_local(Local {
                             name: property.name.clone(),
                             jvm: property.name.clone(),
                             ty,
-                            rep: Rep::Never,
+                            rep: Representation::Never,
                             mutable: property.mutable,
                             slot: Slot::Plain,
                         });
@@ -23290,7 +23392,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     let ty = match declared {
                         Some(held) => held,
                         None => {
-                            if value.rep == Rep::Void {
+                            if value.rep == Representation::Void {
                                 Ty::unit()
                             } else {
                                 match &value.ty {
@@ -23363,10 +23465,13 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub extra: Vec<(String, java::Unit)>,
     }
 
-    pub fn java_modifiers(visibility: Visible) -> java::Modifiers {
+    pub fn java_modifiers(visibility: DeclaredVisibility) -> java::Modifiers {
         java::Modifiers {
-            public: matches!(visibility, Visible::Public | Visible::Internal),
-            protected: visibility == Visible::Protected,
+            public: matches!(
+                visibility,
+                DeclaredVisibility::Public | DeclaredVisibility::Internal
+            ),
+            protected: visibility == DeclaredVisibility::Protected,
             ..java::Modifiers::default()
         }
     }
@@ -23573,7 +23678,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
     impl<'w, 'a> Compiler<'w, 'a> {
         pub fn method_for(
             &self,
-            cx: TypeCx,
+            cx: TypeContext,
             unit_name: &str,
             class: Option<&str>,
             this: Option<J>,
@@ -23625,7 +23730,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             name: function.name.clone(),
                             jvm,
                             ty: Ty::class(&info.name),
-                            rep: Rep::Ref(info.name.clone()),
+                            rep: Representation::Ref(info.name.clone()),
                             mutable: false,
                             slot: Slot::Function(function),
                         });
@@ -23686,9 +23791,9 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let mut unit = new_unit(&scope.facade, java::Shape::Class);
             unit.modifiers.final_ = true;
             unit.source = Some(scope.source_name.clone());
-            let cx = TypeCx {
+            let cx = TypeContext {
                 file: index,
-                ..TypeCx::default()
+                ..TypeContext::default()
             };
             let members = self.world.package(&scope.package);
             let mut any = false;
@@ -23781,9 +23886,9 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let mut cx = if self.class_decl(jvm).is_some() {
                 self.class_cx(jvm)
             } else {
-                TypeCx {
+                TypeContext {
                     file,
-                    ..TypeCx::default()
+                    ..TypeContext::default()
                 }
             };
             cx.file = file;
@@ -24201,7 +24306,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             plan.filled.iter().zip(candidate.info.parameters.iter())
                         {
                             match slot {
-                                Filled::Given(at) => {
+                                ArgumentSlot::Given(at) => {
                                     if let ArgValue::Ready(value) = &given[*at].value {
                                         arguments.push(
                                             method.coerce(
@@ -24216,7 +24321,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                                         );
                                     }
                                 }
-                                Filled::Many(list) => {
+                                ArgumentSlot::Many(list) => {
                                     let element = erase_params(&parameter.ty);
                                     let mut items = Vec::new();
                                     for at in list {
@@ -24226,7 +24331,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                                     }
                                     arguments.push(method.array_literal(&element, items));
                                 }
-                                Filled::Default => arguments
+                                ArgumentSlot::Default => arguments
                                     .push(default_value(&rep_of(&erase_params(&parameter.ty)))),
                             }
                         }
@@ -24305,7 +24410,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             Some(slot) => self.inferred(slot)?,
                             None => property.ty.clone(),
                         };
-                        let mut modifiers = if property.visibility == Visible::Private {
+                        let mut modifiers = if property.visibility == DeclaredVisibility::Private {
                             java::Modifiers::default()
                         } else {
                             java_modifiers(property.visibility)
@@ -24348,7 +24453,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             &self,
             info: &ClassInfo,
             members: &[tree::Declaration],
-            cx: &TypeCx,
+            cx: &TypeContext,
             jvm: &str,
             file: usize,
             entry: &tree::EnumEntry,
@@ -24415,14 +24520,17 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         && one.receiver.is_some() == info.receiver.is_some()
                 }) {
                     for (at, parameter) in function.parameters.iter().enumerate() {
-                        if !matches!(rep_of(&erase_params(&parameter.ty)), Rep::Prim(_)) {
+                        if !matches!(
+                            rep_of(&erase_params(&parameter.ty)),
+                            Representation::Prim(_)
+                        ) {
                             parameters[at] = true;
                         }
                     }
                     if !function.returns.is_unit()
                         && !matches!(
                             rep_of(&erase_params(&function.returns)),
-                            Rep::Prim(_) | Rep::Void
+                            Representation::Prim(_) | Representation::Void
                         )
                     {
                         returns = true;
@@ -24446,7 +24554,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         ) -> java::Method {
             let (underlying, property) =
                 value_class(&class.name).unwrap_or((Ty::any(), String::new()));
-            let mut arguments: Vec<(J, Rep)> =
+            let mut arguments: Vec<(J, Representation)> =
                 vec![(field(J::This, &property), rep_of(&underlying))];
             let mut parameters: Vec<(W, String)> = Vec::new();
             for (parameter, name) in info.parameters.iter().zip(names.iter()) {
@@ -24454,7 +24562,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 parameters.push((boxed, name.clone()));
                 let rep = rep_of(&erase_params(&parameter.ty));
                 let j = match &rep {
-                    Rep::Value(held, inner) => {
+                    Representation::Value(held, inner) => {
                         value_unbox(held, inner, cast(named(held), J::Name(name.clone())))
                     }
                     _ => J::Name(name.clone()),
@@ -24475,7 +24583,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 ]
             } else {
                 let j = match &returned_rep {
-                    Rep::Value(held, inner) => value_box(held, inner, invoked),
+                    Representation::Value(held, inner) => value_box(held, inner, invoked),
                     _ => invoked,
                 };
                 vec![at_line(S::Return(Some(j)), spot)]
@@ -24490,7 +24598,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 returned,
                 parameters,
                 Some(body),
-                java_modifiers(Visible::Public),
+                java_modifiers(DeclaredVisibility::Public),
                 spot.line,
             )
         }
@@ -24501,7 +24609,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             unit: &mut java::Unit,
             info: &ClassInfo,
             tree: &Rc<tree::Class>,
-            cx: &TypeCx,
+            cx: &TypeContext,
             jvm: &str,
             underlying: &Ty,
             property: &str,
@@ -24512,7 +24620,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let held_written = written(underlying, true, &class_params, &[]);
             let class_written = named(jvm);
             let public_static = || {
-                let mut modifiers = java_modifiers(Visible::Public);
+                let mut modifiers = java_modifiers(DeclaredVisibility::Public);
                 modifiers.static_ = true;
                 modifiers
             };
@@ -24598,7 +24706,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     S::Return(Some(field(J::This, property))),
                     spot,
                 )]),
-                java_modifiers(Visible::Public),
+                java_modifiers(DeclaredVisibility::Public),
                 spot.line,
             ));
             let declares = |name: &str| {
@@ -24610,17 +24718,17 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let simple = jvm.rsplit(['/', '$']).next().unwrap_or(jvm).to_string();
             let same = |left: J, right: J| -> J {
                 match &inner {
-                    Rep::Prim(FLOAT) => binary(
+                    Representation::Prim(FLOAT) => binary(
                         java::Binary::Equal,
                         static_call("java/lang/Float", "compare", vec![left, right]),
                         J::Int(0),
                     ),
-                    Rep::Prim(DOUBLE) => binary(
+                    Representation::Prim(DOUBLE) => binary(
                         java::Binary::Equal,
                         static_call("java/lang/Double", "compare", vec![left, right]),
                         J::Int(0),
                     ),
-                    Rep::Prim(_) => binary(java::Binary::Equal, left, right),
+                    Representation::Prim(_) => binary(java::Binary::Equal, left, right),
                     _ => static_call(
                         "kotlin/jvm/internal/Intrinsics",
                         "areEqual",
@@ -24656,17 +24764,17 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             jvm,
                             "toString-impl",
                             vec![(field(J::This, property), inner.clone())],
-                            &Rep::Ref(STRING.to_string()),
+                            &Representation::Ref(STRING.to_string()),
                         ))),
                         spot,
                     )]),
-                    java_modifiers(Visible::Public),
+                    java_modifiers(DeclaredVisibility::Public),
                     spot.line,
                 ));
             }
             if !declares("hashCode") {
                 let hashed = match &inner {
-                    Rep::Prim(name) => {
+                    Representation::Prim(name) => {
                         static_call(boxed_of(name).unwrap_or(OBJECT), "hashCode", vec![v()])
                     }
                     _ => J::Conditional {
@@ -24692,11 +24800,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             jvm,
                             "hashCode-impl",
                             vec![(field(J::This, property), inner.clone())],
-                            &Rep::Prim(INT),
+                            &Representation::Prim(INT),
                         ))),
                         spot,
                     )]),
-                    java_modifiers(Visible::Public),
+                    java_modifiers(DeclaredVisibility::Public),
                     spot.line,
                 ));
             }
@@ -24743,13 +24851,13 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             "equals-impl",
                             vec![
                                 (field(J::This, property), inner.clone()),
-                                (other, Rep::Ref(OBJECT.to_string())),
+                                (other, Representation::Ref(OBJECT.to_string())),
                             ],
-                            &Rep::Prim(BOOLEAN),
+                            &Representation::Prim(BOOLEAN),
                         ))),
                         spot,
                     )]),
-                    java_modifiers(Visible::Public),
+                    java_modifiers(DeclaredVisibility::Public),
                     spot.line,
                 ));
             }
@@ -24777,7 +24885,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             &self,
             info: &Rc<FunctionInfo>,
             decl: &Rc<tree::Function>,
-            cx: &TypeCx,
+            cx: &TypeContext,
             owner: &str,
             class: Option<&ClassInfo>,
             top_level: bool,
@@ -24799,10 +24907,10 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let abstract_ = decl.body.is_none() && !external;
             modifiers.abstract_ = abstract_;
             modifiers.native_ = external;
-            if interface && info.visibility == Visible::Private {
+            if interface && info.visibility == DeclaredVisibility::Private {
                 modifiers.public = false;
             }
-            if interface && !abstract_ && info.visibility != Visible::Private {
+            if interface && !abstract_ && info.visibility != DeclaredVisibility::Private {
                 modifiers.public = true;
             }
             let receiver_name = format!(
@@ -24955,7 +25063,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                             Some(&returns)
                         };
                         let value = method.value(expr, wanted)?;
-                        if !method.is_dead() && !matches!(value.rep, Rep::Never) {
+                        if !method.is_dead() && !matches!(value.rep, Representation::Never) {
                             if returns.is_unit() && !returns.is_nullable() {
                                 method.statement_of(value);
                                 if suspending {
@@ -25091,7 +25199,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub fn annotations_of(
             &self,
             modifiers: &tree::Modifiers,
-            cx: &TypeCx,
+            cx: &TypeContext,
         ) -> Vec<java::Annotated> {
             let mut out = Vec::new();
             for annotation in &modifiers.annotations {
@@ -25271,7 +25379,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             &self,
             info: &Rc<FunctionInfo>,
             decl: &Rc<tree::Function>,
-            cx: &TypeCx,
+            cx: &TypeContext,
             owner: &str,
             class: Option<&ClassInfo>,
             static_: bool,
@@ -25427,7 +25535,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             unit: &mut java::Unit,
             info: &Rc<PropertyInfo>,
             decl: &Rc<tree::Property>,
-            cx: &TypeCx,
+            cx: &TypeContext,
             owner: &str,
             class: Option<&ClassInfo>,
             top_level: bool,
@@ -25590,7 +25698,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     match &custom {
                         Some(tree::Body::Expression(expr)) => {
                             let value = method.value(expr, Some(&ty))?;
-                            if !matches!(value.rep, Rep::Never) && !method.is_dead() {
+                            if !matches!(value.rep, Representation::Never) && !method.is_dead() {
                                 let j = method.coerce(value, &ty);
                                 method.emit(S::Return(Some(j)));
                             }
@@ -25604,8 +25712,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         None => {
                             let access = field_access(&J::This).unwrap_or(J::Null);
                             if info.delegated {
-                                let holder =
-                                    Val::with_rep(access, Ty::any(), Rep::Ref(OBJECT.to_string()));
+                                let holder = Val::with_rep(
+                                    access,
+                                    Ty::any(),
+                                    Representation::Ref(OBJECT.to_string()),
+                                );
                                 let value = method.delegate_get(holder, &ty, info)?;
                                 let j = method.coerce(value, &ty);
                                 method.emit(S::Return(Some(j)));
@@ -25733,7 +25844,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                                     let holder = Val::with_rep(
                                         access,
                                         Ty::any(),
-                                        Rep::Ref(OBJECT.to_string()),
+                                        Representation::Ref(OBJECT.to_string()),
                                     );
                                     let value =
                                         Val::new(J::Name(jvm_parameter.clone()), ty.clone());
@@ -25796,8 +25907,8 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             parameter.ty.clone()
         };
         match rep_of(&erase_params(&ty)) {
-            Rep::Prim(SHORT) => cast(W::Short, J::Int(0)),
-            Rep::Prim(BYTE) => cast(W::Byte, J::Int(0)),
+            Representation::Prim(SHORT) => cast(W::Short, J::Int(0)),
+            Representation::Prim(BYTE) => cast(W::Byte, J::Int(0)),
             other => default_value(&other),
         }
     }
@@ -25838,7 +25949,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             let lazy = Val::with_rep(
                 cast(named("kotlin/Lazy"), holder.j.clone()),
                 Ty::of("kotlin/Lazy", vec![ty.clone()]),
-                Rep::Ref("kotlin/Lazy".to_string()),
+                Representation::Ref("kotlin/Lazy".to_string()),
             );
             let declared = self.delegate_type(info)?;
             if declared
@@ -25848,7 +25959,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 return Ok(Val::with_rep(
                     call(lazy.j, "getValue", Vec::new()),
                     ty.clone(),
-                    Rep::Ref(OBJECT.to_string()),
+                    Representation::Ref(OBJECT.to_string()),
                 ));
             }
             let declared = declared.unwrap_or_else(Ty::any);
@@ -25858,7 +25969,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 holder.rep,
             );
             let this = if self.static_context {
-                Val::with_rep(J::Null, Ty::any().nullable(), Rep::Ref(OBJECT.to_string()))
+                Val::with_rep(
+                    J::Null,
+                    Ty::any().nullable(),
+                    Representation::Ref(OBJECT.to_string()),
+                )
             } else {
                 self.this_value(None)?
             };
@@ -25898,7 +26013,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     outer: None,
                 },
                 ty,
-                Rep::Ref("kotlin/reflect/KProperty".to_string()),
+                Representation::Ref("kotlin/reflect/KProperty".to_string()),
             )
         }
 
@@ -25915,7 +26030,11 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 holder.rep,
             );
             let this = if self.static_context {
-                Val::with_rep(J::Null, Ty::any().nullable(), Rep::Ref(OBJECT.to_string()))
+                Val::with_rep(
+                    J::Null,
+                    Ty::any().nullable(),
+                    Representation::Ref(OBJECT.to_string()),
+                )
             } else {
                 self.this_value(None)?
             };
@@ -26053,7 +26172,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 let Some(local) = self.lookup_local(&name) else {
                     continue;
                 };
-                if matches!(local.slot, Slot::Inline(_)) || local.rep == Rep::Never {
+                if matches!(local.slot, Slot::Inline(_)) || local.rep == Representation::Never {
                     continue;
                 }
                 let field_name = format!(
@@ -26248,7 +26367,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     name: function.name.clone(),
                     jvm: "this".to_string(),
                     ty: Ty::class(&jvm),
-                    rep: Rep::Ref(jvm.clone()),
+                    rep: Representation::Ref(jvm.clone()),
                     mutable: false,
                     slot: Slot::Function(function_info.clone()),
                 },
@@ -26283,7 +26402,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 name: function.name.clone(),
                 jvm: instance,
                 ty: Ty::class(&jvm),
-                rep: Rep::Ref(jvm.clone()),
+                rep: Representation::Ref(jvm.clone()),
                 mutable: false,
                 slot: Slot::Function(function_info),
             });
@@ -26296,7 +26415,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
             &self,
             info: &ClassInfo,
             tree: &Rc<tree::Class>,
-            cx: &TypeCx,
+            cx: &TypeContext,
             jvm: &str,
             captures: &Captures,
         ) -> Lowered<(Vec<java::Method>, Vec<Positioned<S>>)> {
@@ -26964,7 +27083,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         fn default_constructor(
             &self,
             info: &ClassInfo,
-            cx: &TypeCx,
+            cx: &TypeContext,
             jvm: &str,
             prefix: &[(W, String)],
             kinds: &[ParamInfo],
@@ -41403,7 +41522,7 @@ pub mod native {
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub enum Produce {
+    pub enum BinaryKind {
         Program,
         Static,
         Dynamic,
@@ -41412,44 +41531,44 @@ pub mod native {
         TestBundle,
     }
 
-    impl Produce {
-        pub fn named(name: &str) -> Option<Produce> {
+    impl BinaryKind {
+        pub fn named(name: &str) -> Option<BinaryKind> {
             match name.trim().to_ascii_lowercase().as_str() {
-                "program" => Some(Produce::Program),
-                "static" => Some(Produce::Static),
-                "dynamic" => Some(Produce::Dynamic),
-                "framework" => Some(Produce::Framework),
-                "library" => Some(Produce::Library),
-                "test_bundle" => Some(Produce::TestBundle),
+                "program" => Some(BinaryKind::Program),
+                "static" => Some(BinaryKind::Static),
+                "dynamic" => Some(BinaryKind::Dynamic),
+                "framework" => Some(BinaryKind::Framework),
+                "library" => Some(BinaryKind::Library),
+                "test_bundle" => Some(BinaryKind::TestBundle),
                 _ => None,
             }
         }
 
         pub fn name(self) -> &'static str {
             match self {
-                Produce::Program => "program",
-                Produce::Static => "static",
-                Produce::Dynamic => "dynamic",
-                Produce::Framework => "framework",
-                Produce::Library => "library",
-                Produce::TestBundle => "test_bundle",
+                BinaryKind::Program => "program",
+                BinaryKind::Static => "static",
+                BinaryKind::Dynamic => "dynamic",
+                BinaryKind::Framework => "framework",
+                BinaryKind::Library => "library",
+                BinaryKind::TestBundle => "test_bundle",
             }
         }
 
         pub fn is_binary(self) -> bool {
-            self != Produce::Library
+            self != BinaryKind::Library
         }
 
         pub fn exports_c(self) -> bool {
-            matches!(self, Produce::Static | Produce::Dynamic)
+            matches!(self, BinaryKind::Static | BinaryKind::Dynamic)
         }
 
         pub fn needs_entry(self) -> bool {
-            matches!(self, Produce::Program)
+            matches!(self, BinaryKind::Program)
         }
     }
 
-    pub fn output_file(target: &Target, produce: Produce, base: &str) -> String {
+    pub fn output_file(target: &Target, produce: BinaryKind, base: &str) -> String {
         let family = target.family;
         let stem = base.trim_end_matches('/');
         let (folder, name) = match stem.rsplit_once('/') {
@@ -41458,14 +41577,14 @@ pub mod native {
         };
         let ends = |suffix: &str| name.ends_with(&format!(".{suffix}"));
         let made = match produce {
-            Produce::Program => {
+            BinaryKind::Program => {
                 if ends(family.exe_suffix()) {
                     name
                 } else {
                     format!("{name}.{}", family.exe_suffix())
                 }
             }
-            Produce::Static => {
+            BinaryKind::Static => {
                 let bare = name.trim_end_matches(&format!(".{}", family.static_suffix()));
                 let bare = bare.strip_prefix(family.static_prefix()).unwrap_or(bare);
                 format!(
@@ -41474,7 +41593,7 @@ pub mod native {
                     family.static_suffix()
                 )
             }
-            Produce::Dynamic => {
+            BinaryKind::Dynamic => {
                 let bare = name.trim_end_matches(&format!(".{}", family.dynamic_suffix()));
                 let bare = if family.dynamic_prefix().is_empty() {
                     bare
@@ -41487,21 +41606,21 @@ pub mod native {
                     family.dynamic_suffix()
                 )
             }
-            Produce::Framework => {
+            BinaryKind::Framework => {
                 if ends("framework") {
                     name
                 } else {
                     format!("{name}.framework")
                 }
             }
-            Produce::TestBundle => {
+            BinaryKind::TestBundle => {
                 if ends("xctest") {
                     name
                 } else {
                     format!("{name}.xctest")
                 }
             }
-            Produce::Library => {
+            BinaryKind::Library => {
                 if ends("klib") {
                     name
                 } else {
@@ -41574,7 +41693,7 @@ pub mod native {
     #[derive(Clone, Debug)]
     pub struct Options {
         pub target: Target,
-        pub produce: Produce,
+        pub produce: BinaryKind,
         pub output: String,
         pub module_name: Option<String>,
         pub short_module_name: Option<String>,
@@ -41736,7 +41855,7 @@ pub mod native {
         pub fn new(target: Target) -> Options {
             Options {
                 target,
-                produce: Produce::Program,
+                produce: BinaryKind::Program,
                 output: "program".to_string(),
                 module_name: None,
                 short_module_name: None,
@@ -41826,7 +41945,10 @@ pub mod native {
                 };
                 options.setting(name, &value)?;
             }
-            let apple_only = matches!(options.produce, Produce::Framework | Produce::TestBundle);
+            let apple_only = matches!(
+                options.produce,
+                BinaryKind::Framework | BinaryKind::TestBundle
+            );
             if apple_only && !options.target.family.is_apple() {
                 return Err(
                     fail("EK405", "A framework can only be made for an Apple target.")
@@ -41877,7 +41999,7 @@ pub mod native {
                         )
                         .with_context(format!("Option: {name}")));
                     }
-                    self.produce = Produce::named(value).ok_or_else(|| {
+                    self.produce = BinaryKind::named(value).ok_or_else(|| {
                         fail(
                             "EK401",
                             "This kind of output is not one Kotlin/Native makes.",
@@ -62913,7 +63035,7 @@ annotation class SharedImmutable
         toolchain: Option<Toolchain<'_>>,
     ) -> Result<Compiled, Diagnostic> {
         let output = options.output_file();
-        if options.produce == Produce::Library {
+        if options.produce == BinaryKind::Library {
             let artifact = klib(&lowered, options, &output)?;
             return Ok(Compiled {
                 lowered,

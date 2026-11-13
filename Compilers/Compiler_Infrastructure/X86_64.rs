@@ -32749,7 +32749,7 @@ pub mod codegen {
     }
 
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    pub(super) enum Home {
+    pub(super) enum ValueLocation {
         Stack(usize),
         Register(usize),
         Constant(u64),
@@ -33033,7 +33033,7 @@ pub mod codegen {
     ];
 
     pub(super) struct Allocation {
-        pub(super) homes: Vec<Home>,
+        pub(super) homes: Vec<ValueLocation>,
         pub(super) used: Vec<usize>,
         pub(super) stack_slots: usize,
         pub(super) call_saves: BTreeMap<usize, Vec<(usize, usize)>>,
@@ -33972,15 +33972,17 @@ pub mod codegen {
             .collect();
         used.sort_unstable();
         used.dedup();
-        let mut homes: Vec<Home> = (0..count)
+        let mut homes: Vec<ValueLocation> = (0..count)
             .map(|value| match register_of[value] {
                 _ if constant_of[value].is_some() => {
-                    Home::Constant(constant_of[value].unwrap_or(0))
+                    ValueLocation::Constant(constant_of[value].unwrap_or(0))
                 }
-                Some(register) => Home::Register(register),
-                None if float_of[value].is_some() => Home::Float(float_of[value].unwrap_or(0)),
-                None if slot_of[value] != usize::MAX => Home::Stack(slot_of[value]),
-                None => Home::Stack(0),
+                Some(register) => ValueLocation::Register(register),
+                None if float_of[value].is_some() => {
+                    ValueLocation::Float(float_of[value].unwrap_or(0))
+                }
+                None if slot_of[value] != usize::MAX => ValueLocation::Stack(slot_of[value]),
+                None => ValueLocation::Stack(0),
             })
             .collect();
         for (alias, root) in aliases {
@@ -34440,15 +34442,16 @@ pub mod codegen {
     }
 
     enum EdgeStep {
-        Move(Home, Home),
-        Save(Home),
-        Restore(Home),
+        Move(ValueLocation, ValueLocation),
+        Save(ValueLocation),
+        Restore(ValueLocation),
     }
 
-    fn sequence_moves(moves: &[(Home, Home)]) -> Option<Vec<EdgeStep>> {
+    fn sequence_moves(moves: &[(ValueLocation, ValueLocation)]) -> Option<Vec<EdgeStep>> {
         let count = moves.len();
-        let mut source: Vec<Option<Home>> = moves.iter().map(|held| Some(held.0)).collect();
-        let destination: Vec<Home> = moves.iter().map(|held| held.1).collect();
+        let mut source: Vec<Option<ValueLocation>> =
+            moves.iter().map(|held| Some(held.0)).collect();
+        let destination: Vec<ValueLocation> = moves.iter().map(|held| held.1).collect();
         let mut done = vec![false; count];
         let mut steps = Vec::with_capacity(count + 2);
         let mut left = count;
@@ -34473,7 +34476,7 @@ pub mod codegen {
             }
             let at = (0..count).find(|at| !done[*at])?;
             let victim = destination[at];
-            if !matches!(victim, Home::Register(_) | Home::Stack(_)) {
+            if !matches!(victim, ValueLocation::Register(_) | ValueLocation::Stack(_)) {
                 return None;
             }
             steps.push(EdgeStep::Save(victim));
@@ -34492,7 +34495,7 @@ pub mod codegen {
         pub(super) out: String,
         pub(super) labels: usize,
         pub(super) fields: BTreeMap<u32, (Vec<u32>, u32)>,
-        pub(super) homes: Vec<Home>,
+        pub(super) homes: Vec<ValueLocation>,
         pub(super) selection: Selection,
     }
 
@@ -34535,7 +34538,7 @@ pub mod codegen {
         }
 
         fn small_displacement(&self, value: Value, bits: u32) -> Option<i64> {
-            let Home::Constant(constant) = self.location_of(value) else {
+            let ValueLocation::Constant(constant) = self.location_of(value) else {
                 return None;
             };
             let wide = match bits {
@@ -34549,7 +34552,9 @@ pub mod codegen {
 
         fn small_constant(&self, value: Value, limit: u64) -> Option<u64> {
             match self.location_of(value) {
-                Home::Constant(constant) if constant > 0 && constant <= limit => Some(constant),
+                ValueLocation::Constant(constant) if constant > 0 && constant <= limit => {
+                    Some(constant)
+                }
                 _ => None,
             }
         }
@@ -34597,11 +34602,11 @@ pub mod codegen {
             }
         }
 
-        fn location_of(&self, value: Value) -> Home {
+        fn location_of(&self, value: Value) -> ValueLocation {
             self.homes
                 .get(value.index())
                 .copied()
-                .unwrap_or(Home::Stack(0))
+                .unwrap_or(ValueLocation::Stack(0))
         }
 
         fn stack_offset(index: usize) -> i64 {
@@ -34610,8 +34615,10 @@ pub mod codegen {
 
         fn stack_home(&self, value: Value) -> i64 {
             match self.location_of(value) {
-                Home::Stack(index) => Self::stack_offset(index),
-                Home::Register(_) | Home::Constant(_) | Home::Float(_) => {
+                ValueLocation::Stack(index) => Self::stack_offset(index),
+                ValueLocation::Register(_)
+                | ValueLocation::Constant(_)
+                | ValueLocation::Float(_) => {
                     unreachable!("only stack values have a frame offset")
                 }
             }
@@ -34619,8 +34626,8 @@ pub mod codegen {
 
         fn source(&self, value: Value, word: bool) -> Option<String> {
             match self.location_of(value) {
-                Home::Stack(index) => Some(format!("{}(%rbp)", Self::stack_offset(index))),
-                Home::Register(held) => {
+                ValueLocation::Stack(index) => Some(format!("{}(%rbp)", Self::stack_offset(index))),
+                ValueLocation::Register(held) => {
                     let name = HELD_REGISTERS[held][0];
                     Some(if word {
                         format!("%{}", register_32(name))
@@ -34628,48 +34635,54 @@ pub mod codegen {
                         format!("%{name}")
                     })
                 }
-                Home::Constant(constant) if word => Some(format!("${}", constant as u32 as i32)),
-                Home::Constant(constant) => i32::try_from(constant as i64)
+                ValueLocation::Constant(constant) if word => {
+                    Some(format!("${}", constant as u32 as i32))
+                }
+                ValueLocation::Constant(constant) => i32::try_from(constant as i64)
                     .ok()
                     .map(|small| format!("${small}")),
-                Home::Float(_) => None,
+                ValueLocation::Float(_) => None,
             }
         }
 
         fn load(&mut self, value: Value, register: &str) {
             match self.location_of(value) {
-                Home::Stack(index) => self.line(&format!(
+                ValueLocation::Stack(index) => self.line(&format!(
                     "movq {}(%rbp), %{register}",
                     Self::stack_offset(index)
                 )),
-                Home::Register(held) => {
+                ValueLocation::Register(held) => {
                     if HELD_REGISTERS[held][0] != register {
                         self.line(&format!("movq %{}, %{register}", HELD_REGISTERS[held][0]))
                     }
                 }
-                Home::Constant(constant) => self.constant(constant, register),
-                Home::Float(held) => self.line(&format!("movq %xmm{}, %{register}", 8 + held)),
+                ValueLocation::Constant(constant) => self.constant(constant, register),
+                ValueLocation::Float(held) => {
+                    self.line(&format!("movq %xmm{}, %{register}", 8 + held))
+                }
             }
         }
 
         fn store(&mut self, register: &str, value: Value) {
             match self.location_of(value) {
-                Home::Stack(index) => self.line(&format!(
+                ValueLocation::Stack(index) => self.line(&format!(
                     "movq %{register}, {}(%rbp)",
                     Self::stack_offset(index)
                 )),
-                Home::Register(held) => {
+                ValueLocation::Register(held) => {
                     if HELD_REGISTERS[held][0] != register {
                         self.line(&format!("movq %{register}, %{}", HELD_REGISTERS[held][0]))
                     }
                 }
-                Home::Constant(_) => unreachable!("a constant is never stored"),
-                Home::Float(held) => self.line(&format!("movq %{register}, %xmm{}", 8 + held)),
+                ValueLocation::Constant(_) => unreachable!("a constant is never stored"),
+                ValueLocation::Float(held) => {
+                    self.line(&format!("movq %{register}, %xmm{}", 8 + held))
+                }
             }
         }
 
         fn load_signed(&mut self, value: Value, register: &str, bits: u32) {
-            if let Home::Constant(constant) = self.location_of(value) {
+            if let ValueLocation::Constant(constant) = self.location_of(value) {
                 let extended = match bits {
                     1 => 0u64.wrapping_sub(constant & 1),
                     8 => constant as u8 as i8 as i64 as u64,
@@ -34681,8 +34694,8 @@ pub mod codegen {
                 return;
             }
             let source = match self.location_of(value) {
-                Home::Stack(index) => format!("{}(%rbp)", Self::stack_offset(index)),
-                Home::Register(held) => {
+                ValueLocation::Stack(index) => format!("{}(%rbp)", Self::stack_offset(index)),
+                ValueLocation::Register(held) => {
                     let names = HELD_REGISTERS[held];
                     let name = match bits {
                         8 => names[3],
@@ -34692,18 +34705,18 @@ pub mod codegen {
                     };
                     format!("%{name}")
                 }
-                Home::Float(held) => {
+                ValueLocation::Float(held) => {
                     self.line(&format!("movq %xmm{}, %{register}", 8 + held));
                     return;
                 }
-                Home::Constant(_) => unreachable!("constants are folded above"),
+                ValueLocation::Constant(_) => unreachable!("constants are folded above"),
             };
             match bits {
                 1 => {
                     let wide = match self.location_of(value) {
-                        Home::Stack(_) => source,
-                        Home::Register(held) => format!("%{}", HELD_REGISTERS[held][0]),
-                        Home::Constant(_) | Home::Float(_) => {
+                        ValueLocation::Stack(_) => source,
+                        ValueLocation::Register(held) => format!("%{}", HELD_REGISTERS[held][0]),
+                        ValueLocation::Constant(_) | ValueLocation::Float(_) => {
                             unreachable!("constants are folded above")
                         }
                     };
@@ -34718,7 +34731,7 @@ pub mod codegen {
         }
 
         fn load_float(&mut self, value: Value, register: &str, ty: Type) {
-            if let Home::Float(held) = self.location_of(value) {
+            if let ValueLocation::Float(held) = self.location_of(value) {
                 let name = format!("xmm{}", 8 + held);
                 if name != register {
                     self.line(&format!("movaps %{name}, %{register}"));
@@ -34733,7 +34746,7 @@ pub mod codegen {
         }
 
         fn store_float(&mut self, register: &str, value: Value, ty: Type) {
-            if let Home::Float(held) = self.location_of(value) {
+            if let ValueLocation::Float(held) = self.location_of(value) {
                 let name = format!("xmm{}", 8 + held);
                 if name != register {
                     self.line(&format!("movaps %{register}, %{name}"));
@@ -34858,7 +34871,7 @@ pub mod codegen {
                 ),
                 None => (
                     match self.location_of(address.base) {
-                        Home::Register(held) => HELD_REGISTERS[held][0].to_string(),
+                        ValueLocation::Register(held) => HELD_REGISTERS[held][0].to_string(),
                         _ => {
                             self.load(address.base, "rcx");
                             "rcx".to_string()
@@ -34868,7 +34881,7 @@ pub mod codegen {
                 ),
             };
             let index = match self.location_of(address.index) {
-                Home::Register(held) => HELD_REGISTERS[held][0].to_string(),
+                ValueLocation::Register(held) => HELD_REGISTERS[held][0].to_string(),
                 _ => {
                     self.load(address.index, "rax");
                     "rax".to_string()
@@ -35337,67 +35350,72 @@ pub mod codegen {
             Ok(())
         }
 
-        fn move_home(&mut self, source: Home, destination: Home) {
+        fn move_home(&mut self, source: ValueLocation, destination: ValueLocation) {
             match (source, destination) {
-                (Home::Register(from), Home::Register(to)) => self.line(&format!(
-                    "movq %{}, %{}",
-                    HELD_REGISTERS[from][0], HELD_REGISTERS[to][0]
-                )),
-                (Home::Stack(from), Home::Register(to)) => self.line(&format!(
+                (ValueLocation::Register(from), ValueLocation::Register(to)) => {
+                    self.line(&format!(
+                        "movq %{}, %{}",
+                        HELD_REGISTERS[from][0], HELD_REGISTERS[to][0]
+                    ))
+                }
+                (ValueLocation::Stack(from), ValueLocation::Register(to)) => self.line(&format!(
                     "movq {}(%rbp), %{}",
                     Self::stack_offset(from),
                     HELD_REGISTERS[to][0]
                 )),
-                (Home::Constant(constant), Home::Register(to)) => {
+                (ValueLocation::Constant(constant), ValueLocation::Register(to)) => {
                     self.constant(constant, HELD_REGISTERS[to][0])
                 }
-                (Home::Register(from), Home::Stack(to)) => self.line(&format!(
+                (ValueLocation::Register(from), ValueLocation::Stack(to)) => self.line(&format!(
                     "movq %{}, {}(%rbp)",
                     HELD_REGISTERS[from][0],
                     Self::stack_offset(to)
                 )),
-                (Home::Stack(from), Home::Stack(to)) => {
+                (ValueLocation::Stack(from), ValueLocation::Stack(to)) => {
                     self.line(&format!("movq {}(%rbp), %r11", Self::stack_offset(from)));
                     self.line(&format!("movq %r11, {}(%rbp)", Self::stack_offset(to)));
                 }
-                (Home::Constant(constant), Home::Stack(to)) => match i32::try_from(constant as i64)
-                {
-                    Ok(small) => {
-                        self.line(&format!("movq ${small}, {}(%rbp)", Self::stack_offset(to)))
+                (ValueLocation::Constant(constant), ValueLocation::Stack(to)) => {
+                    match i32::try_from(constant as i64) {
+                        Ok(small) => {
+                            self.line(&format!("movq ${small}, {}(%rbp)", Self::stack_offset(to)))
+                        }
+                        Err(_) => {
+                            self.line(&format!("movabsq ${}, %r11", constant as i64));
+                            self.line(&format!("movq %r11, {}(%rbp)", Self::stack_offset(to)));
+                        }
                     }
-                    Err(_) => {
-                        self.line(&format!("movabsq ${}, %r11", constant as i64));
-                        self.line(&format!("movq %r11, {}(%rbp)", Self::stack_offset(to)));
-                    }
-                },
-                (Home::Float(from), Home::Float(to)) => {
+                }
+                (ValueLocation::Float(from), ValueLocation::Float(to)) => {
                     self.line(&format!("movaps %xmm{}, %xmm{}", 8 + from, 8 + to))
                 }
-                (Home::Float(from), Home::Register(to)) => self.line(&format!(
+                (ValueLocation::Float(from), ValueLocation::Register(to)) => self.line(&format!(
                     "movq %xmm{}, %{}",
                     8 + from,
                     HELD_REGISTERS[to][0]
                 )),
-                (Home::Register(from), Home::Float(to)) => self.line(&format!(
+                (ValueLocation::Register(from), ValueLocation::Float(to)) => self.line(&format!(
                     "movq %{}, %xmm{}",
                     HELD_REGISTERS[from][0],
                     8 + to
                 )),
-                (Home::Float(from), Home::Stack(to)) => self.line(&format!(
+                (ValueLocation::Float(from), ValueLocation::Stack(to)) => self.line(&format!(
                     "movq %xmm{}, {}(%rbp)",
                     8 + from,
                     Self::stack_offset(to)
                 )),
-                (Home::Stack(from), Home::Float(to)) => self.line(&format!(
+                (ValueLocation::Stack(from), ValueLocation::Float(to)) => self.line(&format!(
                     "movq {}(%rbp), %xmm{}",
                     Self::stack_offset(from),
                     8 + to
                 )),
-                (Home::Constant(constant), Home::Float(to)) => {
+                (ValueLocation::Constant(constant), ValueLocation::Float(to)) => {
                     self.constant(constant, "r11");
                     self.line(&format!("movq %r11, %xmm{}", 8 + to));
                 }
-                (_, Home::Constant(_)) => unreachable!("a constant is never a destination"),
+                (_, ValueLocation::Constant(_)) => {
+                    unreachable!("a constant is never a destination")
+                }
             }
         }
 
@@ -35405,7 +35423,7 @@ pub mod codegen {
             if arguments.len() != parameters.len() {
                 return false;
             }
-            let moves: Vec<(Home, Home)> = arguments
+            let moves: Vec<(ValueLocation, ValueLocation)> = arguments
                 .iter()
                 .zip(parameters)
                 .map(|(argument, parameter)| {
@@ -35420,19 +35438,19 @@ pub mod codegen {
                 match step {
                     EdgeStep::Move(source, destination) => self.move_home(source, destination),
                     EdgeStep::Save(victim) => match victim {
-                        Home::Register(held) => {
+                        ValueLocation::Register(held) => {
                             self.line(&format!("movq %{}, %rax", HELD_REGISTERS[held][0]))
                         }
-                        Home::Stack(index) => {
+                        ValueLocation::Stack(index) => {
                             self.line(&format!("movq {}(%rbp), %rax", Self::stack_offset(index)))
                         }
                         _ => {}
                     },
                     EdgeStep::Restore(destination) => match destination {
-                        Home::Register(held) => {
+                        ValueLocation::Register(held) => {
                             self.line(&format!("movq %rax, %{}", HELD_REGISTERS[held][0]))
                         }
-                        Home::Stack(index) => {
+                        ValueLocation::Stack(index) => {
                             self.line(&format!("movq %rax, {}(%rbp)", Self::stack_offset(index)))
                         }
                         _ => {}
@@ -35456,20 +35474,20 @@ pub mod codegen {
             }
             for argument in &call.arguments {
                 match self.location_of(*argument) {
-                    Home::Stack(index) => {
+                    ValueLocation::Stack(index) => {
                         self.line(&format!("pushq {}(%rbp)", Self::stack_offset(index)))
                     }
-                    Home::Register(held) => {
+                    ValueLocation::Register(held) => {
                         self.line(&format!("pushq %{}", HELD_REGISTERS[held][0]))
                     }
-                    Home::Constant(constant) => match i32::try_from(constant as i64) {
+                    ValueLocation::Constant(constant) => match i32::try_from(constant as i64) {
                         Ok(small) => self.line(&format!("pushq ${small}")),
                         Err(_) => {
                             self.line(&format!("movabsq ${}, %r11", constant as i64));
                             self.line("pushq %r11");
                         }
                     },
-                    Home::Float(held) => {
+                    ValueLocation::Float(held) => {
                         self.line("subq $8, %rsp");
                         self.line(&format!("movq %xmm{}, (%rsp)", 8 + held));
                     }
@@ -35478,14 +35496,14 @@ pub mod codegen {
             }
             for parameter in parameters.iter().take(incoming).rev() {
                 match self.location_of(*parameter) {
-                    Home::Stack(index) => {
+                    ValueLocation::Stack(index) => {
                         self.line(&format!("popq {}(%rbp)", Self::stack_offset(index)))
                     }
-                    Home::Register(held) => {
+                    ValueLocation::Register(held) => {
                         self.line(&format!("popq %{}", HELD_REGISTERS[held][0]))
                     }
-                    Home::Constant(_) => unreachable!("a constant is never a destination"),
-                    Home::Float(held) => {
+                    ValueLocation::Constant(_) => unreachable!("a constant is never a destination"),
+                    ValueLocation::Float(held) => {
                         self.line(&format!("movq (%rsp), %xmm{}", 8 + held));
                         self.line("addq $8, %rsp");
                     }
@@ -35770,7 +35788,7 @@ pub mod codegen {
                 Operation::IntegerConstant(value) => {
                     if !matches!(
                         result.map(|held| self.location_of(held)),
-                        Some(Home::Constant(_))
+                        Some(ValueLocation::Constant(_))
                     ) {
                         let bits = type_bits(result_type.unwrap_or(Type::I64));
                         self.constant((*value as u64) & all_ones(bits), "rax");
@@ -35790,7 +35808,7 @@ pub mod codegen {
                 Operation::Null | Operation::Poison => {
                     if !matches!(
                         result.map(|held| self.location_of(held)),
-                        Some(Home::Constant(_))
+                        Some(ValueLocation::Constant(_))
                     ) {
                         self.line("xorl %eax, %eax");
                         self.store_result("rax", result);
@@ -35842,8 +35860,10 @@ pub mod codegen {
                         ("q", "rax", "rcx")
                     };
                     let source = match self.location_of(arguments[0]) {
-                        Home::Register(held) if bits == 32 => register_32(HELD_REGISTERS[held][0]),
-                        Home::Register(held) => HELD_REGISTERS[held][0].to_string(),
+                        ValueLocation::Register(held) if bits == 32 => {
+                            register_32(HELD_REGISTERS[held][0])
+                        }
+                        ValueLocation::Register(held) => HELD_REGISTERS[held][0].to_string(),
                         _ => {
                             self.load(arguments[0], "rcx");
                             narrow.to_string()
@@ -35875,8 +35895,12 @@ pub mod codegen {
                             | Comparison::GreaterSigned
                             | Comparison::GreaterEqualSigned
                     );
-                    let swapped = matches!(self.location_of(arguments[0]), Home::Constant(_))
-                        && !matches!(self.location_of(arguments[1]), Home::Constant(_));
+                    let swapped =
+                        matches!(self.location_of(arguments[0]), ValueLocation::Constant(_))
+                            && !matches!(
+                                self.location_of(arguments[1]),
+                                ValueLocation::Constant(_)
+                            );
                     let (first, second) = if swapped {
                         (arguments[1], arguments[0])
                     } else {
@@ -35917,7 +35941,9 @@ pub mod codegen {
                         let word = bits == 32;
                         let suffix = if word { "l" } else { "q" };
                         let direct = match (self.location_of(first), self.source(second, word)) {
-                            (Home::Stack(slot), Some(operand)) if !operand.contains('(') => {
+                            (ValueLocation::Stack(slot), Some(operand))
+                                if !operand.contains('(') =>
+                            {
                                 Some((slot, operand))
                             }
                             _ => None,
@@ -35927,7 +35953,7 @@ pub mod codegen {
                             self.line(&format!("cmp{suffix} {operand}, {at}(%rbp)"));
                         } else {
                             let left = match self.location_of(first) {
-                                Home::Register(held) => HELD_REGISTERS[held][0],
+                                ValueLocation::Register(held) => HELD_REGISTERS[held][0],
                                 _ => {
                                     self.load(first, "rax");
                                     "rax"
@@ -36088,11 +36114,11 @@ pub mod codegen {
                     let ty = argument_type(0);
                     let address = self.selection.indexed[&arguments[1]];
                     let value_register = match self.location_of(arguments[0]) {
-                        Home::Register(held) => Some(HELD_REGISTERS[held][0]),
+                        ValueLocation::Register(held) => Some(HELD_REGISTERS[held][0]),
                         _ => None,
                     };
                     let index_in_register =
-                        matches!(self.location_of(address.index), Home::Register(_));
+                        matches!(self.location_of(address.index), ValueLocation::Register(_));
                     if value_register.is_some() || index_in_register {
                         if let Some((place, displacement)) =
                             self.indexed_operand(arguments[1], frame)
@@ -36124,7 +36150,7 @@ pub mod codegen {
                     let (address, displacement) = self.address_of(arguments[0], frame);
                     let base = match address.map(|held| (held, self.location_of(held))) {
                         None => "rbp",
-                        Some((_, Home::Register(held))) => HELD_REGISTERS[held][0],
+                        Some((_, ValueLocation::Register(held))) => HELD_REGISTERS[held][0],
                         Some((held, _)) => {
                             self.load(held, "rcx");
                             "rcx"
@@ -36141,7 +36167,7 @@ pub mod codegen {
                 Operation::Store { .. } => {
                     let ty = argument_type(0);
                     let value = match self.location_of(arguments[0]) {
-                        Home::Register(held) => HELD_REGISTERS[held][0],
+                        ValueLocation::Register(held) => HELD_REGISTERS[held][0],
                         _ => {
                             self.load(arguments[0], "rax");
                             "rax"
@@ -36150,7 +36176,7 @@ pub mod codegen {
                     let (address, displacement) = self.address_of(arguments[1], frame);
                     let base = match address.map(|held| (held, self.location_of(held))) {
                         None => "rbp",
-                        Some((_, Home::Register(held))) => HELD_REGISTERS[held][0],
+                        Some((_, ValueLocation::Register(held))) => HELD_REGISTERS[held][0],
                         Some((held, _)) => {
                             self.load(held, "rcx");
                             "rcx"
@@ -36169,7 +36195,7 @@ pub mod codegen {
                         .small_displacement(arguments[1], type_bits(argument_type(1)))
                         .unwrap_or(0);
                     let base = match self.location_of(arguments[0]) {
-                        Home::Register(held) => HELD_REGISTERS[held][0],
+                        ValueLocation::Register(held) => HELD_REGISTERS[held][0],
                         _ => {
                             self.load(arguments[0], "rax");
                             "rax"
@@ -36187,11 +36213,11 @@ pub mod codegen {
                 }
                 Operation::Offset
                     if type_bits(argument_type(1)) == 64
-                        && matches!(self.location_of(arguments[0]), Home::Register(_))
-                        && matches!(self.location_of(arguments[1]), Home::Register(_))
+                        && matches!(self.location_of(arguments[0]), ValueLocation::Register(_))
+                        && matches!(self.location_of(arguments[1]), ValueLocation::Register(_))
                         && self.register_destination(result).is_some() =>
                 {
-                    let (Home::Register(base), Home::Register(index)) = (
+                    let (ValueLocation::Register(base), ValueLocation::Register(index)) = (
                         self.location_of(arguments[0]),
                         self.location_of(arguments[1]),
                     ) else {
@@ -36541,7 +36567,7 @@ pub mod codegen {
 
         fn register_destination(&self, result: Option<Value>) -> Option<&'static str> {
             match result.map(|held| self.location_of(held)) {
-                Some(Home::Register(held)) => Some(HELD_REGISTERS[held][0]),
+                Some(ValueLocation::Register(held)) => Some(HELD_REGISTERS[held][0]),
                 _ => None,
             }
         }
@@ -36577,8 +36603,8 @@ pub mod codegen {
                         _ => "xor",
                     };
                     let (left, right) = if op != BinaryOp::Subtract
-                        && matches!(self.location_of(left), Home::Constant(_))
-                        && !matches!(self.location_of(right), Home::Constant(_))
+                        && matches!(self.location_of(left), ValueLocation::Constant(_))
+                        && !matches!(self.location_of(right), ValueLocation::Constant(_))
                     {
                         (right, left)
                     } else {
@@ -36586,11 +36612,11 @@ pub mod codegen {
                     };
                     let right_in_destination = matches!(
                         self.location_of(right),
-                        Home::Register(held) if HELD_REGISTERS[held][0] == destination
+                        ValueLocation::Register(held) if HELD_REGISTERS[held][0] == destination
                     );
                     let (left, right) = if right_in_destination
                         && !matches!(op, BinaryOp::Subtract)
-                        && !matches!(self.location_of(left), Home::Register(held) if HELD_REGISTERS[held][0] == destination)
+                        && !matches!(self.location_of(left), ValueLocation::Register(held) if HELD_REGISTERS[held][0] == destination)
                     {
                         (right, left)
                     } else {
@@ -36598,13 +36624,13 @@ pub mod codegen {
                     };
                     let wide = bits == 32 || bits == 64;
                     let left_register = match self.location_of(left) {
-                        Home::Register(held) => Some(HELD_REGISTERS[held][0]),
+                        ValueLocation::Register(held) => Some(HELD_REGISTERS[held][0]),
                         _ => None,
                     };
                     if wide && left_register.is_some_and(|name| name != destination) {
                         let from = left_register.unwrap_or("rax");
                         let immediate = match self.location_of(right) {
-                            Home::Constant(constant) => {
+                            ValueLocation::Constant(constant) => {
                                 let value = if word {
                                     i64::from(constant as u32 as i32)
                                 } else {
@@ -36615,7 +36641,7 @@ pub mod codegen {
                             _ => None,
                         };
                         let right_register = match self.location_of(right) {
-                            Home::Register(held) => Some(HELD_REGISTERS[held][0]),
+                            ValueLocation::Register(held) => Some(HELD_REGISTERS[held][0]),
                             _ => None,
                         };
                         let load_effective = if word { "leal" } else { "leaq" };
@@ -36651,7 +36677,7 @@ pub mod codegen {
                         }
                     }
                     if matches!(op, BinaryOp::Multiply) && wide {
-                        if let (Home::Stack(slot), Home::Constant(constant)) =
+                        if let (ValueLocation::Stack(slot), ValueLocation::Constant(constant)) =
                             (self.location_of(left), self.location_of(right))
                         {
                             let value = if word {
@@ -36691,7 +36717,7 @@ pub mod codegen {
                         _ => "sar",
                     };
                     if op == BinaryOp::ShiftLeft && (bits == 32 || bits == 64) {
-                        if let (Home::Register(held), Home::Constant(count)) =
+                        if let (ValueLocation::Register(held), ValueLocation::Constant(count)) =
                             (self.location_of(left), self.location_of(right))
                         {
                             let amount = count & u64::from(bits - 1);
@@ -36711,7 +36737,7 @@ pub mod codegen {
                     } else {
                         self.load(left, destination);
                     }
-                    if let Home::Constant(count) = self.location_of(right) {
+                    if let ValueLocation::Constant(count) = self.location_of(right) {
                         let amount = count & u64::from(bits.max(1) - 1);
                         self.line(&format!("{base}{suffix} ${amount}, %{target}"));
                     } else {
@@ -37047,8 +37073,10 @@ pub mod codegen {
                 | BinaryOp::FloatDivide => {
                     self.load_float(left, "xmm0", ty);
                     let operand = match self.location_of(right) {
-                        Home::Float(held) => format!("%xmm{}", 8 + held),
-                        Home::Stack(index) => format!("{}(%rbp)", Self::stack_offset(index)),
+                        ValueLocation::Float(held) => format!("%xmm{}", 8 + held),
+                        ValueLocation::Stack(index) => {
+                            format!("{}(%rbp)", Self::stack_offset(index))
+                        }
                         _ => {
                             self.load_float(right, "xmm1", ty);
                             "%xmm1".to_string()
@@ -37299,19 +37327,19 @@ pub mod codegen {
                 Conversion::Bitcast => {
                     let size = self.layout.size_of(from).min(self.layout.size_of(to));
                     match self.location_of(value) {
-                        Home::Stack(index) => {
+                        ValueLocation::Stack(index) => {
                             self.line(&format!("leaq {}(%rbp), %rcx", Self::stack_offset(index)))
                         }
-                        Home::Register(held) => {
+                        ValueLocation::Register(held) => {
                             self.line(&format!("movq %{}, -8(%rsp)", HELD_REGISTERS[held][0]));
                             self.line("leaq -8(%rsp), %rcx");
                         }
-                        Home::Constant(constant) => {
+                        ValueLocation::Constant(constant) => {
                             self.constant(constant, "rax");
                             self.line("movq %rax, -8(%rsp)");
                             self.line("leaq -8(%rsp), %rcx");
                         }
-                        Home::Float(held) => {
+                        ValueLocation::Float(held) => {
                             self.line(&format!("movq %xmm{}, -8(%rsp)", 8 + held));
                             self.line("leaq -8(%rsp), %rcx");
                         }

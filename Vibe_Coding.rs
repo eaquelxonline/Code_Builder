@@ -1,18 +1,18 @@
 use crate::json::{self, Json, Writer};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Tier {
+pub enum AccessTier {
     Keyless,
     Free,
     Own,
 }
 
-impl Tier {
+impl AccessTier {
     pub fn name(self) -> &'static str {
         match self {
-            Tier::Keyless => "keyless",
-            Tier::Free => "free",
-            Tier::Own => "byok",
+            AccessTier::Keyless => "keyless",
+            AccessTier::Free => "free",
+            AccessTier::Own => "byok",
         }
     }
 }
@@ -280,7 +280,7 @@ pub struct Model {
 pub struct Provider {
     pub id: &'static str,
     pub shown: &'static str,
-    pub tier: Tier,
+    pub tier: AccessTier,
     pub format: Format,
     pub sign: Sign,
     pub base: &'static str,
@@ -319,7 +319,7 @@ pub const PROVIDERS: &[Provider] = &[
     Provider {
         id: "groq",
         shown: "Groq",
-        tier: Tier::Free,
+        tier: AccessTier::Free,
         format: Format::Open,
         sign: Sign::Bearer,
         base: "https://api.groq.com/openai/v1",
@@ -345,7 +345,7 @@ pub const PROVIDERS: &[Provider] = &[
     Provider {
         id: "cerebras",
         shown: "Cerebras",
-        tier: Tier::Free,
+        tier: AccessTier::Free,
         format: Format::Open,
         sign: Sign::Bearer,
         base: "https://api.cerebras.ai/v1",
@@ -371,7 +371,7 @@ pub const PROVIDERS: &[Provider] = &[
     Provider {
         id: "sambanova",
         shown: "SambaNova",
-        tier: Tier::Free,
+        tier: AccessTier::Free,
         format: Format::Open,
         sign: Sign::Bearer,
         base: "https://api.sambanova.ai/v1",
@@ -397,7 +397,7 @@ pub const PROVIDERS: &[Provider] = &[
     Provider {
         id: "google",
         shown: "Google Gemini",
-        tier: Tier::Free,
+        tier: AccessTier::Free,
         format: Format::Gemini,
         sign: Sign::Google,
         base: "https://generativelanguage.googleapis.com/v1beta",
@@ -439,7 +439,7 @@ pub const PROVIDERS: &[Provider] = &[
     Provider {
         id: "openrouter",
         shown: "OpenRouter",
-        tier: Tier::Free,
+        tier: AccessTier::Free,
         format: Format::Open,
         sign: Sign::Bearer,
         base: "https://openrouter.ai/api/v1",
@@ -465,7 +465,7 @@ pub const PROVIDERS: &[Provider] = &[
     Provider {
         id: "kilo",
         shown: "Kilo Gateway",
-        tier: Tier::Keyless,
+        tier: AccessTier::Keyless,
         format: Format::Open,
         sign: Sign::Nothing,
         base: "https://api.kilo.ai/api/gateway",
@@ -486,7 +486,7 @@ pub const PROVIDERS: &[Provider] = &[
     Provider {
         id: "llm7",
         shown: "LLM7.io",
-        tier: Tier::Keyless,
+        tier: AccessTier::Keyless,
         format: Format::Open,
         sign: Sign::Nothing,
         base: "https://api.llm7.io/v1",
@@ -516,7 +516,7 @@ pub const PROVIDERS: &[Provider] = &[
     Provider {
         id: "pollinations",
         shown: "Pollinations AI",
-        tier: Tier::Keyless,
+        tier: AccessTier::Keyless,
         format: Format::Open,
         sign: Sign::Nothing,
         base: "https://text.pollinations.ai/openai",
@@ -537,7 +537,7 @@ pub const PROVIDERS: &[Provider] = &[
     Provider {
         id: "keylessai",
         shown: "KeylessAI",
-        tier: Tier::Keyless,
+        tier: AccessTier::Keyless,
         format: Format::Open,
         sign: Sign::Nothing,
         base: "https://keylessai.thryx.workers.dev/v1",
@@ -558,7 +558,7 @@ pub const PROVIDERS: &[Provider] = &[
     Provider {
         id: "copilot",
         shown: "GitHub Copilot",
-        tier: Tier::Free,
+        tier: AccessTier::Free,
         format: Format::Open,
         sign: Sign::GitHub,
         base: "https://api.githubcopilot.com",
@@ -609,7 +609,7 @@ pub const PROVIDERS: &[Provider] = &[
     Provider {
         id: "anthropic",
         shown: "Anthropic",
-        tier: Tier::Own,
+        tier: AccessTier::Own,
         format: Format::Anthropic,
         sign: Sign::Anthropic,
         base: "https://api.anthropic.com",
@@ -660,7 +660,7 @@ pub const PROVIDERS: &[Provider] = &[
     Provider {
         id: "openai",
         shown: "OpenAI",
-        tier: Tier::Own,
+        tier: AccessTier::Own,
         format: Format::Open,
         sign: Sign::Bearer,
         base: "https://api.openai.com/v1",
@@ -697,7 +697,7 @@ pub const PROVIDERS: &[Provider] = &[
     Provider {
         id: "deepseek",
         shown: "DeepSeek",
-        tier: Tier::Own,
+        tier: AccessTier::Own,
         format: Format::Open,
         sign: Sign::Bearer,
         base: "https://api.deepseek.com/v1",
@@ -727,7 +727,7 @@ pub const PROVIDERS: &[Provider] = &[
     Provider {
         id: "openzoo",
         shown: "OpenZoo",
-        tier: Tier::Own,
+        tier: AccessTier::Own,
         format: Format::Open,
         sign: Sign::Bearer,
         base: "https://api.openzoo.fun/v1",
@@ -748,7 +748,7 @@ pub const PROVIDERS: &[Provider] = &[
     Provider {
         id: "maximumsats",
         shown: "Maximum Sats DVM",
-        tier: Tier::Own,
+        tier: AccessTier::Own,
         format: Format::Dvm,
         sign: Sign::Lightning,
         base: "https://maximumsats.com/api/dvm",
@@ -773,34 +773,34 @@ pub fn provider(id: &str) -> Option<&'static Provider> {
 }
 
 #[derive(Debug)]
-pub struct Barred {
+pub struct BlockedEndpoint {
     pub name: &'static str,
     pub hosts: &'static [&'static str],
     pub why: &'static str,
 }
 
-pub const BARRED: &[Barred] = &[
-    Barred {
+pub const BARRED: &[BlockedEndpoint] = &[
+    BlockedEndpoint {
         name: "NVIDIA NIM",
         hosts: &["nvidia.com"],
         why: "phone",
     },
-    Barred {
+    BlockedEndpoint {
         name: "Mistral AI",
         hosts: &["mistral.ai"],
         why: "phone",
     },
-    Barred {
+    BlockedEndpoint {
         name: "xAI",
         hosts: &["x.ai", "grok.com"],
         why: "training",
     },
-    Barred {
+    BlockedEndpoint {
         name: "Together AI",
         hosts: &["together.xyz", "together.ai"],
         why: "paid",
     },
-    Barred {
+    BlockedEndpoint {
         name: "Fireworks AI",
         hosts: &["fireworks.ai"],
         why: "paid",
@@ -830,7 +830,7 @@ pub fn host_of(url: &str) -> Option<(String, String)> {
     Some((scheme, host))
 }
 
-pub fn blocked_endpoint(url: &str) -> Option<&'static Barred> {
+pub fn blocked_endpoint(url: &str) -> Option<&'static BlockedEndpoint> {
     let (_, host) = host_of(url)?;
     BARRED.iter().find(|one| {
         one.hosts
@@ -1295,7 +1295,7 @@ pub struct Route {
 }
 
 pub fn keyed(provider: &Provider, keys: &[String]) -> bool {
-    provider.tier == Tier::Keyless || keys.iter().any(|one| one == provider.id)
+    provider.tier == AccessTier::Keyless || keys.iter().any(|one| one == provider.id)
 }
 
 pub fn choice(
@@ -1538,7 +1538,7 @@ impl Custom {
         }
         let filled = fill(
             &self.template,
-            &Filling {
+            &PromptFields {
                 model: "model",
                 prompt: "prompt",
                 system: "system",
@@ -1556,7 +1556,7 @@ impl Custom {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Filling<'a> {
+pub struct PromptFields<'a> {
     pub model: &'a str,
     pub prompt: &'a str,
     pub system: &'a str,
@@ -1571,7 +1571,7 @@ pub fn quoted(text: &str) -> String {
     w.finish()
 }
 
-pub fn fill(template: &str, filling: &Filling) -> String {
+pub fn fill(template: &str, filling: &PromptFields) -> String {
     let messages = if json::read(filling.messages).is_some_and(|held| held.list().is_some()) {
         filling.messages.to_string()
     } else {
@@ -1766,7 +1766,7 @@ pub const UNSPOKEN: &[&str] = &[
 pub const PAID_TIERS: &[&str] = &["seed", "flower", "nectar", "paid"];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Listed {
+pub struct ListedModel {
     pub id: String,
     pub window: u64,
 }
@@ -1860,7 +1860,7 @@ fn window_of(one: &Json) -> u64 {
     found.map_or(0, |said| said.max(0) as u64)
 }
 
-pub fn usable_models(tier: Tier, reply: &Json) -> Vec<Listed> {
+pub fn usable_models(tier: AccessTier, reply: &Json) -> Vec<ListedModel> {
     let items: &[Json] = match reply {
         Json::List(items) => items,
         _ => reply
@@ -1869,7 +1869,7 @@ pub fn usable_models(tier: Tier, reply: &Json) -> Vec<Listed> {
             .and_then(Json::list)
             .unwrap_or(&[]),
     };
-    let mut out: Vec<Listed> = Vec::new();
+    let mut out: Vec<ListedModel> = Vec::new();
     for one in items {
         let named = one
             .get("id")
@@ -1889,7 +1889,7 @@ pub fn usable_models(tier: Tier, reply: &Json) -> Vec<Listed> {
         if window > 0 && window < LISTED_WINDOW {
             continue;
         }
-        if tier != Tier::Own {
+        if tier != AccessTier::Own {
             if free_priced(one) == Some(false) {
                 continue;
             }
@@ -1908,7 +1908,7 @@ pub fn usable_models(tier: Tier, reply: &Json) -> Vec<Listed> {
             }
         }
         if out.iter().all(|held| held.id != id) {
-            out.push(Listed {
+            out.push(ListedModel {
                 id: id.to_string(),
                 window,
             });
@@ -1918,7 +1918,7 @@ pub fn usable_models(tier: Tier, reply: &Json) -> Vec<Listed> {
     out
 }
 
-pub fn listed_json(held: &[Listed]) -> String {
+pub fn listed_json(held: &[ListedModel]) -> String {
     let mut w = Writer::new();
     w.begin_object(None);
     w.begin_array(Some("models"));
@@ -2077,10 +2077,10 @@ pub fn answer(request: &str) -> String {
         "custom" => custom_json(&Custom::read(&held)),
         "models" => {
             let tier = match text_of(&held, "tier") {
-                "byok" | "own" => Tier::Own,
-                "keyless" => Tier::Keyless,
-                "custom" => Tier::Own,
-                _ => Tier::Free,
+                "byok" | "own" => AccessTier::Own,
+                "keyless" => AccessTier::Keyless,
+                "custom" => AccessTier::Own,
+                _ => AccessTier::Free,
             };
             let reply = json::read(text_of(&held, "reply")).unwrap_or(Json::Null);
             listed_json(&usable_models(tier, &reply))
@@ -2100,7 +2100,7 @@ pub fn answer(request: &str) -> String {
         "fill" => {
             let body = fill(
                 text_of(&held, "template"),
-                &Filling {
+                &PromptFields {
                     model: text_of(&held, "model"),
                     prompt: text_of(&held, "prompt"),
                     system: text_of(&held, "system"),

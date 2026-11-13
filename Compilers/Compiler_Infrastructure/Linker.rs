@@ -471,7 +471,7 @@ pub enum Discard {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Strip {
+pub enum StripMode {
     None,
     Debug,
     All,
@@ -567,7 +567,7 @@ pub struct Options {
     pub shared_object_name: Option<String>,
     pub run_paths: Vec<String>,
     pub export_dynamic: bool,
-    pub strip: Strip,
+    pub strip: StripMode,
     pub section_header: bool,
     pub no_warnings: bool,
     pub force_bti: bool,
@@ -762,7 +762,7 @@ impl Default for Options {
             shared_object_name: None,
             run_paths: Vec::new(),
             export_dynamic: false,
-            strip: Strip::None,
+            strip: StripMode::None,
             section_header: true,
             no_warnings: false,
             force_bti: false,
@@ -1933,8 +1933,8 @@ pub fn parse_command_line(arguments: &[String]) -> Result<Options, Diagnostic> {
             "--no-print-gc-sections" => options.print_gc_sections = false,
             "--export-dynamic" | "-E" => options.export_dynamic = true,
             "--no-export-dynamic" => options.export_dynamic = false,
-            "--strip-all" | "-s" => options.strip = Strip::All,
-            "--strip-debug" | "-S" => options.strip = Strip::Debug,
+            "--strip-all" | "-s" => options.strip = StripMode::All,
+            "--strip-debug" | "-S" => options.strip = StripMode::Debug,
             "--discard-all" | "-x" => options.discard = Discard::All,
             "--discard-locals" | "-X" => options.discard = Discard::Locals,
             "--discard-none" => options.discard = Discard::None,
@@ -2396,11 +2396,11 @@ pub fn parse_command_line(arguments: &[String]) -> Result<Options, Diagnostic> {
         }
     }
     if relocatable {
-        options.strip = Strip::None;
+        options.strip = StripMode::None;
     } else if !options.section_header {
-        options.strip = Strip::All;
+        options.strip = StripMode::All;
     }
-    if options.strip == Strip::All && options.emit_relocations {
+    if options.strip == StripMode::All && options.emit_relocations {
         return Err(invalid_value("--strip-all", "--emit-relocs").with_context(
             "Cause: --strip-all and --emit-relocs may not be used together".to_string(),
         ));
@@ -5729,7 +5729,7 @@ impl<'s> Context<'s> {
         data.used_in_regular_object = true;
         let id = self.symbols.len();
         self.symbols.push(data);
-        if self.options.strip != Strip::All {
+        if self.options.strip != StripMode::All {
             self.add_to_symbol_table(id);
         }
         id
@@ -11665,7 +11665,7 @@ impl<'s> Context<'s> {
                 Synthetic::GnuStack,
             );
         }
-        if self.options.strip != Strip::All {
+        if self.options.strip != StripMode::All {
             let index = self.add_synthetic(
                 ".symtab",
                 section_type::SYMBOL_TABLE,
@@ -11692,7 +11692,7 @@ impl<'s> Context<'s> {
                 Synthetic::SectionNameTable,
             );
         }
-        if self.options.strip != Strip::All {
+        if self.options.strip != StripMode::All {
             self.add_synthetic(
                 ".strtab",
                 section_type::STRING_TABLE,
@@ -11752,7 +11752,7 @@ impl<'s> Context<'s> {
                 }
             }
         }
-        if self.options.strip != Strip::None {
+        if self.options.strip != StripMode::None {
             let sections = &self.sections;
             let stripped = |section: SectionIndex| {
                 sections[section].flags & section_flag::ALLOCATE == 0
@@ -18468,7 +18468,7 @@ impl<'s> Context<'s> {
     }
 
     pub fn build_symbol_tables(&mut self) {
-        let has_table = self.options.strip != Strip::All;
+        let has_table = self.options.strip != StripMode::All;
         if has_table {
             for file in self.object_files.clone() {
                 let first_global = self.files[file].first_global;
@@ -24069,7 +24069,7 @@ impl<'s> Context<'s> {
     }
 
     pub fn add_plt_mapping_symbols(&mut self) {
-        if self.target.architecture != Architecture::Arm || self.options.strip == Strip::All {
+        if self.target.architecture != Architecture::Arm || self.options.strip == StripMode::All {
             return;
         }
         let thumb = self.use_thumb_plt();
@@ -26289,7 +26289,7 @@ impl<'s> Context<'s> {
         let id = self.symbols.len();
         self.symbols.push(data);
         self.thunk_state.thunks[thunk].symbols.push(id);
-        if self.options.strip != Strip::All {
+        if self.options.strip != StripMode::All {
             self.add_to_symbol_table(id);
         }
     }

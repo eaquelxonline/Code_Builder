@@ -8862,7 +8862,7 @@ pub mod native {
         UnaryOp, Value,
     };
     use crate::compilers::x86_64::codegen::{
-        self as shared, Emitter, Home, Selection, ARRAY_HEADER, ARRAY_LENGTH_OFFSET,
+        self as shared, Emitter, Selection, ValueLocation, ARRAY_HEADER, ARRAY_LENGTH_OFFSET,
         TRAP_ABSTRACT_METHOD, TRAP_CONVERSION_RANGE, TRAP_DIVISION_BY_ZERO, TRAP_EXPLICIT,
         TRAP_INDEX_OUT_OF_BOUNDS, TRAP_MEMORY_EXHAUSTED, TRAP_MISSING_IMPLEMENTATION,
         TRAP_NULL_REFERENCE, TRAP_OVERLAPPING_COPY, TRAP_UNREACHABLE,
@@ -9041,16 +9041,16 @@ pub mod native {
             }
         }
 
-        fn location_of(&self, value: Value) -> Home {
+        fn location_of(&self, value: Value) -> ValueLocation {
             self.homes
                 .get(value.index())
                 .copied()
-                .unwrap_or(Home::Stack(0))
+                .unwrap_or(ValueLocation::Stack(0))
         }
 
         fn register_of(&self, value: Value) -> Option<String> {
             match self.location_of(value) {
-                Home::Register(held) => Some(Self::held(held)),
+                ValueLocation::Register(held) => Some(Self::held(held)),
                 _ => None,
             }
         }
@@ -9067,7 +9067,7 @@ pub mod native {
 
         fn small_constant(&self, value: Value) -> Option<u64> {
             match self.location_of(value) {
-                Home::Constant(constant) if constant <= 4095 => Some(constant),
+                ValueLocation::Constant(constant) if constant <= 4095 => Some(constant),
                 _ => None,
             }
         }
@@ -9128,7 +9128,7 @@ pub mod native {
                 BinaryOp::ShiftLeft
                 | BinaryOp::ShiftRightLogical
                 | BinaryOp::ShiftRightArithmetic => {
-                    let Home::Constant(count) = self.location_of(right) else {
+                    let ValueLocation::Constant(count) = self.location_of(right) else {
                         return false;
                     };
                     let mnemonic = match op {
@@ -9162,8 +9162,10 @@ pub mod native {
 
         fn access(&mut self, load: bool, register: &str, value: Value) {
             match self.location_of(value) {
-                Home::Stack(index) => self.frame_access(load, register, -16 * (index as i64 + 1)),
-                Home::Register(held) => {
+                ValueLocation::Stack(index) => {
+                    self.frame_access(load, register, -16 * (index as i64 + 1))
+                }
+                ValueLocation::Register(held) => {
                     let name = Self::held(held);
                     if load {
                         self.line(&format!("mov {register}, {name}"));
@@ -9171,11 +9173,11 @@ pub mod native {
                         self.line(&format!("mov {name}, {register}"));
                     }
                 }
-                Home::Constant(constant) => {
+                ValueLocation::Constant(constant) => {
                     assert!(load, "a constant is never stored");
                     self.constant(constant, register);
                 }
-                Home::Float(held) => {
+                ValueLocation::Float(held) => {
                     let number = 24 + held;
                     match register.chars().next() {
                         Some(kind @ ('d' | 's')) => {
@@ -9639,7 +9641,7 @@ pub mod native {
             if arguments.len() != parameters.len() {
                 return false;
             }
-            let moves: Vec<(Home, Home, Value, Value)> = arguments
+            let moves: Vec<(ValueLocation, ValueLocation, Value, Value)> = arguments
                 .iter()
                 .zip(parameters)
                 .map(|(argument, parameter)| {
@@ -9659,7 +9661,7 @@ pub mod native {
             }
             for (_, destination, argument, parameter) in moves {
                 match destination {
-                    Home::Register(held) => self.access(true, &Self::held(held), argument),
+                    ValueLocation::Register(held) => self.access(true, &Self::held(held), argument),
                     _ => {
                         let register = self.operand(argument, A);
                         self.access(false, &register, parameter);
@@ -9891,7 +9893,7 @@ pub mod native {
                 Operation::IntegerConstant(value) => {
                     if !matches!(
                         result.map(|held| self.location_of(held)),
-                        Some(Home::Constant(_))
+                        Some(ValueLocation::Constant(_))
                     ) {
                         let bits = shared::type_bits(result_type.unwrap_or(Type::I64));
                         self.constant((*value as u64) & shared::all_ones(bits), A);
@@ -9911,7 +9913,7 @@ pub mod native {
                 Operation::Null | Operation::Poison => {
                     if !matches!(
                         result.map(|held| self.location_of(held)),
-                        Some(Home::Constant(_))
+                        Some(ValueLocation::Constant(_))
                     ) {
                         self.line(&format!("mov {A}, xzr"));
                         self.store_result(A, result);

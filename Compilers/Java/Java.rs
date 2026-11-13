@@ -1,6 +1,7 @@
 use crate::caps::Capability;
 use crate::compiler::{
-    Compiled, Compiler, Expected, Identity, Kind, Plan, Probe, Reproducibility, Request, Session,
+    BuildPlan, Compiled, Compiler, CompilerProbe, Expected, Identity, Kind, Reproducibility,
+    Request, Session,
 };
 use crate::diag::{Diagnostic, Severity};
 use crate::plugin::{Contract, Version};
@@ -85,7 +86,7 @@ impl Token {
 }
 
 #[derive(Clone, Debug)]
-pub struct Spelled {
+pub struct SpannedToken {
     pub token: Token,
     pub line: u32,
     pub column: u32,
@@ -220,13 +221,13 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn tokens(mut self) -> Result<Vec<Spelled>, Diagnostic> {
+    pub fn tokens(mut self) -> Result<Vec<SpannedToken>, Diagnostic> {
         let mut out = Vec::new();
         loop {
             self.skip_trivia()?;
             let (line, column) = (self.line, self.column);
             if self.at >= self.source.len() {
-                out.push(Spelled {
+                out.push(SpannedToken {
                     token: Token::End,
                     line,
                     column,
@@ -234,7 +235,7 @@ impl<'a> Lexer<'a> {
                 return Ok(out);
             }
             let token = self.scan_token(line, column)?;
-            out.push(Spelled {
+            out.push(SpannedToken {
                 token,
                 line,
                 column,
@@ -709,7 +710,7 @@ fn parse_integer(digits: &str, radix: u32, long: bool) -> Option<i64> {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum Written {
+pub enum TypeSyntax {
     Inferred,
     Void,
     Boolean,
@@ -721,26 +722,26 @@ pub enum Written {
     Float,
     Double,
 
-    Named(String, Vec<Written>),
+    Named(String, Vec<TypeSyntax>),
 
-    Variable(usize, Box<Written>),
+    Variable(usize, Box<TypeSyntax>),
 
-    OwnVariable(String, Box<Written>),
-    Array(Box<Written>),
+    OwnVariable(String, Box<TypeSyntax>),
+    Array(Box<TypeSyntax>),
 }
 
-impl Written {
-    fn of_keyword(word: &str) -> Option<Written> {
+impl TypeSyntax {
+    fn of_keyword(word: &str) -> Option<TypeSyntax> {
         Some(match word {
-            "void" => Written::Void,
-            "boolean" => Written::Boolean,
-            "byte" => Written::Byte,
-            "short" => Written::Short,
-            "char" => Written::Char,
-            "int" => Written::Int,
-            "long" => Written::Long,
-            "float" => Written::Float,
-            "double" => Written::Double,
+            "void" => TypeSyntax::Void,
+            "boolean" => TypeSyntax::Boolean,
+            "byte" => TypeSyntax::Byte,
+            "short" => TypeSyntax::Short,
+            "char" => TypeSyntax::Char,
+            "int" => TypeSyntax::Int,
+            "long" => TypeSyntax::Long,
+            "float" => TypeSyntax::Float,
+            "double" => TypeSyntax::Double,
             _ => return None,
         })
     }
@@ -820,7 +821,7 @@ impl Binary {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Through {
+pub enum InvokeKind {
     Static,
     Virtual,
     Interface,
@@ -853,24 +854,24 @@ pub enum Expression {
         name: String,
         arguments: Vec<Expression>,
 
-        held: Vec<Written>,
+        held: Vec<TypeSyntax>,
     },
     Invoke {
         on: Option<Box<Expression>>,
         owner: String,
         name: String,
         descriptor: String,
-        through: Through,
+        through: InvokeKind,
         arguments: Vec<Expression>,
     },
     New {
-        what: Written,
+        what: TypeSyntax,
         arguments: Vec<Expression>,
 
         outer: Option<Box<Expression>>,
     },
     NewArray {
-        of: Written,
+        of: TypeSyntax,
 
         lengths: Vec<Expression>,
 
@@ -878,18 +879,18 @@ pub enum Expression {
     },
 
     ArrayOf {
-        of: Option<Written>,
+        of: Option<TypeSyntax>,
         values: Vec<Expression>,
         line: u32,
     },
 
     ClassLiteral {
-        of: Written,
+        of: TypeSyntax,
         line: u32,
     },
 
     OuterThis {
-        of: Written,
+        of: TypeSyntax,
         line: u32,
     },
     Index {
@@ -918,9 +919,9 @@ pub enum Expression {
         after: bool,
     },
     Cast {
-        to: Written,
+        to: TypeSyntax,
         of: Box<Expression>,
-        also: Vec<Written>,
+        also: Vec<TypeSyntax>,
     },
     Conditional {
         condition: Box<Expression>,
@@ -934,7 +935,7 @@ pub enum Expression {
 
     Bind {
         name: String,
-        what: Written,
+        what: TypeSyntax,
         value: Box<Expression>,
     },
 
@@ -950,7 +951,7 @@ pub enum Expression {
     },
 
     Lambda {
-        parameters: Vec<(Option<Written>, String)>,
+        parameters: Vec<(Option<TypeSyntax>, String)>,
 
         body: Vec<Positioned<Statement>>,
 
@@ -959,7 +960,7 @@ pub enum Expression {
     },
 
     Anonymous {
-        what: Written,
+        what: TypeSyntax,
         arguments: Vec<Expression>,
         body: Box<Body>,
         line: u32,
@@ -989,7 +990,7 @@ pub struct Positioned<T> {
 pub enum Statement {
     Block(Vec<Positioned<Statement>>),
     Declare {
-        what: Written,
+        what: TypeSyntax,
         name: String,
         value: Option<Expression>,
         fixed: bool,
@@ -1016,7 +1017,7 @@ pub enum Statement {
     },
 
     ForEach {
-        what: Written,
+        what: TypeSyntax,
         name: String,
         over: Expression,
         body: Box<Positioned<Statement>>,
@@ -1079,7 +1080,7 @@ pub struct Arm {
 
 #[derive(Clone, Debug)]
 pub struct Pattern {
-    pub what: Written,
+    pub what: TypeSyntax,
 
     pub name: String,
 
@@ -1090,8 +1091,8 @@ pub struct Pattern {
 
 pub fn as_the_class_it_is(mut unit: Unit, constants: &[Constant]) -> Unit {
     let answering = constants.iter().any(|held| held.body.is_some());
-    let named = Written::Named(unit.name.clone(), Vec::new());
-    let array_of = Written::Array(Box::new(named.clone()));
+    let named = TypeSyntax::Named(unit.name.clone(), Vec::new());
+    let array_of = TypeSyntax::Array(Box::new(named.clone()));
     let public_constant = Modifiers {
         public: true,
         static_: true,
@@ -1201,7 +1202,7 @@ pub fn as_the_class_it_is(mut unit: Unit, constants: &[Constant]) -> Unit {
                 private: true,
                 ..Modifiers::default()
             },
-            returns: Written::Void,
+            returns: TypeSyntax::Void,
             name: "<init>".to_string(),
             parameters: Vec::new(),
             body: Some(Vec::new()),
@@ -1226,10 +1227,10 @@ pub fn as_the_class_it_is(mut unit: Unit, constants: &[Constant]) -> Unit {
         method.modifiers.private = true;
         let mut parameters = vec![
             (
-                Written::Named("String".to_string(), Vec::new()),
+                TypeSyntax::Named("String".to_string(), Vec::new()),
                 "$name".to_string(),
             ),
-            (Written::Int, "$ordinal".to_string()),
+            (TypeSyntax::Int, "$ordinal".to_string()),
         ];
         parameters.append(&mut method.parameters);
         method.parameters = parameters;
@@ -1341,7 +1342,7 @@ pub fn as_the_class_it_is(mut unit: Unit, constants: &[Constant]) -> Unit {
     value_of.push(at(
         1,
         Statement::Throw(Expression::New {
-            what: Written::Named("IllegalArgumentException".to_string(), Vec::new()),
+            what: TypeSyntax::Named("IllegalArgumentException".to_string(), Vec::new()),
             arguments: vec![Expression::Name("$name".to_string())],
             outer: None,
         }),
@@ -1355,7 +1356,7 @@ pub fn as_the_class_it_is(mut unit: Unit, constants: &[Constant]) -> Unit {
         returns: named,
         name: "valueOf".to_string(),
         parameters: vec![(
-            Written::Named("String".to_string(), Vec::new()),
+            TypeSyntax::Named("String".to_string(), Vec::new()),
             "$name".to_string(),
         )],
         body: Some(value_of),
@@ -1381,7 +1382,7 @@ const COMPACT: &str = "<compact>";
 
 fn as_the_class_a_record_is(
     mut unit: Unit,
-    components: &[(Written, String)],
+    components: &[(TypeSyntax, String)],
 ) -> Result<Unit, Diagnostic> {
     let at = |node: Statement| Positioned {
         node,
@@ -1452,7 +1453,7 @@ fn as_the_class_a_record_is(
                 }
                 _ => public,
             },
-            returns: Written::Void,
+            returns: TypeSyntax::Void,
             name: "<init>".to_string(),
             parameters: components.to_vec(),
             body: Some(body),
@@ -1529,7 +1530,7 @@ fn as_the_class_a_record_is(
         };
         unit.methods.push(Method {
             modifiers: public,
-            returns: Written::Named("String".to_string(), Vec::new()),
+            returns: TypeSyntax::Named("String".to_string(), Vec::new()),
             name: "toString".to_string(),
             parameters: Vec::new(),
             body: Some(vec![at(Statement::Return(Some(text)))]),
@@ -1577,7 +1578,7 @@ fn as_the_class_a_record_is(
                     of: Box::new(Expression::InstanceOf {
                         of: Box::new(Expression::Name(OTHER.to_string())),
                         pattern: Box::new(Pattern {
-                            what: Written::Named(unit.name.clone(), Vec::new()),
+                            what: TypeSyntax::Named(unit.name.clone(), Vec::new()),
                             name: IT.to_string(),
                             parts: Vec::new(),
                             taken: false,
@@ -1591,10 +1592,10 @@ fn as_the_class_a_record_is(
         ];
         unit.methods.push(Method {
             modifiers: public,
-            returns: Written::Boolean,
+            returns: TypeSyntax::Boolean,
             name: "equals".to_string(),
             parameters: vec![(
-                Written::Named("Object".to_string(), Vec::new()),
+                TypeSyntax::Named("Object".to_string(), Vec::new()),
                 OTHER.to_string(),
             )],
             body: Some(body),
@@ -1636,7 +1637,7 @@ fn as_the_class_a_record_is(
         }
         unit.methods.push(Method {
             modifiers: public,
-            returns: Written::Int,
+            returns: TypeSyntax::Int,
             name: "hashCode".to_string(),
             parameters: Vec::new(),
             body: Some(vec![at(Statement::Return(Some(worked)))]),
@@ -1658,7 +1659,11 @@ fn as_the_class_a_record_is(
     Ok(unit)
 }
 
-fn component_equals_expression(what: &Written, mine: Expression, theirs: Expression) -> Expression {
+fn component_equals_expression(
+    what: &TypeSyntax,
+    mine: Expression,
+    theirs: Expression,
+) -> Expression {
     let compared_by = |class: &str| Expression::Binary {
         operator: Binary::Equal,
         left: Box::new(Expression::Call {
@@ -1671,14 +1676,14 @@ fn component_equals_expression(what: &Written, mine: Expression, theirs: Express
         right: Box::new(Expression::Int(0)),
     };
     match what {
-        Written::Float => compared_by("Float"),
-        Written::Double => compared_by("Double"),
-        Written::Boolean
-        | Written::Byte
-        | Written::Short
-        | Written::Char
-        | Written::Int
-        | Written::Long => Expression::Binary {
+        TypeSyntax::Float => compared_by("Float"),
+        TypeSyntax::Double => compared_by("Double"),
+        TypeSyntax::Boolean
+        | TypeSyntax::Byte
+        | TypeSyntax::Short
+        | TypeSyntax::Char
+        | TypeSyntax::Int
+        | TypeSyntax::Long => Expression::Binary {
             operator: Binary::Equal,
             left: Box::new(mine),
             right: Box::new(theirs),
@@ -1705,7 +1710,7 @@ fn component_equals_expression(what: &Written, mine: Expression, theirs: Express
     }
 }
 
-fn component_hash_expression(what: &Written, mine: Expression) -> Expression {
+fn component_hash_expression(what: &TypeSyntax, mine: Expression) -> Expression {
     let hashed_by = |class: &str| Expression::Call {
         on: Some(Box::new(Expression::Name(class.to_string()))),
         super_call: false,
@@ -1714,14 +1719,14 @@ fn component_hash_expression(what: &Written, mine: Expression) -> Expression {
         arguments: vec![mine.clone()],
     };
     match what {
-        Written::Boolean => hashed_by("Boolean"),
-        Written::Byte => hashed_by("Byte"),
-        Written::Short => hashed_by("Short"),
-        Written::Char => hashed_by("Character"),
-        Written::Int => hashed_by("Integer"),
-        Written::Long => hashed_by("Long"),
-        Written::Float => hashed_by("Float"),
-        Written::Double => hashed_by("Double"),
+        TypeSyntax::Boolean => hashed_by("Boolean"),
+        TypeSyntax::Byte => hashed_by("Byte"),
+        TypeSyntax::Short => hashed_by("Short"),
+        TypeSyntax::Char => hashed_by("Character"),
+        TypeSyntax::Int => hashed_by("Integer"),
+        TypeSyntax::Long => hashed_by("Long"),
+        TypeSyntax::Float => hashed_by("Float"),
+        TypeSyntax::Double => hashed_by("Double"),
         _ => Expression::Conditional {
             condition: Box::new(Expression::Binary {
                 operator: Binary::Equal,
@@ -1745,7 +1750,7 @@ fn attach_enclosing_instance(mut unit: Unit, holder: &str, package: &Option<Stri
         Some(package) => format!("{}/{holder}", package.replace('.', "/")),
         None => holder.to_string(),
     };
-    let written = Written::Named(enclosing.replace('/', "."), Vec::new());
+    let written = TypeSyntax::Named(enclosing.replace('/', "."), Vec::new());
 
     unit.fields.insert(
         0,
@@ -1769,7 +1774,7 @@ fn attach_enclosing_instance(mut unit: Unit, holder: &str, package: &Option<Stri
                 public: true,
                 ..Modifiers::default()
             },
-            returns: Written::Void,
+            returns: TypeSyntax::Void,
             name: "<init>".to_string(),
             parameters: Vec::new(),
             body: Some(Vec::new()),
@@ -1870,7 +1875,7 @@ fn with_the_assertion_flag(unit: &Unit) -> Unit {
             final_: true,
             ..Modifiers::default()
         },
-        what: Written::Boolean,
+        what: TypeSyntax::Boolean,
         name: ASSERTIONS_OFF.to_string(),
         value: None,
         line: 1,
@@ -1886,7 +1891,7 @@ fn with_the_assertion_flag(unit: &Unit) -> Unit {
                     operator: Unary::Not,
                     of: Box::new(Expression::Call {
                         on: Some(Box::new(Expression::ClassLiteral {
-                            of: Written::Named(unit.name.clone(), Vec::new()),
+                            of: TypeSyntax::Named(unit.name.clone(), Vec::new()),
                             line: 1,
                         })),
                         super_call: false,
@@ -1975,20 +1980,20 @@ const OUTER: &str = "$outer";
 
 const REACHING_UP: &str = "lambda$super$";
 
-fn written_type_of(what: &Type) -> Option<Written> {
+fn written_type_of(what: &Type) -> Option<TypeSyntax> {
     Some(match what {
         Type::Void => return None,
-        Type::Boolean => Written::Boolean,
-        Type::Byte => Written::Byte,
-        Type::Short => Written::Short,
-        Type::Char => Written::Char,
-        Type::Int => Written::Int,
-        Type::Long => Written::Long,
-        Type::Float => Written::Float,
-        Type::Double => Written::Double,
-        Type::Array(of) => Written::Array(Box::new(written_type_of(of)?)),
+        Type::Boolean => TypeSyntax::Boolean,
+        Type::Byte => TypeSyntax::Byte,
+        Type::Short => TypeSyntax::Short,
+        Type::Char => TypeSyntax::Char,
+        Type::Int => TypeSyntax::Int,
+        Type::Long => TypeSyntax::Long,
+        Type::Float => TypeSyntax::Float,
+        Type::Double => TypeSyntax::Double,
+        Type::Array(of) => TypeSyntax::Array(Box::new(written_type_of(of)?)),
 
-        Type::Object(name, held) => Written::Named(
+        Type::Object(name, held) => TypeSyntax::Named(
             name.replace('/', "."),
             held.iter().filter_map(written_type_of).collect(),
         ),
@@ -2019,9 +2024,9 @@ fn names_assigned(body: &Body, out: &mut Vec<String>) {
     );
 }
 
-type Seeing<'a> = dyn FnMut(&Expression, &[String], &mut Vec<String>) + 'a;
+type ExpressionVisitor<'a> = dyn FnMut(&Expression, &[String], &mut Vec<String>) + 'a;
 
-fn free_in_body(body: &Body, visit: &mut Seeing<'_>, out: &mut Vec<String>) {
+fn free_in_body(body: &Body, visit: &mut ExpressionVisitor<'_>, out: &mut Vec<String>) {
     for field in &body.fields {
         if let Some(value) = &field.value {
             visit(value, &[], out);
@@ -2049,7 +2054,7 @@ fn free_in_body(body: &Body, visit: &mut Seeing<'_>, out: &mut Vec<String>) {
 fn in_scope_order(
     statements: &[Positioned<Statement>],
     bound: &mut Vec<String>,
-    visit: &mut Seeing<'_>,
+    visit: &mut ExpressionVisitor<'_>,
     out: &mut Vec<String>,
 ) {
     let mark = bound.len();
@@ -2062,7 +2067,7 @@ fn in_scope_order(
 fn in_scope_statement(
     statement: &Statement,
     bound: &mut Vec<String>,
-    visit: &mut Seeing<'_>,
+    visit: &mut ExpressionVisitor<'_>,
     out: &mut Vec<String>,
 ) {
     match statement {
@@ -2160,7 +2165,7 @@ fn in_scope_statement(
 fn in_scope_nested(
     statement: &Statement,
     bound: &mut Vec<String>,
-    visit: &mut Seeing<'_>,
+    visit: &mut ExpressionVisitor<'_>,
     out: &mut Vec<String>,
 ) {
     let mark = bound.len();
@@ -2552,7 +2557,7 @@ pub struct Constant {
 
 #[derive(Clone, Debug)]
 pub struct Catch {
-    pub types: Vec<Written>,
+    pub types: Vec<TypeSyntax>,
     pub name: String,
     pub body: Vec<Positioned<Statement>>,
     pub line: u32,
@@ -2624,7 +2629,7 @@ pub struct Annotated {
 #[derive(Clone, Debug)]
 pub struct Field {
     pub modifiers: Modifiers,
-    pub what: Written,
+    pub what: TypeSyntax,
     pub name: String,
 
     pub value: Option<Expression>,
@@ -2636,9 +2641,9 @@ pub struct Field {
 #[derive(Clone, Debug)]
 pub struct Method {
     pub modifiers: Modifiers,
-    pub returns: Written,
+    pub returns: TypeSyntax,
     pub name: String,
-    pub parameters: Vec<(Written, String)>,
+    pub parameters: Vec<(TypeSyntax, String)>,
     pub body: Option<Vec<Positioned<Statement>>>,
     pub constructor: bool,
 
@@ -2654,7 +2659,7 @@ pub struct Method {
 
     pub own_variables: Vec<String>,
 
-    pub own_bounds: Vec<Written>,
+    pub own_bounds: Vec<TypeSyntax>,
 
     pub throws: Vec<String>,
     pub line: u32,
@@ -2688,7 +2693,7 @@ pub struct Unit {
 
     pub outer: Option<String>,
 
-    pub above: Vec<Written>,
+    pub above: Vec<TypeSyntax>,
 
     pub stands_for_a_lambda: bool,
 
@@ -2702,7 +2707,7 @@ pub struct Unit {
 
     pub source: Option<String>,
 
-    pub own_variables: Vec<(String, Written)>,
+    pub own_variables: Vec<(String, TypeSyntax)>,
 
     pub enclosed_by: Option<(String, Option<(String, String)>)>,
 
@@ -2719,13 +2724,13 @@ impl Unit {
 }
 
 struct TypeFrame {
-    held: Vec<(String, Written)>,
+    held: Vec<(String, TypeSyntax)>,
 
     of_a_class: bool,
 }
 
 pub struct Parser {
-    tokens: Vec<Spelled>,
+    tokens: Vec<SpannedToken>,
     at: usize,
 
     held_annotations: Vec<Annotated>,
@@ -2745,7 +2750,7 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<Spelled>) -> Parser {
+    pub fn new(tokens: Vec<SpannedToken>) -> Parser {
         Parser {
             tokens,
             at: 0,
@@ -2772,7 +2777,7 @@ impl Parser {
         for (offset, token) in opening.into_iter().enumerate() {
             self.tokens.insert(
                 at + offset,
-                Spelled {
+                SpannedToken {
                     token,
                     line,
                     column,
@@ -2783,7 +2788,7 @@ impl Parser {
         let end_line = self.tokens[last].line;
         self.tokens.insert(
             last,
-            Spelled {
+            SpannedToken {
                 token: Token::Punctuation("}"),
                 line: end_line,
                 column: 1,
@@ -2791,15 +2796,15 @@ impl Parser {
         );
     }
 
-    fn erased(&self, name: &str) -> Option<Written> {
+    fn erased(&self, name: &str) -> Option<TypeSyntax> {
         self.type_variables.iter().rev().find_map(|frame| {
             let at = frame.held.iter().position(|(one, _)| one == name)?;
             let bound = frame.held[at].1.clone();
 
             if frame.of_a_class {
-                Some(Written::Variable(at, Box::new(bound)))
+                Some(TypeSyntax::Variable(at, Box::new(bound)))
             } else {
-                Some(Written::OwnVariable(name.to_string(), Box::new(bound)))
+                Some(TypeSyntax::OwnVariable(name.to_string(), Box::new(bound)))
             }
         })
     }
@@ -2820,7 +2825,7 @@ impl Parser {
                 }
                 first
             } else {
-                Written::Named("Object".to_string(), Vec::new())
+                TypeSyntax::Named("Object".to_string(), Vec::new())
             };
             frame.push((name, bound));
             if self.eat_mark(",") {
@@ -2865,9 +2870,9 @@ impl Parser {
         }
     }
 
-    fn erasing(&self, written: Written) -> Written {
+    fn erasing(&self, written: TypeSyntax) -> TypeSyntax {
         match &written {
-            Written::Named(name, _) => match self.erased(name) {
+            TypeSyntax::Named(name, _) => match self.erased(name) {
                 Some(bound) => bound,
                 None => written,
             },
@@ -2875,7 +2880,7 @@ impl Parser {
         }
     }
 
-    fn current_token(&self) -> &Spelled {
+    fn current_token(&self) -> &SpannedToken {
         &self.tokens[self.at.min(self.tokens.len() - 1)]
     }
 
@@ -3132,9 +3137,9 @@ impl Parser {
         Ok(found)
     }
 
-    fn parse_written_type(&mut self) -> Result<Written, Diagnostic> {
+    fn parse_written_type(&mut self) -> Result<TypeSyntax, Diagnostic> {
         let base = match self.current_token().token.clone() {
-            Token::Keyword(word) => match Written::of_keyword(word) {
+            Token::Keyword(word) => match TypeSyntax::of_keyword(word) {
                 Some(found) => {
                     self.take();
                     found
@@ -3156,7 +3161,7 @@ impl Parser {
                     ) =>
             {
                 self.take();
-                Written::Inferred
+                TypeSyntax::Inferred
             }
             Token::Identifier(_) => {
                 let mut named = self.qualified()?;
@@ -3171,7 +3176,7 @@ impl Parser {
                         arguments = held;
                     }
                 }
-                Written::Named(named, arguments)
+                TypeSyntax::Named(named, arguments)
             }
             other => {
                 return Err(at(
@@ -3189,7 +3194,7 @@ impl Parser {
         while self.is_mark("[") && matches!(self.peek_ahead(1), Token::Punctuation("]")) {
             self.take();
             self.take();
-            found = Written::Array(Box::new(found));
+            found = TypeSyntax::Array(Box::new(found));
         }
         Ok(found)
     }
@@ -3235,7 +3240,7 @@ impl Parser {
 
     fn looks_like_declaration(&self) -> bool {
         match &self.current_token().token {
-            Token::Keyword(word) => Written::of_keyword(word).is_some(),
+            Token::Keyword(word) => TypeSyntax::of_keyword(word).is_some(),
             Token::Identifier(_) => {
                 let mut ahead = 0usize;
 
@@ -3473,7 +3478,7 @@ impl Parser {
 
         let pushed = self.push_type_parameters(true)?;
 
-        let own_variables: Vec<(String, Written)> = if pushed {
+        let own_variables: Vec<(String, TypeSyntax)> = if pushed {
             self.type_variables
                 .last()
                 .map(|frame| frame.held.clone())
@@ -3492,11 +3497,11 @@ impl Parser {
         let mut extends = None;
         let mut implements = Vec::new();
 
-        let mut above: Vec<Written> = Vec::new();
+        let mut above: Vec<TypeSyntax> = Vec::new();
         if self.eat_word("extends") {
             loop {
                 let named = self.qualified()?;
-                above.push(Written::Named(named.clone(), self.type_arguments()?));
+                above.push(TypeSyntax::Named(named.clone(), self.type_arguments()?));
                 self.skip_type_arguments()?;
                 match shape {
                     Shape::Class | Shape::Enum => extends = Some(named),
@@ -3511,7 +3516,7 @@ impl Parser {
         if self.eat_word("implements") {
             loop {
                 let named = self.qualified()?;
-                above.push(Written::Named(named.clone(), self.type_arguments()?));
+                above.push(TypeSyntax::Named(named.clone(), self.type_arguments()?));
                 self.skip_type_arguments()?;
                 implements.push(named);
                 if !self.eat_mark(",") {
@@ -3708,7 +3713,7 @@ impl Parser {
             let body = self.braced_block()?;
             methods.push(Method {
                 modifiers,
-                returns: Written::Void,
+                returns: TypeSyntax::Void,
                 name: COMPACT.to_string(),
                 parameters: Vec::new(),
                 body: Some(body),
@@ -3756,7 +3761,7 @@ impl Parser {
             self.pop_type_parameters(pushed);
             methods.push(Method {
                 modifiers,
-                returns: Written::Void,
+                returns: TypeSyntax::Void,
                 name: "<init>".to_string(),
                 parameters,
                 body,
@@ -3849,7 +3854,7 @@ impl Parser {
             while self.is_mark("[") && matches!(self.peek_ahead(1), Token::Punctuation("]")) {
                 self.take();
                 self.take();
-                what = Written::Array(Box::new(what));
+                what = TypeSyntax::Array(Box::new(what));
             }
             let value = if self.eat_mark("=") {
                 Some(self.value_or_array()?)
@@ -3881,7 +3886,7 @@ impl Parser {
         Ok(())
     }
 
-    fn type_arguments(&mut self) -> Result<Vec<Written>, Diagnostic> {
+    fn type_arguments(&mut self) -> Result<Vec<TypeSyntax>, Diagnostic> {
         if !self.is_mark("<") {
             return Ok(Vec::new());
         }
@@ -3903,10 +3908,10 @@ impl Parser {
                     found.push(if self.in_parameters {
                         lower
                     } else {
-                        Written::Named("Object".to_string(), Vec::new())
+                        TypeSyntax::Named("Object".to_string(), Vec::new())
                     });
                 } else {
-                    found.push(Written::Named("Object".to_string(), Vec::new()));
+                    found.push(TypeSyntax::Named("Object".to_string(), Vec::new()));
                 }
                 if self.eat_mark(",") {
                     continue;
@@ -3982,7 +3987,7 @@ impl Parser {
         }
     }
 
-    fn parameters_and_shape(&mut self) -> Result<(Vec<(Written, String)>, bool), Diagnostic> {
+    fn parameters_and_shape(&mut self) -> Result<(Vec<(TypeSyntax, String)>, bool), Diagnostic> {
         let mut variadic = false;
         self.require_mark("(")?;
         let mut found = Vec::new();
@@ -3999,14 +4004,14 @@ impl Parser {
                 self.in_parameters = false;
                 let mut what = what?;
                 if self.eat_mark("...") {
-                    what = Written::Array(Box::new(what));
+                    what = TypeSyntax::Array(Box::new(what));
                     variadic = true;
                 }
                 let name = self.require_name()?;
                 while self.is_mark("[") && matches!(self.peek_ahead(1), Token::Punctuation("]")) {
                     self.take();
                     self.take();
-                    what = Written::Array(Box::new(what));
+                    what = TypeSyntax::Array(Box::new(what));
                 }
                 found.push((what, name));
                 if !self.eat_mark(",") {
@@ -4267,7 +4272,7 @@ impl Parser {
             while self.is_mark("[") && matches!(self.peek_ahead(1), Token::Punctuation("]")) {
                 self.take();
                 self.take();
-                what = Written::Array(Box::new(what));
+                what = TypeSyntax::Array(Box::new(what));
             }
             let value = if self.eat_mark("=") {
                 Some(self.value_or_array()?)
@@ -4424,7 +4429,7 @@ impl Parser {
     fn looks_like_a_type_pattern(&self) -> bool {
         let mut at;
 
-        if matches!(self.peek_ahead(0), Token::Keyword(word) if Written::of_keyword(word).is_some())
+        if matches!(self.peek_ahead(0), Token::Keyword(word) if TypeSyntax::of_keyword(word).is_some())
         {
             at = 1;
         } else {
@@ -4554,7 +4559,7 @@ impl Parser {
                     let named = self.require_name()?;
                     resources.push(Positioned {
                         node: Statement::Declare {
-                            what: Written::Inferred,
+                            what: TypeSyntax::Inferred,
                             name: format!("$closing{}", resources.len()),
                             value: Some(Expression::Name(named)),
                             fixed: true,
@@ -4980,7 +4985,7 @@ impl Parser {
 
     fn looks_like_cast(&self) -> bool {
         if let Token::Keyword(word) = self.peek_ahead(1) {
-            if Written::of_keyword(word).is_some() {
+            if TypeSyntax::of_keyword(word).is_some() {
                 let mut at = 2usize;
                 while matches!(self.peek_ahead(at), Token::Punctuation("["))
                     && matches!(self.peek_ahead(at + 1), Token::Punctuation("]"))
@@ -5046,7 +5051,7 @@ impl Parser {
                 | Token::Punctuation("~")
         ) || matches!(
             self.peek_ahead(ahead + 1),
-            Token::Keyword(word) if Written::of_keyword(word).is_some() || *word == "void"
+            Token::Keyword(word) if TypeSyntax::of_keyword(word).is_some() || *word == "void"
         )
     }
 
@@ -5195,7 +5200,7 @@ impl Parser {
                 while self.is_mark("[") && matches!(self.peek_ahead(1), Token::Punctuation("]")) {
                     self.take();
                     self.take();
-                    named = Written::Array(Box::new(named));
+                    named = TypeSyntax::Array(Box::new(named));
                 }
                 self.require_mark(".")?;
                 if !self.eat_word("class") {
@@ -5234,9 +5239,9 @@ impl Parser {
         Ok(found)
     }
 
-    fn type_name_only(&mut self) -> Result<Written, Diagnostic> {
+    fn type_name_only(&mut self) -> Result<TypeSyntax, Diagnostic> {
         let base = match self.current_token().token.clone() {
-            Token::Keyword(word) => match Written::of_keyword(word) {
+            Token::Keyword(word) => match TypeSyntax::of_keyword(word) {
                 Some(one) => {
                     self.take();
                     one
@@ -5252,7 +5257,7 @@ impl Parser {
             },
             _ => {
                 let named = self.qualified()?;
-                Written::Named(named, self.type_arguments()?)
+                TypeSyntax::Named(named, self.type_arguments()?)
             }
         };
         self.skip_type_arguments()?;
@@ -5328,7 +5333,7 @@ impl Parser {
     }
 
     fn lambda(&mut self, line: u32) -> Result<Expression, Diagnostic> {
-        let mut parameters: Vec<(Option<Written>, String)> = Vec::new();
+        let mut parameters: Vec<(Option<TypeSyntax>, String)> = Vec::new();
         if self.eat_mark("(") {
             while !self.is_mark(")") {
                 self.eat_final()?;
@@ -5396,7 +5401,7 @@ impl Parser {
         let (line, column) = (self.line(), self.column());
 
         if let Token::Keyword(word) = self.current_token().token {
-            if Written::of_keyword(word).is_some() {
+            if TypeSyntax::of_keyword(word).is_some() {
                 let mut at = 1usize;
                 while matches!(self.peek_ahead(at), Token::Punctuation("["))
                     && matches!(self.peek_ahead(at + 1), Token::Punctuation("]"))
@@ -5406,13 +5411,13 @@ impl Parser {
                 if matches!(self.peek_ahead(at), Token::Punctuation("."))
                     && matches!(self.peek_ahead(at + 1), Token::Keyword("class"))
                 {
-                    let mut of = Written::of_keyword(word).expect("just checked");
+                    let mut of = TypeSyntax::of_keyword(word).expect("just checked");
                     self.take();
                     while self.is_mark("[") && matches!(self.peek_ahead(1), Token::Punctuation("]"))
                     {
                         self.take();
                         self.take();
-                        of = Written::Array(Box::new(of));
+                        of = TypeSyntax::Array(Box::new(of));
                     }
                     self.take();
                     self.take();
@@ -5451,7 +5456,7 @@ impl Parser {
         if self.eat_word("new") {
             let held = self.at;
             let mut what = self.parse_written_type()?;
-            if matches!(what, Written::Array(_)) {
+            if matches!(what, TypeSyntax::Array(_)) {
                 self.at = held;
                 what = self.type_name_only()?;
             }
@@ -5481,7 +5486,7 @@ impl Parser {
                     }
                     let mut of = what;
                     for _ in 1..empty {
-                        of = Written::Array(Box::new(of));
+                        of = TypeSyntax::Array(Box::new(of));
                     }
                     let values = self.array_values()?;
                     return Ok(Expression::ArrayOf {
@@ -5934,8 +5939,8 @@ pub struct Signature {
 
     pub parameter_variables: Vec<Option<usize>>,
 
-    pub taken_stands_for: Vec<Standing>,
-    pub returns_stands_for: Standing,
+    pub taken_stands_for: Vec<TypePosition>,
+    pub returns_stands_for: TypePosition,
 
     pub own_variables: Vec<String>,
 
@@ -5971,7 +5976,7 @@ pub struct KnownClass {
     pub fields: Vec<(String, Type, bool)>,
 
     pub constants: Vec<(String, Expression)>,
-    pub field_standings: Vec<(String, Standing)>,
+    pub field_standings: Vec<(String, TypePosition)>,
     pub interface: bool,
 
     pub abstract_: bool,
@@ -5982,7 +5987,7 @@ pub struct KnownClass {
 
     pub permits: Vec<String>,
 
-    pub above: Vec<(String, Vec<(Type, Standing)>)>,
+    pub above: Vec<(String, Vec<(Type, TypePosition)>)>,
 }
 
 impl Classpath {
@@ -6156,7 +6161,7 @@ impl Classpath {
             .above
             .iter()
             .filter_map(|one| {
-                let Written::Named(named, arguments) = one else {
+                let TypeSyntax::Named(named, arguments) = one else {
                     return None;
                 };
                 let found = resolve_named(self, unit, named)?;
@@ -6172,7 +6177,8 @@ impl Classpath {
             })
             .collect();
 
-        let shallow = |written: &Written| -> Option<Type> { resolve_written(self, unit, written) };
+        let shallow =
+            |written: &TypeSyntax| -> Option<Type> { resolve_written(self, unit, written) };
 
         for field in &unit.fields {
             if let Some(what) = shallow(&field.what) {
@@ -6862,7 +6868,7 @@ struct Local {
 }
 
 #[derive(Clone)]
-struct Locally {
+struct LocalClass {
     written: String,
     internal: String,
     outer: Option<String>,
@@ -6870,7 +6876,7 @@ struct Locally {
     captured: Vec<Local>,
 }
 
-struct Pending {
+struct PendingJump {
     at: usize,
     from: usize,
 
@@ -6941,14 +6947,14 @@ struct Level {
     label: Option<String>,
 
     loops: bool,
-    breaks: Vec<Pending>,
-    continues: Vec<Pending>,
+    breaks: Vec<PendingJump>,
+    continues: Vec<PendingJump>,
 
     finallys: usize,
 }
 
-struct Yielding {
-    pending: Vec<Pending>,
+struct SwitchYield {
+    pending: Vec<PendingJump>,
 
     produced: Option<Type>,
 
@@ -7001,7 +7007,7 @@ struct Emitter<'a> {
 
     pending_label: Option<String>,
 
-    yields: Vec<Yielding>,
+    yields: Vec<SwitchYield>,
 
     made: &'a mut Vec<Unit>,
 
@@ -7015,7 +7021,7 @@ struct Emitter<'a> {
 
     taken_apart: usize,
 
-    locally: Vec<Locally>,
+    locally: Vec<LocalClass>,
 
     writing_a_bridge: bool,
     static_: bool,
@@ -7257,18 +7263,18 @@ impl<'a> Emitter<'a> {
         self.code.extend_from_slice(&operand.to_be_bytes());
     }
 
-    fn jump(&mut self, opcode: u8) -> Pending {
+    fn jump(&mut self, opcode: u8) -> PendingJump {
         let from = self.code.len();
         self.code.push(opcode);
         self.code.extend_from_slice(&[0, 0]);
-        Pending {
+        PendingJump {
             at: self.code.len() - 2,
             from,
             slots: self.slots.clone(),
         }
     }
 
-    fn bind_jump(&mut self, pending: Pending) {
+    fn bind_jump(&mut self, pending: PendingJump) {
         if self.reachable {
             self.merge_frame_types(&pending.slots);
         } else {
@@ -7289,7 +7295,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn bind_jump_at(&mut self, pending: Pending, to: usize) {
+    fn bind_jump_at(&mut self, pending: PendingJump, to: usize) {
         let offset = (to as i64 - pending.from as i64) as i16;
         self.code[pending.at..pending.at + 2].copy_from_slice(&offset.to_be_bytes());
     }
@@ -7342,7 +7348,7 @@ impl<'a> Emitter<'a> {
         slot
     }
 
-    fn record_constant(&mut self, what: &Written, value: &Expression) {
+    fn record_constant(&mut self, what: &TypeSyntax, value: &Expression) {
         let Some(local) = self.locals.last() else {
             return;
         };
@@ -7379,9 +7385,9 @@ impl<'a> Emitter<'a> {
             .cloned()
     }
 
-    fn resolve(&self, written: &Written, line: u32) -> Result<Type, Diagnostic> {
+    fn resolve(&self, written: &TypeSyntax, line: u32) -> Result<Type, Diagnostic> {
         Ok(match written {
-            Written::Inferred => {
+            TypeSyntax::Inferred => {
                 return Err(at(
                     "EJ234",
                     line,
@@ -7390,21 +7396,21 @@ impl<'a> Emitter<'a> {
                 )
                 .with_suggestion("Write the type, or give it a value."))
             }
-            Written::Void => Type::Void,
-            Written::Boolean => Type::Boolean,
-            Written::Byte => Type::Byte,
-            Written::Short => Type::Short,
-            Written::Char => Type::Char,
-            Written::Int => Type::Int,
-            Written::Long => Type::Long,
-            Written::Float => Type::Float,
-            Written::Double => Type::Double,
-            Written::Array(of) => Type::Array(Box::new(self.resolve(of, line)?)),
+            TypeSyntax::Void => Type::Void,
+            TypeSyntax::Boolean => Type::Boolean,
+            TypeSyntax::Byte => Type::Byte,
+            TypeSyntax::Short => Type::Short,
+            TypeSyntax::Char => Type::Char,
+            TypeSyntax::Int => Type::Int,
+            TypeSyntax::Long => Type::Long,
+            TypeSyntax::Float => Type::Float,
+            TypeSyntax::Double => Type::Double,
+            TypeSyntax::Array(of) => Type::Array(Box::new(self.resolve(of, line)?)),
 
-            Written::Variable(_, bound) | Written::OwnVariable(_, bound) => {
+            TypeSyntax::Variable(_, bound) | TypeSyntax::OwnVariable(_, bound) => {
                 self.resolve(bound, line)?
             }
-            Written::Named(name, held) => {
+            TypeSyntax::Named(name, held) => {
                 let mut arguments = Vec::new();
                 for one in held {
                     match self.resolve(one, line) {
@@ -8357,7 +8363,7 @@ fn built_in_overloads(owner: &str, name: &str, count: usize) -> Vec<Signature> {
             returns_variable: None,
             parameter_variables: Vec::new(),
             taken_stands_for: Vec::new(),
-            returns_stands_for: Standing::Fixed,
+            returns_stands_for: TypePosition::Fixed,
             own_variables: Vec::new(),
             witnessed: Vec::new(),
             throws: Vec::new(),
@@ -8402,7 +8408,7 @@ fn built_in_overloads(owner: &str, name: &str, count: usize) -> Vec<Signature> {
                 returns_variable: None,
                 parameter_variables: Vec::new(),
                 taken_stands_for: Vec::new(),
-                returns_stands_for: Standing::Fixed,
+                returns_stands_for: TypePosition::Fixed,
                 own_variables: Vec::new(),
                 witnessed: Vec::new(),
                 throws: Vec::new(),
@@ -8432,7 +8438,7 @@ fn dotted_path_of(expression: &Expression) -> Option<String> {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
-pub enum Standing {
+pub enum TypePosition {
     #[default]
     Fixed,
 
@@ -8440,19 +8446,19 @@ pub enum Standing {
 
     OfTheMethod(String),
 
-    Holding(Vec<Standing>),
+    Holding(Vec<TypePosition>),
 
-    ArrayOf(Box<Standing>),
+    ArrayOf(Box<TypePosition>),
 }
 
-impl Standing {
+impl TypePosition {
     fn references_class_type_parameter(&self) -> bool {
         match self {
-            Standing::OfTheClass(_) => true,
-            Standing::Holding(inside) => {
-                inside.iter().any(Standing::references_class_type_parameter)
-            }
-            Standing::ArrayOf(of) => of.references_class_type_parameter(),
+            TypePosition::OfTheClass(_) => true,
+            TypePosition::Holding(inside) => inside
+                .iter()
+                .any(TypePosition::references_class_type_parameter),
+            TypePosition::ArrayOf(of) => of.references_class_type_parameter(),
             _ => false,
         }
     }
@@ -8463,16 +8469,16 @@ impl Standing {
 
     fn is_fixed(&self) -> bool {
         match self {
-            Standing::Fixed => true,
-            Standing::Holding(inside) => inside.iter().all(Standing::is_fixed),
-            Standing::ArrayOf(of) => of.is_fixed(),
+            TypePosition::Fixed => true,
+            TypePosition::Holding(inside) => inside.iter().all(TypePosition::is_fixed),
+            TypePosition::ArrayOf(of) => of.is_fixed(),
             _ => false,
         }
     }
 
     fn bind(&self, actual: &Type, out: &mut Vec<(String, Type)>) {
         match self {
-            Standing::OfTheMethod(name) => {
+            TypePosition::OfTheMethod(name) => {
                 let actual = match boxed_name(actual) {
                     Some(boxed) => Type::Object(boxed.to_string(), Vec::new()),
                     None => actual.clone(),
@@ -8490,14 +8496,14 @@ impl Standing {
                     None => out.push((name.clone(), actual)),
                 }
             }
-            Standing::Holding(inside) => {
+            TypePosition::Holding(inside) => {
                 if let Type::Object(_, arguments) = actual {
                     for (one, held) in inside.iter().zip(arguments.iter()) {
                         one.bind(held, out);
                     }
                 }
             }
-            Standing::ArrayOf(of) => {
+            TypePosition::ArrayOf(of) => {
                 if let Type::Array(held) = actual {
                     of.bind(held, out);
                 }
@@ -8513,13 +8519,15 @@ impl Standing {
         of_the_method: &[(String, Type)],
     ) -> Type {
         match self {
-            Standing::OfTheClass(at) => of_the_class.get(*at).cloned().unwrap_or(erased.clone()),
-            Standing::OfTheMethod(name) => of_the_method
+            TypePosition::OfTheClass(at) => {
+                of_the_class.get(*at).cloned().unwrap_or(erased.clone())
+            }
+            TypePosition::OfTheMethod(name) => of_the_method
                 .iter()
                 .find(|(held, _)| held == name)
                 .map(|(_, what)| what.clone())
                 .unwrap_or(erased.clone()),
-            Standing::Holding(inside) => {
+            TypePosition::Holding(inside) => {
                 let Type::Object(named, arguments) = erased else {
                     return erased.clone();
                 };
@@ -8538,7 +8546,7 @@ impl Standing {
                     .collect();
                 Type::Object(named.clone(), filled)
             }
-            Standing::ArrayOf(of) => match erased {
+            TypePosition::ArrayOf(of) => match erased {
                 Type::Array(held) => Type::Array(Box::new(of.substitute_type_variables(
                     held,
                     of_the_class,
@@ -8546,36 +8554,40 @@ impl Standing {
                 ))),
                 _ => erased.clone(),
             },
-            Standing::Fixed => erased.clone(),
+            TypePosition::Fixed => erased.clone(),
         }
     }
 }
 
-fn type_position_of(written: &Written) -> Standing {
+fn type_position_of(written: &TypeSyntax) -> TypePosition {
     match written {
-        Written::Variable(at, _) => Standing::OfTheClass(*at),
-        Written::OwnVariable(name, _) => Standing::OfTheMethod(name.clone()),
-        Written::Array(of) => {
+        TypeSyntax::Variable(at, _) => TypePosition::OfTheClass(*at),
+        TypeSyntax::OwnVariable(name, _) => TypePosition::OfTheMethod(name.clone()),
+        TypeSyntax::Array(of) => {
             let inside = type_position_of(of);
             if inside.is_fixed() {
-                Standing::Fixed
+                TypePosition::Fixed
             } else {
-                Standing::ArrayOf(Box::new(inside))
+                TypePosition::ArrayOf(Box::new(inside))
             }
         }
-        Written::Named(_, arguments) if !arguments.is_empty() => {
-            let inside: Vec<Standing> = arguments.iter().map(type_position_of).collect();
-            if inside.iter().all(Standing::is_fixed) {
-                Standing::Fixed
+        TypeSyntax::Named(_, arguments) if !arguments.is_empty() => {
+            let inside: Vec<TypePosition> = arguments.iter().map(type_position_of).collect();
+            if inside.iter().all(TypePosition::is_fixed) {
+                TypePosition::Fixed
             } else {
-                Standing::Holding(inside)
+                TypePosition::Holding(inside)
             }
         }
-        _ => Standing::Fixed,
+        _ => TypePosition::Fixed,
     }
 }
 
-fn read_type_position(bytes: &[u8], at: &mut usize, of_the_class: &[String]) -> Option<Standing> {
+fn read_type_position(
+    bytes: &[u8],
+    at: &mut usize,
+    of_the_class: &[String],
+) -> Option<TypePosition> {
     match *bytes.get(*at)? {
         b'T' => {
             *at += 1;
@@ -8586,21 +8598,21 @@ fn read_type_position(bytes: &[u8], at: &mut usize, of_the_class: &[String]) -> 
             let name = String::from_utf8_lossy(&bytes[from..*at]).into_owned();
             *at += 1;
             Some(match of_the_class.iter().position(|one| *one == name) {
-                Some(held) => Standing::OfTheClass(held),
-                None => Standing::OfTheMethod(name),
+                Some(held) => TypePosition::OfTheClass(held),
+                None => TypePosition::OfTheMethod(name),
             })
         }
         b'[' => {
             *at += 1;
             let inside = read_type_position(bytes, at, of_the_class)?;
             Some(if inside.is_fixed() {
-                Standing::Fixed
+                TypePosition::Fixed
             } else {
-                Standing::ArrayOf(Box::new(inside))
+                TypePosition::ArrayOf(Box::new(inside))
             })
         }
         b'L' => {
-            let mut inside: Vec<Standing> = Vec::new();
+            let mut inside: Vec<TypePosition> = Vec::new();
             loop {
                 match *bytes.get(*at)? {
                     b'<' => {
@@ -8613,7 +8625,7 @@ fn read_type_position(bytes: &[u8], at: &mut usize, of_the_class: &[String]) -> 
                             }
                             if *bytes.get(*at)? == b'*' {
                                 *at += 1;
-                                inside.push(Standing::Fixed);
+                                inside.push(TypePosition::Fixed);
                                 continue;
                             }
                             inside.push(read_type_position(bytes, at, of_the_class)?);
@@ -8627,15 +8639,15 @@ fn read_type_position(bytes: &[u8], at: &mut usize, of_the_class: &[String]) -> 
                     _ => *at += 1,
                 }
             }
-            Some(if inside.iter().all(Standing::is_fixed) {
-                Standing::Fixed
+            Some(if inside.iter().all(TypePosition::is_fixed) {
+                TypePosition::Fixed
             } else {
-                Standing::Holding(inside)
+                TypePosition::Holding(inside)
             })
         }
         _ => {
             skip_generic_type(bytes, at)?;
-            Some(Standing::Fixed)
+            Some(TypePosition::Fixed)
         }
     }
 }
@@ -8657,7 +8669,7 @@ fn not_shadowed(signature: &str, of_the_class: &[String]) -> Vec<String> {
 fn type_positions_of_signature(
     signature: &str,
     of_the_class: &[String],
-) -> Option<(Vec<Standing>, Standing)> {
+) -> Option<(Vec<TypePosition>, TypePosition)> {
     let of_the_class = &not_shadowed(signature, of_the_class);
     let bytes = signature.as_bytes();
     let mut at = 0usize;
@@ -8780,14 +8792,14 @@ fn bounds_of(signature: &str) -> Vec<(String, Type)> {
     out
 }
 
-type Placed = (Type, Standing, Vec<(Type, Standing)>);
+type SignatureTypeEntry = (Type, TypePosition, Vec<(Type, TypePosition)>);
 
 fn read_signature_type(
     bytes: &[u8],
     at: &mut usize,
     variables: &[String],
     bounds: &[(String, Type)],
-) -> Option<Placed> {
+) -> Option<SignatureTypeEntry> {
     let object = || Type::Object("java/lang/Object".to_string(), Vec::new());
     match *bytes.get(*at)? {
         b'T' => {
@@ -8804,8 +8816,8 @@ fn read_signature_type(
                 .map(|(_, bound)| bound.clone())
                 .unwrap_or_else(object);
             let standing = match variables.iter().position(|held| *held == name) {
-                Some(index) => Standing::OfTheClass(index),
-                None => Standing::Fixed,
+                Some(index) => TypePosition::OfTheClass(index),
+                None => TypePosition::Fixed,
             };
             Some((erased, standing, Vec::new()))
         }
@@ -8813,15 +8825,15 @@ fn read_signature_type(
             *at += 1;
             let (inner, standing, _) = read_signature_type(bytes, at, variables, bounds)?;
             let standing = match standing {
-                Standing::Fixed => Standing::Fixed,
-                other => Standing::ArrayOf(Box::new(other)),
+                TypePosition::Fixed => TypePosition::Fixed,
+                other => TypePosition::ArrayOf(Box::new(other)),
             };
             Some((Type::Array(Box::new(inner)), standing, Vec::new()))
         }
         b'L' => {
             *at += 1;
             let mut name = String::new();
-            let mut arguments: Vec<(Type, Standing)> = Vec::new();
+            let mut arguments: Vec<(Type, TypePosition)> = Vec::new();
             loop {
                 let held = *bytes.get(*at)?;
                 match held {
@@ -8836,7 +8848,7 @@ fn read_signature_type(
                             match bytes[*at] {
                                 b'*' => {
                                     *at += 1;
-                                    arguments.push((object(), Standing::Fixed));
+                                    arguments.push((object(), TypePosition::Fixed));
                                 }
                                 b'-' => {
                                     *at += 1;
@@ -8871,9 +8883,9 @@ fn read_signature_type(
                 }
             }
             let standing = if arguments.iter().all(|(_, one)| one.is_fixed()) {
-                Standing::Fixed
+                TypePosition::Fixed
             } else {
-                Standing::Holding(arguments.iter().map(|(_, one)| one.clone()).collect())
+                TypePosition::Holding(arguments.iter().map(|(_, one)| one.clone()).collect())
             };
             let erased = Type::Object(
                 name,
@@ -8883,7 +8895,7 @@ fn read_signature_type(
         }
         _ => {
             let text = String::from_utf8_lossy(bytes).into_owned();
-            Some((read_type(&text, at)?, Standing::Fixed, Vec::new()))
+            Some((read_type(&text, at)?, TypePosition::Fixed, Vec::new()))
         }
     }
 }
@@ -8919,19 +8931,19 @@ fn fixed_parts(signature: &str, of_the_class: &[String]) -> Option<Parts> {
     let mut parameters = Vec::new();
     while *bytes.get(at)? != b')' {
         let (erased, standing, _) = read_signature_type(bytes, &mut at, &variables, &[])?;
-        parameters.push(matches!(standing, Standing::Fixed).then_some(erased));
+        parameters.push(matches!(standing, TypePosition::Fixed).then_some(erased));
     }
     at += 1;
     let returns = if *bytes.get(at)? == b'V' {
         None
     } else {
         let (erased, standing, _) = read_signature_type(bytes, &mut at, &variables, &[])?;
-        matches!(standing, Standing::Fixed).then_some(erased)
+        matches!(standing, TypePosition::Fixed).then_some(erased)
     };
     Some((parameters, returns))
 }
 
-fn supertypes_of_signature(signature: &str) -> Vec<(String, Vec<(Type, Standing)>)> {
+fn supertypes_of_signature(signature: &str) -> Vec<(String, Vec<(Type, TypePosition)>)> {
     let variables = type_parameters_of(signature);
     let bounds = bounds_of(signature);
     let bytes = signature.as_bytes();
@@ -9140,29 +9152,29 @@ fn variables_of(signature: &str, parameters: &[String]) -> (Option<usize>, Vec<O
     (returns, taken)
 }
 
-fn type_variable_index(written: &Written) -> Option<usize> {
+fn type_variable_index(written: &TypeSyntax) -> Option<usize> {
     match written {
-        Written::Variable(at, _) => Some(*at),
+        TypeSyntax::Variable(at, _) => Some(*at),
         _ => None,
     }
 }
 
-fn resolve_written(classpath: &Classpath, unit: &Unit, written: &Written) -> Option<Type> {
+fn resolve_written(classpath: &Classpath, unit: &Unit, written: &TypeSyntax) -> Option<Type> {
     Some(match written {
-        Written::Void => Type::Void,
-        Written::Boolean => Type::Boolean,
-        Written::Byte => Type::Byte,
-        Written::Short => Type::Short,
-        Written::Char => Type::Char,
-        Written::Int => Type::Int,
-        Written::Long => Type::Long,
-        Written::Float => Type::Float,
-        Written::Double => Type::Double,
-        Written::Array(of) => Type::Array(Box::new(resolve_written(classpath, unit, of)?)),
-        Written::Variable(_, bound) | Written::OwnVariable(_, bound) => {
+        TypeSyntax::Void => Type::Void,
+        TypeSyntax::Boolean => Type::Boolean,
+        TypeSyntax::Byte => Type::Byte,
+        TypeSyntax::Short => Type::Short,
+        TypeSyntax::Char => Type::Char,
+        TypeSyntax::Int => Type::Int,
+        TypeSyntax::Long => Type::Long,
+        TypeSyntax::Float => Type::Float,
+        TypeSyntax::Double => Type::Double,
+        TypeSyntax::Array(of) => Type::Array(Box::new(resolve_written(classpath, unit, of)?)),
+        TypeSyntax::Variable(_, bound) | TypeSyntax::OwnVariable(_, bound) => {
             resolve_written(classpath, unit, bound)?
         }
-        Written::Named(name, held) => {
+        TypeSyntax::Named(name, held) => {
             let mut arguments = Vec::new();
             for one in held {
                 match resolve_written(classpath, unit, one) {
@@ -9176,7 +9188,7 @@ fn resolve_written(classpath: &Classpath, unit: &Unit, written: &Written) -> Opt
             }
             Type::Object(resolve_named(classpath, unit, name)?, arguments)
         }
-        Written::Inferred => return None,
+        TypeSyntax::Inferred => return None,
     })
 }
 
@@ -13545,7 +13557,7 @@ impl Emitter<'_> {
         around: &str,
         name: &str,
         arguments: &[Expression],
-        held: &[Written],
+        held: &[TypeSyntax],
         going: Option<Type>,
         line: u32,
     ) -> Result<Type, Diagnostic> {
@@ -13886,7 +13898,7 @@ impl Emitter<'_> {
 
     fn narrowed_field(
         &mut self,
-        standing: Option<Standing>,
+        standing: Option<TypePosition>,
         what: &Type,
         arguments: &[Type],
     ) -> Type {
@@ -14268,12 +14280,12 @@ impl Emitter<'_> {
 impl Emitter<'_> {
     fn new_object(
         &mut self,
-        what: &Written,
+        what: &TypeSyntax,
         arguments: &[Expression],
         outer: Option<&Expression>,
         line: u32,
     ) -> Result<Type, Diagnostic> {
-        if let Written::Named(named, _) = what {
+        if let TypeSyntax::Named(named, _) = what {
             if let Some(held) = self
                 .locally
                 .iter()
@@ -14286,7 +14298,7 @@ impl Emitter<'_> {
         }
 
         let target = match (outer, what) {
-            (Some(written), Written::Named(named, held)) if !named.contains('.') => {
+            (Some(written), TypeSyntax::Named(named, held)) if !named.contains('.') => {
                 let held = held.clone();
                 let named = named.clone();
                 let around = self.peek_type(written, line).ok();
@@ -14397,12 +14409,12 @@ impl Emitter<'_> {
                         && found
                             .taken_stands_for
                             .iter()
-                            .any(|one| matches!(one, Standing::OfTheClass(_)))
+                            .any(|one| matches!(one, TypePosition::OfTheClass(_)))
                     {
                         let object = Type::Object("java/lang/Object".to_string(), Vec::new());
                         let mut inferred: Vec<Type> = Vec::new();
                         for (at, standing) in found.taken_stands_for.iter().enumerate() {
-                            let Standing::OfTheClass(which) = standing else {
+                            let TypePosition::OfTheClass(which) = standing else {
                                 continue;
                             };
                             let Some(argument) = arguments.get(at) else {
@@ -14475,7 +14487,7 @@ impl Emitter<'_> {
 
     fn new_local_object(
         &mut self,
-        held: &Locally,
+        held: &LocalClass,
         arguments: &[Expression],
         line: u32,
     ) -> Result<Type, Diagnostic> {
@@ -14567,7 +14579,7 @@ impl Emitter<'_> {
                     returns_variable: None,
                     parameter_variables: Vec::new(),
                     taken_stands_for: Vec::new(),
-                    returns_stands_for: Standing::Fixed,
+                    returns_stands_for: TypePosition::Fixed,
                     own_variables: Vec::new(),
                     witnessed: Vec::new(),
                     throws: Vec::new(),
@@ -14753,7 +14765,7 @@ impl Emitter<'_> {
         owner: &str,
         name: &str,
         descriptor: &str,
-        through: Through,
+        through: InvokeKind,
         arguments: &[Expression],
         line: u32,
     ) -> Result<Type, Diagnostic> {
@@ -14768,7 +14780,7 @@ impl Emitter<'_> {
                 ),
             ));
         };
-        let static_ = through == Through::Static;
+        let static_ = through == InvokeKind::Static;
         if let Some(on) = on {
             let found = self.value(on, line)?;
             if !found.is_reference() {
@@ -14791,13 +14803,13 @@ impl Emitter<'_> {
             })?;
         let index = self
             .pool
-            .method(owner, name, descriptor, through == Through::Interface);
+            .method(owner, name, descriptor, through == InvokeKind::Interface);
         let taken: i32 = parameters.iter().map(|one| i32::from(one.width())).sum();
         match through {
-            Through::Static => self.op2(0xb8, index),
-            Through::Virtual => self.op2(0xb6, index),
-            Through::Special => self.op2(0xb7, index),
-            Through::Interface => {
+            InvokeKind::Static => self.op2(0xb8, index),
+            InvokeKind::Virtual => self.op2(0xb6, index),
+            InvokeKind::Special => self.op2(0xb7, index),
+            InvokeKind::Interface => {
                 self.code.push(0xb9);
                 self.code.extend_from_slice(&index.to_be_bytes());
                 self.code.push((taken + 1) as u8);
@@ -14815,7 +14827,7 @@ impl Emitter<'_> {
         super_call: bool,
         name: &str,
         arguments: &[Expression],
-        held: &[Written],
+        held: &[TypeSyntax],
         line: u32,
     ) -> Result<Type, Diagnostic> {
         let going = self.expecting.clone();
@@ -15509,7 +15521,7 @@ impl Emitter<'_> {
         owner: &str,
         name: &str,
         arguments: &[Expression],
-        held: &[Written],
+        held: &[TypeSyntax],
         line: u32,
     ) -> Result<Option<Signature>, Diagnostic> {
         let Some(mut found) = self.signature_for(owner, name, arguments, line)? else {
@@ -15580,7 +15592,7 @@ impl Emitter<'_> {
         let mut anything = self.argument_flexibility_in_scope(arguments);
         let mut given = Vec::with_capacity(arguments.len());
         for (at, expression) in arguments.iter().enumerate() {
-            if anything[at] != Loosely::No {
+            if anything[at] != ArgumentFlexibility::No {
                 given.push(Type::Object("java/lang/Object".to_string(), Vec::new()));
                 continue;
             }
@@ -15594,7 +15606,7 @@ impl Emitter<'_> {
                     Expression::Conditional { .. } | Expression::Call { .. }
                 )
             {
-                anything[at] = Loosely::AnyReference;
+                anything[at] = ArgumentFlexibility::AnyReference;
             }
             given.push(seen);
         }
@@ -15630,7 +15642,7 @@ impl Emitter<'_> {
             let (Type::Object(asked, _), Type::Object(limit, _)) = (wanted, &declared) else {
                 return true;
             };
-            !matches!(signature.returns_stands_for, Standing::OfTheMethod(_))
+            !matches!(signature.returns_stands_for, TypePosition::OfTheMethod(_))
                 || limit == "java/lang/Object"
                 || self.classpath.get(asked).is_none()
                 || self.classpath.get(limit).is_none()
@@ -15706,7 +15718,10 @@ impl Emitter<'_> {
         line: u32,
     ) -> Result<Vec<Type>, Diagnostic> {
         if signature.returns_stands_for.is_fixed()
-            && signature.taken_stands_for.iter().all(Standing::is_fixed)
+            && signature
+                .taken_stands_for
+                .iter()
+                .all(TypePosition::is_fixed)
         {
             return Ok(Vec::new());
         }
@@ -15748,11 +15763,16 @@ impl Emitter<'_> {
     }
 
     fn as_the_parameter_sees_it(&self, signature: &Signature, at: usize, found: Type) -> Type {
-        let (Some(Type::Object(wanted, _)), Some(Standing::Holding(_)), Type::Object(have, held)) = (
+        let (
+            Some(Type::Object(wanted, _)),
+            Some(TypePosition::Holding(_)),
+            Type::Object(have, held),
+        ) = (
             signature.parameters.get(at),
             signature.taken_stands_for.get(at),
             &found,
-        ) else {
+        )
+        else {
             return found;
         };
         if wanted == have || !self.classpath.ancestors(have).contains(wanted) {
@@ -15776,7 +15796,7 @@ impl Emitter<'_> {
         };
         let sam = self.single_abstract_method(named, line).ok()?;
 
-        let Standing::OfTheClass(which) = sam.returns_stands_for else {
+        let TypePosition::OfTheClass(which) = sam.returns_stands_for else {
             return None;
         };
         let shaped = as_written(&sam, held);
@@ -15820,14 +15840,14 @@ impl Emitter<'_> {
                     vec!["java/lang/Throwable".to_string()],
                 );
                 if !*expression {
-                    let mut declared: Vec<(Written, String, Option<Expression>)> = Vec::new();
+                    let mut declared: Vec<(TypeSyntax, String, Option<Expression>)> = Vec::new();
                     for one in body.iter() {
                         locals_declared(&one.node, &mut declared);
                     }
                     for (what, name, value) in declared {
                         let found = match (&what, &value) {
-                            (Written::Inferred, Some(value)) => self.type_of(value, line).ok(),
-                            (Written::Inferred, None) => None,
+                            (TypeSyntax::Inferred, Some(value)) => self.type_of(value, line).ok(),
+                            (TypeSyntax::Inferred, None) => None,
                             _ => self.resolve(&what, line).ok(),
                         };
                         if let Some(found) = found {
@@ -15983,7 +16003,7 @@ impl Emitter<'_> {
         let anything = self.argument_flexibility_in_scope(arguments);
         let mut given = Vec::with_capacity(arguments.len());
         for (at, one) in arguments.iter().enumerate() {
-            if anything[at] != Loosely::No {
+            if anything[at] != ArgumentFlexibility::No {
                 given.push(Type::Object("java/lang/Object".to_string(), Vec::new()));
                 continue;
             }
@@ -16010,7 +16030,7 @@ impl Emitter<'_> {
                 returns_variable: None,
                 parameter_variables: Vec::new(),
                 taken_stands_for: Vec::new(),
-                returns_stands_for: Standing::Fixed,
+                returns_stands_for: TypePosition::Fixed,
                 own_variables: Vec::new(),
                 witnessed: Vec::new(),
                 throws: Vec::new(),
@@ -16092,13 +16112,18 @@ impl Emitter<'_> {
             .all(|(held, wanted)| held == wanted || self.is_subtype(held, wanted))
     }
 
-    fn conversion_cost(&self, candidate: &Signature, given: &[Type], anything: &[Loosely]) -> u32 {
+    fn conversion_cost(
+        &self,
+        candidate: &Signature,
+        given: &[Type],
+        anything: &[ArgumentFlexibility],
+    ) -> u32 {
         let mut total = 0u32;
         let last = candidate.parameters.len().saturating_sub(1);
         for (at, have) in given.iter().enumerate() {
             if matches!(
                 anything.get(at),
-                Some(Loosely::Anywhere(_) | Loosely::Shaped(..))
+                Some(ArgumentFlexibility::Anywhere(_) | ArgumentFlexibility::Shaped(..))
             ) {
                 continue;
             }
@@ -16124,18 +16149,18 @@ impl Emitter<'_> {
         &self,
         candidate: &Signature,
         given: &[Type],
-        anything: &[Loosely],
+        anything: &[ArgumentFlexibility],
         round: u8,
     ) -> bool {
         let matched = |at: usize, have: &Type, want: &Type| match anything.get(at) {
-            Some(Loosely::Anywhere(counts)) => {
+            Some(ArgumentFlexibility::Anywhere(counts)) => {
                 counts.is_empty()
                     || match self.functional_interface_arity(want) {
                         Some(takes) => counts.contains(&takes),
                         None => true,
                     }
             }
-            Some(Loosely::Shaped(count, gives)) => {
+            Some(ArgumentFlexibility::Shaped(count, gives)) => {
                 let Type::Object(named, _) = want else {
                     return false;
                 };
@@ -16143,15 +16168,15 @@ impl Emitter<'_> {
                     Ok(single) => {
                         single.parameters.len() == *count
                             && match gives {
-                                Gives::Nothing => single.returns == Type::Void,
-                                Gives::Something => single.returns != Type::Void,
-                                Gives::Either => true,
+                                LambdaResult::Nothing => single.returns == Type::Void,
+                                LambdaResult::Something => single.returns != Type::Void,
+                                LambdaResult::Either => true,
                             }
                     }
                     Err(_) => false,
                 }
             }
-            Some(Loosely::AnyReference) => want.is_reference(),
+            Some(ArgumentFlexibility::AnyReference) => want.is_reference(),
             _ => match round {
                 0 => want == have,
                 1 => self.is_subtype(have, want),
@@ -16236,7 +16261,7 @@ impl Emitter<'_> {
                     returns_variable: None,
                     parameter_variables: Vec::new(),
                     taken_stands_for: Vec::new(),
-                    returns_stands_for: Standing::Fixed,
+                    returns_stands_for: TypePosition::Fixed,
                     own_variables: Vec::new(),
                     witnessed: Vec::new(),
                     throws: Vec::new(),
@@ -16902,7 +16927,7 @@ impl Emitter<'_> {
                 value,
                 fixed,
             } => {
-                if matches!(what, Written::Inferred) {
+                if matches!(what, TypeSyntax::Inferred) {
                     let Some(expression) = value else {
                         return Err(self.resolve(what, line).unwrap_err());
                     };
@@ -17676,7 +17701,7 @@ fn contains_break(statement: &Statement) -> bool {
 impl Emitter<'_> {
     fn for_each(
         &mut self,
-        what: &Written,
+        what: &TypeSyntax,
         name: &str,
         over: &Expression,
         body: &Positioned<Statement>,
@@ -17691,7 +17716,7 @@ impl Emitter<'_> {
         let found = self.value(over, line)?;
 
         let declared = match what {
-            Written::Inferred => (*element).clone(),
+            TypeSyntax::Inferred => (*element).clone(),
             other => self.resolve(other, line)?,
         };
         let refused = at(
@@ -17772,7 +17797,7 @@ impl Emitter<'_> {
 
         self.open();
         self.enter(false);
-        let mut ends: Vec<Pending> = Vec::new();
+        let mut ends: Vec<PendingJump> = Vec::new();
         let mut targets: Vec<usize> = Vec::new();
 
         let over_held = over.clone();
@@ -17884,7 +17909,7 @@ impl Emitter<'_> {
         }
 
         self.open();
-        self.yields.push(Yielding {
+        self.yields.push(SwitchYield {
             pending: Vec::new(),
             produced: None,
             finallys: self.finallys.len(),
@@ -18223,7 +18248,7 @@ impl Emitter<'_> {
         let held = self.declare(PATTERN_SUBJECT, kind.clone());
         self.store(held, kind);
 
-        let mut waiting: Vec<(Pending, usize)> = Vec::new();
+        let mut waiting: Vec<(PendingJump, usize)> = Vec::new();
         for (index, arm) in arms.iter().enumerate() {
             for label in &arm.labels {
                 if matches!(label, Expression::Null) {
@@ -18513,7 +18538,7 @@ impl Emitter<'_> {
         let held = self.declare(PATTERN_SUBJECT, object.clone());
         self.store(held, &object);
 
-        let mut waiting: Vec<(Pending, usize)> = Vec::new();
+        let mut waiting: Vec<(PendingJump, usize)> = Vec::new();
         for (index, arm) in arms.iter().enumerate() {
             if arm.labels.iter().any(|one| matches!(one, Expression::Null)) {
                 self.load(held, &object);
@@ -18629,7 +18654,7 @@ impl Emitter<'_> {
         line: u32,
     ) -> Result<(), Diagnostic> {
         let target = match pattern.what {
-            Written::Inferred => from.clone(),
+            TypeSyntax::Inferred => from.clone(),
             ref other => self.resolve(other, line)?,
         };
         if !from.is_reference() && target.is_reference() {
@@ -18700,7 +18725,7 @@ impl Emitter<'_> {
         self.store(held, &what);
 
         let mut seen: Vec<String> = Vec::new();
-        let mut waiting: Vec<(Pending, usize)> = Vec::new();
+        let mut waiting: Vec<(PendingJump, usize)> = Vec::new();
         for (index, arm) in arms.iter().enumerate() {
             for label in &arm.labels {
                 let named = match label {
@@ -18877,7 +18902,7 @@ impl Emitter<'_> {
         self.store(held, &text);
 
         let mut seen: Vec<String> = Vec::new();
-        let mut waiting: Vec<(Pending, usize)> = Vec::new();
+        let mut waiting: Vec<(PendingJump, usize)> = Vec::new();
         for (index, arm) in arms.iter().enumerate() {
             for label in &arm.labels {
                 let Some(Expression::Str(value)) = self.case_constant(label) else {
@@ -18965,7 +18990,7 @@ impl Emitter<'_> {
         written?;
         let ended = self.code.len();
 
-        let mut outs: Vec<Pending> = Vec::new();
+        let mut outs: Vec<PendingJump> = Vec::new();
         if self.reachable && !body.iter().any(|one| cannot_complete_normally(&one.node)) {
             self.run_finallys(outer)?;
             if self.reachable {
@@ -19079,7 +19104,7 @@ impl Emitter<'_> {
 
     fn anonymous(
         &mut self,
-        what: &Written,
+        what: &TypeSyntax,
         arguments: &[Expression],
         body: &Body,
         line: u32,
@@ -19090,7 +19115,7 @@ impl Emitter<'_> {
 
     fn lambda(
         &mut self,
-        parameters: &[(Option<Written>, String)],
+        parameters: &[(Option<TypeSyntax>, String)],
         body: &[Positioned<Statement>],
         expression: bool,
         line: u32,
@@ -19182,7 +19207,7 @@ impl Emitter<'_> {
             }
         }
 
-        let Some(returns) = written_type_of(&single.returns).or(Some(Written::Void)) else {
+        let Some(returns) = written_type_of(&single.returns).or(Some(TypeSyntax::Void)) else {
             unreachable!("void is nameable")
         };
         let made = Body {
@@ -19194,7 +19219,7 @@ impl Emitter<'_> {
                     ..Modifiers::default()
                 },
                 returns: if single.returns == Type::Void {
-                    Written::Void
+                    TypeSyntax::Void
                 } else {
                     returns
                 },
@@ -19294,13 +19319,13 @@ impl Emitter<'_> {
                     ));
                 }
                 Expression::NewArray {
-                    of: Written::Named(element, Vec::new()),
+                    of: TypeSyntax::Named(element, Vec::new()),
                     lengths: arguments,
                     empty,
                 }
             } else {
                 Expression::New {
-                    what: Written::Named(class.clone(), Vec::new()),
+                    what: TypeSyntax::Named(class.clone(), Vec::new()),
                     arguments,
                     outer: None,
                 }
@@ -19366,7 +19391,10 @@ impl Emitter<'_> {
         }
     }
 
-    fn argument_flexibility_in_scope(&mut self, arguments: &[Expression]) -> Vec<Loosely> {
+    fn argument_flexibility_in_scope(
+        &mut self,
+        arguments: &[Expression],
+    ) -> Vec<ArgumentFlexibility> {
         let mut said = argument_flexibility(arguments);
         for (at, argument) in arguments.iter().enumerate() {
             let Expression::Lambda {
@@ -19378,7 +19406,9 @@ impl Emitter<'_> {
             else {
                 continue;
             };
-            if !parameters.is_empty() || said[at] != Loosely::Shaped(0, Gives::Either) {
+            if !parameters.is_empty()
+                || said[at] != ArgumentFlexibility::Shaped(0, LambdaResult::Either)
+            {
                 continue;
             }
             let Some(Statement::Express(called @ Expression::Call { .. })) =
@@ -19390,7 +19420,7 @@ impl Emitter<'_> {
             let found = self.type_of(called, 1);
             self.expecting = outside;
             if found.is_ok_and(|what| what == Type::Void) {
-                said[at] = Loosely::Shaped(0, Gives::Nothing);
+                said[at] = ArgumentFlexibility::Shaped(0, LambdaResult::Nothing);
             }
         }
         for (at, argument) in arguments.iter().enumerate() {
@@ -19428,7 +19458,7 @@ impl Emitter<'_> {
                 }
             }
             if !counts.is_empty() {
-                said[at] = Loosely::Anywhere(counts);
+                said[at] = ArgumentFlexibility::Anywhere(counts);
             }
         }
         said
@@ -19510,7 +19540,7 @@ impl Emitter<'_> {
                     returns_variable: None,
                     parameter_variables: Vec::new(),
                     taken_stands_for: Vec::new(),
-                    returns_stands_for: Standing::Fixed,
+                    returns_stands_for: TypePosition::Fixed,
                     own_variables: Vec::new(),
                     witnessed: Vec::new(),
                     throws: Vec::new(),
@@ -19685,9 +19715,9 @@ impl Emitter<'_> {
         let name = format!("{}${index}", self.unit.name);
 
         let mut fields = Vec::new();
-        let mut parameters: Vec<(Written, String)> = Vec::new();
+        let mut parameters: Vec<(TypeSyntax, String)> = Vec::new();
         let mut filling: Vec<Positioned<Statement>> = Vec::new();
-        let held = |what: Written, name: &str, line: u32| Field {
+        let held = |what: TypeSyntax, name: &str, line: u32| Field {
             modifiers: Modifiers {
                 private: true,
                 final_: true,
@@ -19713,7 +19743,7 @@ impl Emitter<'_> {
         };
 
         if let Some(enclosing) = &outer {
-            let written = Written::Named(enclosing.replace('/', "."), Vec::new());
+            let written = TypeSyntax::Named(enclosing.replace('/', "."), Vec::new());
             fields.push(held(written.clone(), OUTER, line));
             parameters.push((written, OUTER.to_string()));
             filling.push(fill(OUTER, line));
@@ -19786,7 +19816,7 @@ impl Emitter<'_> {
 
         let mut methods = vec![Method {
             modifiers: Modifiers::default(),
-            returns: Written::Void,
+            returns: TypeSyntax::Void,
             name: "<init>".to_string(),
             parameters: parameters.clone(),
             body: Some(constructor_body),
@@ -19988,9 +20018,9 @@ impl Emitter<'_> {
         made.outer = outer.clone();
 
         let mut fields = Vec::new();
-        let mut parameters: Vec<(Written, String)> = Vec::new();
+        let mut parameters: Vec<(TypeSyntax, String)> = Vec::new();
         let mut filling: Vec<Positioned<Statement>> = Vec::new();
-        let held = |what: Written, name: &str| Field {
+        let held = |what: TypeSyntax, name: &str| Field {
             modifiers: Modifiers {
                 private: true,
                 final_: true,
@@ -20015,7 +20045,7 @@ impl Emitter<'_> {
             column: 1,
         };
         if let Some(enclosing) = &outer {
-            let written = Written::Named(enclosing.replace('/', "."), Vec::new());
+            let written = TypeSyntax::Named(enclosing.replace('/', "."), Vec::new());
             fields.push(held(written.clone(), OUTER));
             parameters.push((written, OUTER.to_string()));
             filling.push(fill(OUTER));
@@ -20056,7 +20086,7 @@ impl Emitter<'_> {
                 Some(package) => format!("{}/{name}", package.replace('.', "/")),
                 None => name,
             };
-            self.locally.push(Locally {
+            self.locally.push(LocalClass {
                 written: first.name.clone(),
                 internal,
                 outer: None,
@@ -20072,7 +20102,7 @@ impl Emitter<'_> {
                     public: true,
                     ..Modifiers::default()
                 },
-                returns: Written::Void,
+                returns: TypeSyntax::Void,
                 name: "<init>".to_string(),
                 parameters: Vec::new(),
                 body: Some(Vec::new()),
@@ -20115,7 +20145,7 @@ impl Emitter<'_> {
             Some(package) => format!("{}/{name}", package.replace('.', "/")),
             None => name,
         };
-        self.locally.push(Locally {
+        self.locally.push(LocalClass {
             written: first.name.clone(),
             internal,
             outer,
@@ -20178,7 +20208,7 @@ impl Emitter<'_> {
                 self.lower_pattern_test(&reach, part, line)?
             } else {
                 let wanted = match part.what {
-                    Written::Inferred => declared.clone(),
+                    TypeSyntax::Inferred => declared.clone(),
                     ref other => self.resolve(other, line)?,
                 };
                 if wanted.is_reference() && *declared != wanted {
@@ -20195,8 +20225,8 @@ impl Emitter<'_> {
                     Expression::Bind {
                         name: part.name.clone(),
                         what: match part.what {
-                            Written::Inferred => {
-                                written_type_of(declared).unwrap_or(Written::Inferred)
+                            TypeSyntax::Inferred => {
+                                written_type_of(declared).unwrap_or(TypeSyntax::Inferred)
                             }
                             ref other => other.clone(),
                         },
@@ -20389,7 +20419,7 @@ impl Emitter<'_> {
                 returns_variable: None,
                 parameter_variables: Vec::new(),
                 taken_stands_for: Vec::new(),
-                returns_stands_for: Standing::Fixed,
+                returns_stands_for: TypePosition::Fixed,
                 own_variables: Vec::new(),
                 witnessed: Vec::new(),
                 throws: Vec::new(),
@@ -20409,7 +20439,7 @@ impl Emitter<'_> {
                     returns_variable: None,
                     parameter_variables: Vec::new(),
                     taken_stands_for: Vec::new(),
-                    returns_stands_for: Standing::Fixed,
+                    returns_stands_for: TypePosition::Fixed,
                     own_variables: Vec::new(),
                     witnessed: Vec::new(),
                     throws: Vec::new(),
@@ -20449,7 +20479,7 @@ impl Emitter<'_> {
 
     fn for_each_over_an_iterator(
         &mut self,
-        what: &Written,
+        what: &TypeSyntax,
         name: &str,
         over: &Expression,
         body: &Positioned<Statement>,
@@ -20490,7 +20520,7 @@ impl Emitter<'_> {
                 .filter(|found| *found != object),
         };
         let declared = match what {
-            Written::Inferred => holds.clone().unwrap_or(object.clone()),
+            TypeSyntax::Inferred => holds.clone().unwrap_or(object.clone()),
             other => self.resolve(other, line)?,
         };
 
@@ -20604,7 +20634,7 @@ impl Emitter<'_> {
         self.pushes(&signature.returns);
     }
 
-    fn outer_this(&mut self, of: &Written, line: u32) -> Result<Type, Diagnostic> {
+    fn outer_this(&mut self, of: &TypeSyntax, line: u32) -> Result<Type, Diagnostic> {
         let wanted = self.resolve(of, line)?;
         let Type::Object(named, _) = wanted.clone() else {
             return Err(at("EJ252", line, 1, "`this` belongs to a class."));
@@ -20646,7 +20676,7 @@ impl Emitter<'_> {
 
     fn new_array(
         &mut self,
-        of: &Written,
+        of: &TypeSyntax,
         lengths: &[Expression],
         empty: usize,
         line: u32,
@@ -20861,8 +20891,8 @@ enum Dispatch {
     },
 
     Chain {
-        waiting: Vec<(Pending, usize)>,
-        fallthrough: Pending,
+        waiting: Vec<(PendingJump, usize)>,
+        fallthrough: PendingJump,
     },
 }
 
@@ -20899,40 +20929,40 @@ impl Dispatch {
     }
 }
 
-fn coerce_constant(what: &Written, value: Expression) -> Option<Expression> {
+fn coerce_constant(what: &TypeSyntax, value: Expression) -> Option<Expression> {
     let whole = match &value {
         Expression::Int(held) => Some(*held),
         Expression::Char(held) => Some(i64::from(*held)),
         _ => None,
     };
     Some(match (what, whole) {
-        (Written::Char, Some(held)) => Expression::Char(held as u16),
-        (Written::Byte, Some(held)) => Expression::Int(i64::from(held as i8)),
-        (Written::Short, Some(held)) => Expression::Int(i64::from(held as i16)),
-        (Written::Int, Some(held)) => Expression::Int(held),
-        (Written::Long, Some(held)) => Expression::Long(held),
-        (Written::Long, None) if matches!(value, Expression::Long(_)) => value,
-        (Written::Float, Some(held)) => Expression::Float(held as f64),
-        (Written::Float, None) => match value {
+        (TypeSyntax::Char, Some(held)) => Expression::Char(held as u16),
+        (TypeSyntax::Byte, Some(held)) => Expression::Int(i64::from(held as i8)),
+        (TypeSyntax::Short, Some(held)) => Expression::Int(i64::from(held as i16)),
+        (TypeSyntax::Int, Some(held)) => Expression::Int(held),
+        (TypeSyntax::Long, Some(held)) => Expression::Long(held),
+        (TypeSyntax::Long, None) if matches!(value, Expression::Long(_)) => value,
+        (TypeSyntax::Float, Some(held)) => Expression::Float(held as f64),
+        (TypeSyntax::Float, None) => match value {
             Expression::Long(held) => Expression::Float(held as f64),
             Expression::Float(_) => value,
             _ => return None,
         },
-        (Written::Double, Some(held)) => Expression::Double(held as f64),
-        (Written::Double, None) => match value {
+        (TypeSyntax::Double, Some(held)) => Expression::Double(held as f64),
+        (TypeSyntax::Double, None) => match value {
             Expression::Long(held) => Expression::Double(held as f64),
             Expression::Float(held) => Expression::Double(f64::from(held as f32)),
             Expression::Double(_) => value,
             _ => return None,
         },
-        (Written::Boolean, None) if matches!(value, Expression::Boolean(_)) => value,
-        (Written::Named(named, _), None)
+        (TypeSyntax::Boolean, None) if matches!(value, Expression::Boolean(_)) => value,
+        (TypeSyntax::Named(named, _), None)
             if matches!(value, Expression::Str(_))
                 && (named == "String" || named == "java.lang.String") =>
         {
             value
         }
-        (Written::Inferred, _) => value,
+        (TypeSyntax::Inferred, _) => value,
         _ => return None,
     })
 }
@@ -21067,23 +21097,23 @@ fn fold_constant(
         Expression::Cast { to, of, .. } => {
             let inner = fold_constant(of, look)?;
             match to {
-                Written::Named(named, _) if named == "String" || named == "java.lang.String" => {
+                TypeSyntax::Named(named, _) if named == "String" || named == "java.lang.String" => {
                     let Expression::Str(_) = inner else {
                         return None;
                     };
                     inner
                 }
-                Written::Boolean => {
+                TypeSyntax::Boolean => {
                     let Expression::Boolean(_) = inner else {
                         return None;
                     };
                     inner
                 }
-                Written::Long => Expression::Long(wide(&inner)?),
-                Written::Int => narrow(wide(&inner)?),
-                Written::Char => Expression::Char(wide(&inner)? as u16),
-                Written::Short => Expression::Int(i64::from(wide(&inner)? as i16)),
-                Written::Byte => Expression::Int(i64::from(wide(&inner)? as i8)),
+                TypeSyntax::Long => Expression::Long(wide(&inner)?),
+                TypeSyntax::Int => narrow(wide(&inner)?),
+                TypeSyntax::Char => Expression::Char(wide(&inner)? as u16),
+                TypeSyntax::Short => Expression::Int(i64::from(wide(&inner)? as i16)),
+                TypeSyntax::Byte => Expression::Int(i64::from(wide(&inner)? as i8)),
                 _ => return None,
             }
         }
@@ -21248,7 +21278,7 @@ fn constant_int(expression: &Expression) -> Option<i32> {
     }
 }
 
-fn as_a_written_type(expression: &Expression) -> Option<Written> {
+fn as_a_written_type(expression: &Expression) -> Option<TypeSyntax> {
     fn dotted(expression: &Expression) -> Option<String> {
         Some(match expression {
             Expression::Name(name) => name.clone(),
@@ -21256,7 +21286,7 @@ fn as_a_written_type(expression: &Expression) -> Option<Written> {
             _ => return None,
         })
     }
-    Some(Written::Named(dotted(expression)?, Vec::new()))
+    Some(TypeSyntax::Named(dotted(expression)?, Vec::new()))
 }
 
 fn has_runtime_retention(unit: &Unit) -> bool {
@@ -21288,7 +21318,11 @@ fn with_what_the_arguments_say(
     given: &[Type],
     going: Option<&Type>,
 ) -> Signature {
-    if signature.taken_stands_for.iter().all(Standing::is_fixed) {
+    if signature
+        .taken_stands_for
+        .iter()
+        .all(TypePosition::is_fixed)
+    {
         return signature.clone();
     }
     let bound = infer_call_type_arguments(signature, given, going);
@@ -21317,7 +21351,7 @@ fn infer_call_type_arguments(
     }
 
     if signature.variadic && given.len() > fixed {
-        if let Some(Standing::ArrayOf(inside)) = signature.taken_stands_for.last() {
+        if let Some(TypePosition::ArrayOf(inside)) = signature.taken_stands_for.last() {
             let trailing = &given[fixed..];
             let handed_the_array = trailing.len() == 1 && matches!(trailing[0], Type::Array(_));
             if !handed_the_array {
@@ -21354,7 +21388,7 @@ fn as_written(signature: &Signature, held: &[Type]) -> Signature {
         && (signature
             .taken_stands_for
             .iter()
-            .any(Standing::references_class_type_parameter)
+            .any(TypePosition::references_class_type_parameter)
             || signature
                 .returns_stands_for
                 .references_class_type_parameter())
@@ -21493,7 +21527,7 @@ fn exactness(from: &Type, to: &Type, name: &str) -> Option<Option<Expression>> {
         return Some(None);
     }
     let held = || Expression::Name(name.to_string());
-    let cast = |to: Written, of: Expression| Expression::Cast {
+    let cast = |to: TypeSyntax, of: Expression| Expression::Cast {
         to,
         of: Box::new(of),
         also: Vec::new(),
@@ -21516,7 +21550,7 @@ fn exactness(from: &Type, to: &Type, name: &str) -> Option<Option<Expression>> {
         arguments: vec![Expression::Name(name.to_string())],
         held: Vec::new(),
     };
-    let narrow = |to: &Type| written_type_of(to).unwrap_or(Written::Int);
+    let narrow = |to: &Type| written_type_of(to).unwrap_or(TypeSyntax::Int);
     match (from, to) {
         (Boolean, _) | (_, Boolean) => return None,
         (Byte, Short | Int | Long | Float | Double)
@@ -21533,12 +21567,12 @@ fn exactness(from: &Type, to: &Type, name: &str) -> Option<Option<Expression>> {
                 Binary::AndAlso,
                 both(
                     Binary::Equal,
-                    cast(Written::Float, cast(Written::Int, held())),
+                    cast(TypeSyntax::Float, cast(TypeSyntax::Int, held())),
                     held(),
                 ),
                 both(
                     Binary::NotEqual,
-                    cast(Written::Int, held()),
+                    cast(TypeSyntax::Int, held()),
                     Expression::Int(i64::from(i32::MAX)),
                 ),
             ),
@@ -21554,7 +21588,7 @@ fn exactness(from: &Type, to: &Type, name: &str) -> Option<Option<Expression>> {
             Binary::AndAlso,
             both(
                 Binary::Equal,
-                cast(Written::Double, cast(Written::Int, held())),
+                cast(TypeSyntax::Double, cast(TypeSyntax::Int, held())),
                 held(),
             ),
             both(
@@ -21572,7 +21606,7 @@ fn exactness(from: &Type, to: &Type, name: &str) -> Option<Option<Expression>> {
                 both(
                     Binary::Equal,
                     held(),
-                    cast(Written::Int, cast(Written::Float, held())),
+                    cast(TypeSyntax::Int, cast(TypeSyntax::Float, held())),
                 ),
                 both(
                     Binary::NotEqual,
@@ -21585,7 +21619,10 @@ fn exactness(from: &Type, to: &Type, name: &str) -> Option<Option<Expression>> {
         Long => match to {
             Byte | Short | Char | Int => both(
                 Binary::Equal,
-                cast(Written::Long, cast(narrow(to), cast(Written::Int, held()))),
+                cast(
+                    TypeSyntax::Long,
+                    cast(narrow(to), cast(TypeSyntax::Int, held())),
+                ),
                 held(),
             ),
             Float | Double => both(
@@ -21593,7 +21630,7 @@ fn exactness(from: &Type, to: &Type, name: &str) -> Option<Option<Expression>> {
                 both(
                     Binary::Equal,
                     held(),
-                    cast(Written::Long, cast(narrow(to), held())),
+                    cast(TypeSyntax::Long, cast(narrow(to), held())),
                 ),
                 both(Binary::NotEqual, held(), Expression::Long(i64::MAX)),
             ),
@@ -21607,12 +21644,12 @@ fn exactness(from: &Type, to: &Type, name: &str) -> Option<Option<Expression>> {
                     Binary::AndAlso,
                     both(
                         Binary::Equal,
-                        cast(Written::Float, cast(Written::Long, held())),
+                        cast(TypeSyntax::Float, cast(TypeSyntax::Long, held())),
                         held(),
                     ),
                     both(
                         Binary::NotEqual,
-                        cast(Written::Long, held()),
+                        cast(TypeSyntax::Long, held()),
                         Expression::Long(i64::MAX),
                     ),
                 ),
@@ -21627,8 +21664,8 @@ fn exactness(from: &Type, to: &Type, name: &str) -> Option<Option<Expression>> {
                 to_int_from_float(),
                 both(
                     Binary::Equal,
-                    cast(narrow(to), cast(Written::Int, held())),
-                    cast(Written::Int, held()),
+                    cast(narrow(to), cast(TypeSyntax::Int, held())),
+                    cast(TypeSyntax::Int, held()),
                 ),
             ),
             _ => return None,
@@ -21641,12 +21678,12 @@ fn exactness(from: &Type, to: &Type, name: &str) -> Option<Option<Expression>> {
                     Binary::AndAlso,
                     both(
                         Binary::Equal,
-                        cast(Written::Double, cast(Written::Long, held())),
+                        cast(TypeSyntax::Double, cast(TypeSyntax::Long, held())),
                         held(),
                     ),
                     both(
                         Binary::NotEqual,
-                        cast(Written::Long, held()),
+                        cast(TypeSyntax::Long, held()),
                         Expression::Long(i64::MAX),
                     ),
                 ),
@@ -21660,7 +21697,7 @@ fn exactness(from: &Type, to: &Type, name: &str) -> Option<Option<Expression>> {
                 Binary::OrElse,
                 both(
                     Binary::Equal,
-                    cast(Written::Double, cast(Written::Float, held())),
+                    cast(TypeSyntax::Double, cast(TypeSyntax::Float, held())),
                     held(),
                 ),
                 both(Binary::NotEqual, held(), held()),
@@ -21670,8 +21707,8 @@ fn exactness(from: &Type, to: &Type, name: &str) -> Option<Option<Expression>> {
                 to_int_from_double(),
                 both(
                     Binary::Equal,
-                    cast(narrow(to), cast(Written::Int, held())),
-                    cast(Written::Int, held()),
+                    cast(narrow(to), cast(TypeSyntax::Int, held())),
+                    cast(TypeSyntax::Int, held()),
                 ),
             ),
             _ => return None,
@@ -21705,17 +21742,17 @@ fn is_side_effect_free_target(expression: &Expression) -> bool {
 }
 
 #[derive(Clone, PartialEq, Eq)]
-enum Loosely {
+enum ArgumentFlexibility {
     No,
 
     Anywhere(Vec<usize>),
-    Shaped(usize, Gives),
+    Shaped(usize, LambdaResult),
     AnyReference,
 }
 
-fn locals_declared(statement: &Statement, out: &mut Vec<(Written, String, Option<Expression>)>) {
+fn locals_declared(statement: &Statement, out: &mut Vec<(TypeSyntax, String, Option<Expression>)>) {
     let all = |held: &[Positioned<Statement>],
-               out: &mut Vec<(Written, String, Option<Expression>)>| {
+               out: &mut Vec<(TypeSyntax, String, Option<Expression>)>| {
         for one in held {
             locals_declared(&one.node, out);
         }
@@ -21738,7 +21775,7 @@ fn locals_declared(statement: &Statement, out: &mut Vec<(Written, String, Option
         Statement::ForEach {
             what, name, body, ..
         } => {
-            if !matches!(what, Written::Inferred) {
+            if !matches!(what, TypeSyntax::Inferred) {
                 out.push((what.clone(), name.clone(), None));
             }
             locals_declared(&body.node, out);
@@ -21815,13 +21852,13 @@ fn values_returned(statement: &Statement, out: &mut Vec<Expression>) {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Gives {
+enum LambdaResult {
     Nothing,
     Something,
     Either,
 }
 
-fn lambda_result_kind(body: &[Positioned<Statement>], expression: bool) -> Gives {
+fn lambda_result_kind(body: &[Positioned<Statement>], expression: bool) -> LambdaResult {
     fn returns_in(statement: &Statement, bare: &mut bool, valued: &mut bool) {
         let all = |held: &[Positioned<Statement>], bare: &mut bool, valued: &mut bool| {
             for one in held {
@@ -21874,9 +21911,9 @@ fn lambda_result_kind(body: &[Positioned<Statement>], expression: bool) -> Gives
                 | Expression::Step { .. }
                 | Expression::New { .. }
                 | Expression::Anonymous { .. },
-            )) => Gives::Either,
-            Some(Statement::Express(_)) => Gives::Something,
-            _ => Gives::Either,
+            )) => LambdaResult::Either,
+            Some(Statement::Express(_)) => LambdaResult::Something,
+            _ => LambdaResult::Either,
         };
     }
     let (mut bare, mut valued) = (false, false);
@@ -21884,20 +21921,20 @@ fn lambda_result_kind(body: &[Positioned<Statement>], expression: bool) -> Gives
         returns_in(&one.node, &mut bare, &mut valued);
     }
     match (bare, valued) {
-        (true, _) => Gives::Nothing,
-        (false, true) => Gives::Something,
+        (true, _) => LambdaResult::Nothing,
+        (false, true) => LambdaResult::Something,
         (false, false)
             if body
                 .last()
                 .is_some_and(|one| cannot_complete_normally(&one.node)) =>
         {
-            Gives::Either
+            LambdaResult::Either
         }
-        (false, false) => Gives::Nothing,
+        (false, false) => LambdaResult::Nothing,
     }
 }
 
-fn argument_flexibility(arguments: &[Expression]) -> Vec<Loosely> {
+fn argument_flexibility(arguments: &[Expression]) -> Vec<ArgumentFlexibility> {
     arguments
         .iter()
         .map(|one| match one {
@@ -21906,11 +21943,13 @@ fn argument_flexibility(arguments: &[Expression]) -> Vec<Loosely> {
                 body,
                 expression,
                 ..
-            } => Loosely::Shaped(parameters.len(), lambda_result_kind(body, *expression)),
+            } => {
+                ArgumentFlexibility::Shaped(parameters.len(), lambda_result_kind(body, *expression))
+            }
 
-            Expression::MethodRef { .. } => Loosely::Anywhere(Vec::new()),
-            Expression::Null => Loosely::AnyReference,
-            _ => Loosely::No,
+            Expression::MethodRef { .. } => ArgumentFlexibility::Anywhere(Vec::new()),
+            Expression::Null => ArgumentFlexibility::AnyReference,
+            _ => ArgumentFlexibility::No,
         })
         .collect()
 }
@@ -21989,52 +22028,52 @@ fn folded_constant(field: &Field, what: &Type, pool: &mut Pool) -> Option<u16> {
     }
 }
 
-fn needs_generic_signature(what: &Written) -> bool {
+fn needs_generic_signature(what: &TypeSyntax) -> bool {
     match what {
-        Written::Variable(_, _) | Written::OwnVariable(_, _) => true,
-        Written::Array(of) => needs_generic_signature(of),
-        Written::Named(_, held) => !held.is_empty(),
+        TypeSyntax::Variable(_, _) | TypeSyntax::OwnVariable(_, _) => true,
+        TypeSyntax::Array(of) => needs_generic_signature(of),
+        TypeSyntax::Named(_, held) => !held.is_empty(),
         _ => false,
     }
 }
 
 fn signature_of_written(
-    what: &Written,
+    what: &TypeSyntax,
     classpath: &Classpath,
     unit: &Unit,
     of_the_class: &[String],
     of_the_method: &[String],
 ) -> Option<String> {
     Some(match what {
-        Written::Void => "V".to_string(),
-        Written::Boolean => "Z".to_string(),
-        Written::Byte => "B".to_string(),
-        Written::Short => "S".to_string(),
-        Written::Char => "C".to_string(),
-        Written::Int => "I".to_string(),
-        Written::Long => "J".to_string(),
-        Written::Float => "F".to_string(),
-        Written::Double => "D".to_string(),
-        Written::Inferred => return None,
-        Written::Array(of) => {
+        TypeSyntax::Void => "V".to_string(),
+        TypeSyntax::Boolean => "Z".to_string(),
+        TypeSyntax::Byte => "B".to_string(),
+        TypeSyntax::Short => "S".to_string(),
+        TypeSyntax::Char => "C".to_string(),
+        TypeSyntax::Int => "I".to_string(),
+        TypeSyntax::Long => "J".to_string(),
+        TypeSyntax::Float => "F".to_string(),
+        TypeSyntax::Double => "D".to_string(),
+        TypeSyntax::Inferred => return None,
+        TypeSyntax::Array(of) => {
             format!(
                 "[{}",
                 signature_of_written(of, classpath, unit, of_the_class, of_the_method)?
             )
         }
-        Written::Variable(at, bound) => match of_the_class.get(*at) {
+        TypeSyntax::Variable(at, bound) => match of_the_class.get(*at) {
             Some(name) => format!("T{name};"),
 
             None => signature_of_written(bound, classpath, unit, of_the_class, of_the_method)?,
         },
-        Written::OwnVariable(name, _) => format!("T{name};"),
+        TypeSyntax::OwnVariable(name, _) => format!("T{name};"),
 
-        Written::Named(name, held)
+        TypeSyntax::Named(name, held)
             if held.is_empty() && (of_the_method.contains(name) || of_the_class.contains(name)) =>
         {
             format!("T{name};")
         }
-        Written::Named(name, held) => {
+        TypeSyntax::Named(name, held) => {
             let internal = resolve_named(classpath, unit, name)?;
             if held.is_empty() {
                 format!("L{internal};")
@@ -22056,7 +22095,7 @@ fn signature_of_written(
 }
 
 fn type_parameters_signature(
-    held: &[(String, Written)],
+    held: &[(String, TypeSyntax)],
     classpath: &Classpath,
     unit: &Unit,
     of_the_class: &[String],
@@ -22070,7 +22109,7 @@ fn type_parameters_signature(
         out.push_str(name);
 
         out.push(':');
-        if let Written::Named(named, _) = bound {
+        if let TypeSyntax::Named(named, _) = bound {
             if resolve_named(classpath, unit, named)
                 .and_then(|found| classpath.get(&found).map(|known| known.interface))
                 .unwrap_or(false)
@@ -22102,9 +22141,9 @@ fn class_signature(classpath: &Classpath, unit: &Unit) -> Option<String> {
     }
     let mut out = type_parameters_signature(&unit.own_variables, classpath, unit, &named, &[])?;
 
-    let above_by_name = |written: &String| -> Option<&Written> {
+    let above_by_name = |written: &String| -> Option<&TypeSyntax> {
         unit.above.iter().find(|one| match one {
-            Written::Named(name, _) => name == written,
+            TypeSyntax::Named(name, _) => name == written,
             _ => false,
         })
     };
@@ -22155,8 +22194,8 @@ fn method_signature(classpath: &Classpath, unit: &Unit, method: &Method) -> Opti
         return None;
     }
 
-    let object = Written::Named("java.lang.Object".to_string(), Vec::new());
-    let mine: Vec<(String, Written)> = method
+    let object = TypeSyntax::Named("java.lang.Object".to_string(), Vec::new());
+    let mine: Vec<(String, TypeSyntax)> = method
         .own_variables
         .iter()
         .enumerate()
@@ -22336,7 +22375,7 @@ fn annotation_value(
         }
         Expression::ClassLiteral { of, .. } => {
             let named = match of {
-                Written::Named(name, _) => {
+                TypeSyntax::Named(name, _) => {
                     Type::Object(resolve_named(classpath, unit, name)?, Vec::new())
                 }
                 other => shallow_type(classpath, unit, other)?,
@@ -22372,7 +22411,7 @@ fn annotation_value(
     Some(out)
 }
 
-fn shallow_type(classpath: &Classpath, unit: &Unit, written: &Written) -> Option<Type> {
+fn shallow_type(classpath: &Classpath, unit: &Unit, written: &TypeSyntax) -> Option<Type> {
     resolve_written(classpath, unit, written)
 }
 
@@ -22473,7 +22512,7 @@ fn super_accessors_for_lambdas(unit: &Unit, classpath: &Classpath) -> Vec<Method
                 if seen.contains(&key) {
                     continue;
                 }
-                let parameters: Option<Vec<(Written, String)>> = found
+                let parameters: Option<Vec<(TypeSyntax, String)>> = found
                     .parameters
                     .iter()
                     .enumerate()
@@ -22483,7 +22522,7 @@ fn super_accessors_for_lambdas(unit: &Unit, classpath: &Classpath) -> Vec<Method
                     continue;
                 };
                 let returns = if found.returns == Type::Void {
-                    Written::Void
+                    TypeSyntax::Void
                 } else {
                     let Some(one) = written_type_of(&found.returns) else {
                         continue;
@@ -22535,7 +22574,8 @@ fn super_accessors_for_lambdas(unit: &Unit, classpath: &Classpath) -> Vec<Method
 }
 
 fn bridges_for(unit: &Unit, classpath: &Classpath) -> Vec<Method> {
-    let resolve = |written: &Written| -> Option<Type> { resolve_written(classpath, unit, written) };
+    let resolve =
+        |written: &TypeSyntax| -> Option<Type> { resolve_written(classpath, unit, written) };
 
     let mut above: Vec<String> = Vec::new();
     let mut waiting: Vec<String> = Vec::new();
@@ -22607,8 +22647,8 @@ fn bridges_for(unit: &Unit, classpath: &Classpath) -> Vec<Method> {
                     .get(at)
                 {
                     None => candidate.taken_stands_for.is_empty(),
-                    Some(Standing::OfTheMethod(_)) => true,
-                    Some(standing @ (Standing::OfTheClass(_) | Standing::ArrayOf(_))) => {
+                    Some(TypePosition::OfTheMethod(_)) => true,
+                    Some(standing @ (TypePosition::OfTheClass(_) | TypePosition::ArrayOf(_))) => {
                         match &seen {
                             Some(arguments) => {
                                 standing.substitute_type_variables(theirs, arguments, &[]) == *ours
@@ -22634,7 +22674,7 @@ fn bridges_for(unit: &Unit, classpath: &Classpath) -> Vec<Method> {
                 if !fits {
                     continue;
                 }
-                let shape: Vec<(Written, String)> = candidate
+                let shape: Vec<(TypeSyntax, String)> = candidate
                     .parameters
                     .iter()
                     .enumerate()
@@ -22687,7 +22727,7 @@ fn bridges_for(unit: &Unit, classpath: &Classpath) -> Vec<Method> {
                     },
                     returns: match written_type_of(&candidate.returns) {
                         Some(found) => found,
-                        None => Written::Void,
+                        None => TypeSyntax::Void,
                     },
                     name: method.name.clone(),
                     parameters: shape,
@@ -22997,7 +23037,7 @@ pub fn compile_unit_in_nest(
                 static_: true,
                 ..Modifiers::default()
             },
-            returns: Written::Void,
+            returns: TypeSyntax::Void,
             name: "<clinit>".to_string(),
             parameters: Vec::new(),
             body: Some(static_setup),
@@ -23021,7 +23061,7 @@ pub fn compile_unit_in_nest(
                     public: unit.modifiers.public,
                     ..Modifiers::default()
                 },
-                returns: Written::Void,
+                returns: TypeSyntax::Void,
                 name: "<init>".to_string(),
                 parameters: Vec::new(),
                 body: Some(Vec::new()),
@@ -23074,7 +23114,7 @@ pub fn compile_unit_in_nest(
                 returns_variable: None,
                 parameter_variables: Vec::new(),
                 taken_stands_for: Vec::new(),
-                returns_stands_for: Standing::Fixed,
+                returns_stands_for: TypePosition::Fixed,
                 own_variables: Vec::new(),
                 witnessed: Vec::new(),
                 throws: Vec::new(),
@@ -23315,7 +23355,7 @@ pub fn compile_unit_in_nest(
             returns_variable: None,
             parameter_variables: Vec::new(),
             taken_stands_for: Vec::new(),
-            returns_stands_for: Standing::Fixed,
+            returns_stands_for: TypePosition::Fixed,
             own_variables: Vec::new(),
             witnessed: Vec::new(),
             throws: Vec::new(),
@@ -23575,7 +23615,7 @@ pub fn parse_sources_with_classpath(
     (units, together)
 }
 
-pub fn resolve_in(classpath: &Classpath, unit: &Unit, written: &Written) -> Option<Type> {
+pub fn resolve_in(classpath: &Classpath, unit: &Unit, written: &TypeSyntax) -> Option<Type> {
     resolve_written(classpath, unit, written)
 }
 
@@ -23851,8 +23891,8 @@ impl Compiler for JavaCompiler {
         &CONTRACT
     }
 
-    fn probe(&self) -> Probe {
-        Probe::usable(
+    fn probe(&self) -> CompilerProbe {
+        CompilerProbe::usable(
             Identity::new("java", "build.java", env!("CARGO_PKG_VERSION"), "jvm")
                 .with("languageRelease", LANGUAGE_RELEASE)
                 .with("classFileMajor", CLASS_MAJOR.to_string())
@@ -23861,7 +23901,7 @@ impl Compiler for JavaCompiler {
         )
     }
 
-    fn plan(&self, request: &Request) -> Result<Plan, Diagnostic> {
+    fn plan(&self, request: &Request) -> Result<BuildPlan, Diagnostic> {
         if !crate::compiler::api_is_supported(request.api_level) {
             return Err(fail(
                 "EJ301",
@@ -23887,8 +23927,8 @@ impl Compiler for JavaCompiler {
             });
         }
 
-        Ok(Plan {
-            key: Plan::key_for(&identity, request),
+        Ok(BuildPlan {
+            key: BuildPlan::key_for(&identity, request),
             identity,
             expected,
             reproducibility: Reproducibility::Always,
@@ -23897,7 +23937,7 @@ impl Compiler for JavaCompiler {
 
     fn compile(
         &self,
-        plan: &Plan,
+        plan: &BuildPlan,
         request: &Request,
         mut session: Session<'_>,
     ) -> Result<Compiled, Diagnostic> {

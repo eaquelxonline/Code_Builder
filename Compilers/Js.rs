@@ -4035,7 +4035,7 @@ impl Parser {
 }
 
 #[derive(Clone, Copy)]
-struct Ctx {
+struct ParseContext {
     strict: bool,
     module: bool,
     is_async: bool,
@@ -4050,7 +4050,7 @@ struct Ctx {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Top {
+enum TopLevelKind {
     Block,
     Function,
     Script,
@@ -4063,7 +4063,7 @@ struct PrivateScope {
 }
 
 #[derive(Default)]
-struct Early {
+struct EarlyErrorState {
     privates: Vec<PrivateScope>,
     labels: Vec<(String, bool)>,
     iteration: u32,
@@ -4266,9 +4266,9 @@ fn var_names<'a>(node: &'a Node, out: &mut Vec<&'a Node>) {
     }
 }
 
-impl Early {
+impl EarlyErrorState {
     fn run(&mut self, program: &Program) -> Check {
-        let ctx = Ctx {
+        let ctx = ParseContext {
             strict: program.module,
             module: program.module,
             is_async: program.module,
@@ -4283,9 +4283,9 @@ impl Early {
         };
         let list: Vec<&Node> = program.body.iter().collect();
         let top = if program.module {
-            Top::Module
+            TopLevelKind::Module
         } else {
-            Top::Script
+            TopLevelKind::Script
         };
         if !program.module {
             if let Some(held) = list.iter().find(|inner| {
@@ -4432,7 +4432,13 @@ impl Early {
         }
     }
 
-    fn lexical_conflicts(&self, list: &[&Node], ctx: Ctx, top: Top, extra_vars: &[&Node]) -> Check {
+    fn lexical_conflicts(
+        &self,
+        list: &[&Node],
+        ctx: ParseContext,
+        top: TopLevelKind,
+        extra_vars: &[&Node],
+    ) -> Check {
         let mut lexical: Vec<(&Node, bool)> = Vec::new();
         let mut vars: Vec<&Node> = Vec::new();
         for statement in list {
@@ -4468,8 +4474,11 @@ impl Early {
                 }
                 "FunctionDeclaration" => {
                     if let Some(id) = target.node("id") {
-                        if top == Top::Block || top == Top::Module {
-                            lexical.push((id, is_plain_function(target) && top == Top::Block));
+                        if top == TopLevelKind::Block || top == TopLevelKind::Module {
+                            lexical.push((
+                                id,
+                                is_plain_function(target) && top == TopLevelKind::Block,
+                            ));
                         } else {
                             vars.push(id);
                         }
@@ -4497,7 +4506,13 @@ impl Early {
         Ok(())
     }
 
-    fn statements(&mut self, list: &[&Node], mut ctx: Ctx, top: Top, params: &[&Node]) -> Check {
+    fn statements(
+        &mut self,
+        list: &[&Node],
+        mut ctx: ParseContext,
+        top: TopLevelKind,
+        params: &[&Node],
+    ) -> Check {
         let mut first_octal: Option<&Node> = None;
         let mut prologue = true;
         for statement in list {
@@ -4556,7 +4571,7 @@ impl Early {
         Ok(())
     }
 
-    fn substatement(&mut self, node: &Node, ctx: Ctx, in_if: bool) -> Check {
+    fn substatement(&mut self, node: &Node, ctx: ParseContext, in_if: bool) -> Check {
         match node.kind {
             "ClassDeclaration" => Err(problem_at(node, "Unexpected token 'class'")),
             "VariableDeclaration" if node.text("kind") != Some("var") => Err(problem_at(
@@ -4590,18 +4605,18 @@ impl Early {
         }
     }
 
-    fn loop_body(&mut self, node: &Node, ctx: Ctx) -> Check {
+    fn loop_body(&mut self, node: &Node, ctx: ParseContext) -> Check {
         self.iteration += 1;
         let result = self.substatement(node, ctx, false);
         self.iteration -= 1;
         result
     }
 
-    fn statement(&mut self, node: &Node, ctx: Ctx, _listed: bool) -> Check {
+    fn statement(&mut self, node: &Node, ctx: ParseContext, _listed: bool) -> Check {
         match node.kind {
             "BlockStatement" => {
                 let list = child_nodes(node, "body");
-                self.statements(&list, ctx, Top::Block, &[])
+                self.statements(&list, ctx, TopLevelKind::Block, &[])
             }
             "IfStatement" => {
                 if let Some(test) = node.node("test") {
@@ -4743,7 +4758,7 @@ impl Early {
                         "More than one default clause in switch statement",
                     ));
                 }
-                self.lexical_conflicts(&all, ctx, Top::Block, &[])?;
+                self.lexical_conflicts(&all, ctx, TopLevelKind::Block, &[])?;
                 self.switches += 1;
                 let mut outcome = Ok(());
                 for case in child_nodes(node, "cases") {
@@ -4977,7 +4992,7 @@ impl Early {
         Ok(())
     }
 
-    fn catch_clause(&mut self, handler: &Node, ctx: Ctx) -> Check {
+    fn catch_clause(&mut self, handler: &Node, ctx: ParseContext) -> Check {
         let mut names = Vec::new();
         if let Some(param) = handler.node("param") {
             self.binding_pattern(param, ctx)?;
@@ -5027,7 +5042,7 @@ impl Early {
         Ok(())
     }
 
-    fn declaration(&mut self, node: &Node, ctx: Ctx) -> Check {
+    fn declaration(&mut self, node: &Node, ctx: ParseContext) -> Check {
         let lexical = node.text("kind") != Some("var");
         for declarator in child_nodes(node, "declarations") {
             if let Some(id) = declarator.node("id") {
@@ -5052,7 +5067,7 @@ impl Early {
         Ok(())
     }
 
-    fn binding_name(&self, node: &Node, ctx: Ctx) -> Check {
+    fn binding_name(&self, node: &Node, ctx: ParseContext) -> Check {
         let name = name_of(node);
         if ctx.strict && (name == "eval" || name == "arguments") {
             return Err(problem_at(
@@ -5063,7 +5078,7 @@ impl Early {
         self.reference_name(node, ctx, false)
     }
 
-    fn reference_name(&self, node: &Node, ctx: Ctx, label: bool) -> Check {
+    fn reference_name(&self, node: &Node, ctx: ParseContext, label: bool) -> Check {
         let name = name_of(node);
         let escaped = node.flag("_escaped");
         if escaped && RESERVED.contains(&name) {
@@ -5090,7 +5105,7 @@ impl Early {
         Ok(())
     }
 
-    fn binding_pattern(&mut self, node: &Node, ctx: Ctx) -> Check {
+    fn binding_pattern(&mut self, node: &Node, ctx: ParseContext) -> Check {
         match node.kind {
             "Identifier" => self.binding_name(node, ctx),
             "ObjectPattern" => {
@@ -5166,7 +5181,7 @@ impl Early {
         }
     }
 
-    fn target(&mut self, node: &Node, ctx: Ctx, simple_only: bool) -> Check {
+    fn target(&mut self, node: &Node, ctx: ParseContext, simple_only: bool) -> Check {
         if node.flag("_paren") && matches!(node.kind, "ObjectPattern" | "ArrayPattern") {
             return Err(problem_at(node, "Invalid parenthesized assignment pattern"));
         }
@@ -5195,7 +5210,7 @@ impl Early {
         }
     }
 
-    fn assignment_pattern(&mut self, node: &Node, ctx: Ctx) -> Check {
+    fn assignment_pattern(&mut self, node: &Node, ctx: ParseContext) -> Check {
         match node.kind {
             "ObjectPattern" => {
                 let properties = child_nodes(node, "properties");
@@ -5257,7 +5272,7 @@ impl Early {
         }
     }
 
-    fn pattern_element(&mut self, node: &Node, ctx: Ctx) -> Check {
+    fn pattern_element(&mut self, node: &Node, ctx: ParseContext) -> Check {
         if node.kind == "AssignmentPattern" {
             if let Some(left) = node.node("left") {
                 self.target(left, ctx, false)?;
@@ -5271,7 +5286,7 @@ impl Early {
         }
     }
 
-    fn generic(&mut self, node: &Node, ctx: Ctx) -> Check {
+    fn generic(&mut self, node: &Node, ctx: ParseContext) -> Check {
         for (_, value) in &node.fields {
             match value {
                 Value::Node(inner) => self.expression(inner, ctx)?,
@@ -5288,7 +5303,7 @@ impl Early {
         Ok(())
     }
 
-    fn expression(&mut self, node: &Node, ctx: Ctx) -> Check {
+    fn expression(&mut self, node: &Node, ctx: ParseContext) -> Check {
         match node.kind {
             "Identifier" => self.reference_name(node, ctx, false),
             "Literal" => {
@@ -5596,7 +5611,7 @@ impl Early {
         &mut self,
         function: &Node,
         kind: &str,
-        ctx: Ctx,
+        ctx: ParseContext,
         derived_constructor: bool,
     ) -> Check {
         let params = child_nodes(function, "params");
@@ -5621,14 +5636,14 @@ impl Early {
         self.function_with(function, inner, false, true)
     }
 
-    fn function(&mut self, function: &Node, ctx: Ctx, arrow: bool) -> Check {
+    fn function(&mut self, function: &Node, ctx: ParseContext, arrow: bool) -> Check {
         self.function_with(function, ctx, arrow, false)
     }
 
     fn function_with(
         &mut self,
         function: &Node,
-        outer: Ctx,
+        outer: ParseContext,
         arrow: bool,
         is_method: bool,
     ) -> Check {
@@ -5687,7 +5702,7 @@ impl Early {
             let mut id_ctx = if function.kind == "FunctionExpression" {
                 param_ctx
             } else {
-                Ctx {
+                ParseContext {
                     is_async: outer.is_async,
                     generator: outer.generator,
                     static_block: outer.static_block,
@@ -5734,7 +5749,7 @@ impl Early {
         }
         let result = match body {
             Some(block) if block.kind == "BlockStatement" => {
-                self.statements(&body_list, body_ctx, Top::Function, &names)
+                self.statements(&body_list, body_ctx, TopLevelKind::Function, &names)
             }
             Some(expression) => self.expression(expression, body_ctx),
             None => Ok(()),
@@ -5745,7 +5760,7 @@ impl Early {
         result
     }
 
-    fn class(&mut self, node: &Node, outer: Ctx) -> Check {
+    fn class(&mut self, node: &Node, outer: ParseContext) -> Check {
         let mut ctx = outer;
         ctx.strict = true;
         if let Some(id) = node.node("id") {
@@ -5885,7 +5900,7 @@ impl Early {
         Ok(())
     }
 
-    fn class_element(&mut self, element: &Node, ctx: Ctx, derived: bool) -> Check {
+    fn class_element(&mut self, element: &Node, ctx: ParseContext, derived: bool) -> Check {
         match element.kind {
             "StaticBlock" => {
                 let mut inner = ctx;
@@ -5901,7 +5916,7 @@ impl Early {
                 let saved_iteration = std::mem::replace(&mut self.iteration, 0);
                 let saved_switches = std::mem::replace(&mut self.switches, 0);
                 let list = child_nodes(element, "body");
-                let result = self.statements(&list, inner, Top::Function, &[]);
+                let result = self.statements(&list, inner, TopLevelKind::Function, &[]);
                 self.labels = saved_labels;
                 self.iteration = saved_iteration;
                 self.switches = saved_switches;
@@ -5942,7 +5957,7 @@ impl Early {
 }
 
 fn early_errors(program: &Program, name: &str) -> Result<(), Diagnostic> {
-    Early::default()
+    EarlyErrorState::default()
         .run(program)
         .map_err(|problem| report(name, &problem))
 }
@@ -7659,8 +7674,8 @@ impl crate::compiler::Compiler for JsCompiler {
         &CONTRACT
     }
 
-    fn probe(&self) -> crate::compiler::Probe {
-        crate::compiler::Probe::usable(
+    fn probe(&self) -> crate::compiler::CompilerProbe {
+        crate::compiler::CompilerProbe::usable(
             crate::compiler::Identity::new("js", "build.js", env!("CARGO_PKG_VERSION"), "web")
                 .with("standard", "ECMAScript 2025 and later"),
             crate::compiler::Reproducibility::Always,
@@ -7670,7 +7685,7 @@ impl crate::compiler::Compiler for JsCompiler {
     fn plan(
         &self,
         request: &crate::compiler::Request,
-    ) -> Result<crate::compiler::Plan, Diagnostic> {
+    ) -> Result<crate::compiler::BuildPlan, Diagnostic> {
         let identity = self
             .probe()
             .identity
@@ -7683,8 +7698,8 @@ impl crate::compiler::Compiler for JsCompiler {
                 kind: crate::compiler::Kind::Resource,
             })
             .collect();
-        Ok(crate::compiler::Plan {
-            key: crate::compiler::Plan::key_for(&identity, request),
+        Ok(crate::compiler::BuildPlan {
+            key: crate::compiler::BuildPlan::key_for(&identity, request),
             identity,
             expected,
             reproducibility: crate::compiler::Reproducibility::Always,
@@ -7693,7 +7708,7 @@ impl crate::compiler::Compiler for JsCompiler {
 
     fn compile(
         &self,
-        plan: &crate::compiler::Plan,
+        plan: &crate::compiler::BuildPlan,
         request: &crate::compiler::Request,
         mut session: crate::compiler::Session<'_>,
     ) -> Result<crate::compiler::Compiled, Diagnostic> {

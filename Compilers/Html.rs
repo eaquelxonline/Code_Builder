@@ -67,7 +67,7 @@ pub struct Node {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Quirks {
+pub enum QuirksMode {
     No,
     Limited,
     Full,
@@ -82,7 +82,7 @@ pub struct ParseError {
 #[derive(Clone, Debug)]
 pub struct Document {
     pub nodes: Vec<Node>,
-    pub quirks: Quirks,
+    pub quirks: QuirksMode,
     pub errors: Vec<ParseError>,
 }
 
@@ -94,7 +94,7 @@ impl Document {
                 parent: None,
                 children: Vec::new(),
             }],
-            quirks: Quirks::No,
+            quirks: QuirksMode::No,
             errors: Vec::new(),
         }
     }
@@ -1921,7 +1921,7 @@ enum Scope {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Listed {
+enum ActiveFormattingEntry {
     Marker,
     Element(NodeId),
 }
@@ -2242,7 +2242,7 @@ fn quirks_for(
     public_id: &Option<String>,
     system_id: &Option<String>,
     force: bool,
-) -> Quirks {
+) -> QuirksMode {
     let public = public_id.as_deref().unwrap_or("").to_ascii_lowercase();
     let has_public = public_id.is_some();
     let has_system = system_id.is_some();
@@ -2262,7 +2262,7 @@ fn quirks_for(
             && (public.starts_with("-//w3c//dtd html 4.01 frameset//")
                 || public.starts_with("-//w3c//dtd html 4.01 transitional//")))
     {
-        return Quirks::Full;
+        return QuirksMode::Full;
     }
     if has_public
         && (public.starts_with("-//w3c//dtd xhtml 1.0 frameset//")
@@ -2271,9 +2271,9 @@ fn quirks_for(
                 && (public.starts_with("-//w3c//dtd html 4.01 frameset//")
                     || public.starts_with("-//w3c//dtd html 4.01 transitional//"))))
     {
-        return Quirks::Limited;
+        return QuirksMode::Limited;
     }
-    Quirks::No
+    QuirksMode::No
 }
 
 struct TreeBuilder {
@@ -2282,7 +2282,7 @@ struct TreeBuilder {
     mode: Mode,
     original: Mode,
     open: Vec<NodeId>,
-    listed: Vec<Listed>,
+    listed: Vec<ActiveFormattingEntry>,
     templates: Vec<Mode>,
     head: Option<NodeId>,
     form: Option<NodeId>,
@@ -2722,7 +2722,7 @@ impl TreeBuilder {
 
     fn clear_to_marker(&mut self) {
         while let Some(entry) = self.listed.pop() {
-            if entry == Listed::Marker {
+            if entry == ActiveFormattingEntry::Marker {
                 break;
             }
         }
@@ -2763,8 +2763,8 @@ impl TreeBuilder {
         let mut matches: Vec<usize> = Vec::new();
         for (at, entry) in self.listed.iter().enumerate().rev() {
             match entry {
-                Listed::Marker => break,
-                Listed::Element(held) => {
+                ActiveFormattingEntry::Marker => break,
+                ActiveFormattingEntry::Element(held) => {
                     if self.same_element(*held, id) {
                         matches.push(at);
                     }
@@ -2775,14 +2775,14 @@ impl TreeBuilder {
             let earliest = *matches.last().unwrap_or(&0);
             self.listed.remove(earliest);
         }
-        self.listed.push(Listed::Element(id));
+        self.listed.push(ActiveFormattingEntry::Element(id));
     }
 
     fn reconstruct(&mut self) {
         let Some(&last) = self.listed.last() else {
             return;
         };
-        let Listed::Element(held) = last else {
+        let ActiveFormattingEntry::Element(held) = last else {
             return;
         };
         if self.open.contains(&held) {
@@ -2791,8 +2791,8 @@ impl TreeBuilder {
         let mut at = self.listed.len() - 1;
         while at > 0 {
             match self.listed[at - 1] {
-                Listed::Marker => break,
-                Listed::Element(previous) => {
+                ActiveFormattingEntry::Marker => break,
+                ActiveFormattingEntry::Element(previous) => {
                     if self.open.contains(&previous) {
                         break;
                     }
@@ -2801,13 +2801,13 @@ impl TreeBuilder {
             }
         }
         while at < self.listed.len() {
-            let Listed::Element(old) = self.listed[at] else {
+            let ActiveFormattingEntry::Element(old) = self.listed[at] else {
                 break;
             };
             let name = self.name_of(old).to_string();
             let attributes = self.clone_attributes(old);
             let fresh = self.insert_element(Namespace::Html, &name, attributes);
-            self.listed[at] = Listed::Element(fresh);
+            self.listed[at] = ActiveFormattingEntry::Element(fresh);
             at += 1;
         }
     }
@@ -2905,7 +2905,11 @@ impl TreeBuilder {
 
     fn run_adoption_agency(&mut self, subject: &str) -> bool {
         if let Some(current) = self.current() {
-            if self.is(current, subject) && !self.listed.contains(&Listed::Element(current)) {
+            if self.is(current, subject)
+                && !self
+                    .listed
+                    .contains(&ActiveFormattingEntry::Element(current))
+            {
                 self.open.pop();
                 return true;
             }
@@ -2914,8 +2918,8 @@ impl TreeBuilder {
             let mut found: Option<(usize, NodeId)> = None;
             for (at, entry) in self.listed.iter().enumerate().rev() {
                 match entry {
-                    Listed::Marker => break,
-                    Listed::Element(id) => {
+                    ActiveFormattingEntry::Marker => break,
+                    ActiveFormattingEntry::Element(id) => {
                         if self.is(*id, subject) {
                             found = Some((at, *id));
                             break;
@@ -2966,7 +2970,7 @@ impl TreeBuilder {
                 let mut in_list = self
                     .listed
                     .iter()
-                    .position(|entry| *entry == Listed::Element(node));
+                    .position(|entry| *entry == ActiveFormattingEntry::Element(node));
                 if inner > 3 {
                     if let Some(held) = in_list {
                         self.listed.remove(held);
@@ -2983,7 +2987,7 @@ impl TreeBuilder {
                 let name = self.name_of(node).to_string();
                 let attributes = self.clone_attributes(node);
                 let fresh = self.make(Namespace::Html, &name, attributes);
-                self.listed[held] = Listed::Element(fresh);
+                self.listed[held] = ActiveFormattingEntry::Element(fresh);
                 self.open[node_at] = fresh;
                 if last_node == furthest_block {
                     bookmark = held + 1;
@@ -3010,7 +3014,7 @@ impl TreeBuilder {
             if let Some(held) = self
                 .listed
                 .iter()
-                .position(|entry| *entry == Listed::Element(element))
+                .position(|entry| *entry == ActiveFormattingEntry::Element(element))
             {
                 self.listed.remove(held);
                 if held < bookmark {
@@ -3018,7 +3022,8 @@ impl TreeBuilder {
                 }
             }
             let bookmark = bookmark.min(self.listed.len());
-            self.listed.insert(bookmark, Listed::Element(fresh));
+            self.listed
+                .insert(bookmark, ActiveFormattingEntry::Element(fresh));
             self.remove_from_stack(element);
             let below = self
                 .open
@@ -3129,7 +3134,7 @@ impl TreeBuilder {
             }
             _ => {
                 self.fault("missing-doctype");
-                self.doc.quirks = Quirks::Full;
+                self.doc.quirks = QuirksMode::Full;
                 self.mode = Mode::BeforeHtml;
                 self.reprocess(token);
             }
@@ -3209,7 +3214,7 @@ impl TreeBuilder {
                 "script" => self.generic_text(name, attributes, State::ScriptData),
                 "template" => {
                     self.insert_html(name, attributes);
-                    self.listed.push(Listed::Marker);
+                    self.listed.push(ActiveFormattingEntry::Marker);
                     self.frameset_ok = false;
                     self.mode = Mode::InTemplate;
                     self.templates.push(Mode::InTemplate);
@@ -3608,8 +3613,8 @@ impl TreeBuilder {
                 let mut found = None;
                 for entry in self.listed.iter().rev() {
                     match entry {
-                        Listed::Marker => break,
-                        Listed::Element(id) => {
+                        ActiveFormattingEntry::Marker => break,
+                        ActiveFormattingEntry::Element(id) => {
                             if self.is(*id, "a") {
                                 found = Some(*id);
                                 break;
@@ -3620,7 +3625,8 @@ impl TreeBuilder {
                 if let Some(held) = found {
                     self.fault("nested-anchor");
                     self.run_adoption_agency("a");
-                    self.listed.retain(|entry| *entry != Listed::Element(held));
+                    self.listed
+                        .retain(|entry| *entry != ActiveFormattingEntry::Element(held));
                     self.remove_from_stack(held);
                 }
                 self.reconstruct();
@@ -3646,11 +3652,11 @@ impl TreeBuilder {
             "applet" | "marquee" | "object" => {
                 self.reconstruct();
                 self.insert_html(name, attributes);
-                self.listed.push(Listed::Marker);
+                self.listed.push(ActiveFormattingEntry::Marker);
                 self.frameset_ok = false;
             }
             "table" => {
-                if self.doc.quirks != Quirks::Full {
+                if self.doc.quirks != QuirksMode::Full {
                     self.close_p_in_button_scope();
                 }
                 self.insert_html(name, attributes);
@@ -3958,7 +3964,7 @@ impl TreeBuilder {
             } => match name.as_str() {
                 "caption" => {
                     self.clear_to(&["table", "template", "html"]);
-                    self.listed.push(Listed::Marker);
+                    self.listed.push(ActiveFormattingEntry::Marker);
                     self.insert_html(name, attributes);
                     self.mode = Mode::InCaption;
                 }
@@ -4218,7 +4224,7 @@ impl TreeBuilder {
                 self.clear_to(&["tr", "template", "html"]);
                 self.insert_html(name, attributes);
                 self.mode = Mode::InCell;
-                self.listed.push(Listed::Marker);
+                self.listed.push(ActiveFormattingEntry::Marker);
             }
             Token::End { name } if name == "tr" => {
                 if self.in_scope("tr", Scope::Table) {
@@ -5401,8 +5407,8 @@ impl crate::compiler::Compiler for HtmlCompiler {
         &CONTRACT
     }
 
-    fn probe(&self) -> crate::compiler::Probe {
-        crate::compiler::Probe::usable(
+    fn probe(&self) -> crate::compiler::CompilerProbe {
+        crate::compiler::CompilerProbe::usable(
             crate::compiler::Identity::new("html", "build.html", env!("CARGO_PKG_VERSION"), "web")
                 .with("standard", "WHATWG HTML Living Standard"),
             crate::compiler::Reproducibility::Always,
@@ -5412,7 +5418,7 @@ impl crate::compiler::Compiler for HtmlCompiler {
     fn plan(
         &self,
         request: &crate::compiler::Request,
-    ) -> Result<crate::compiler::Plan, Diagnostic> {
+    ) -> Result<crate::compiler::BuildPlan, Diagnostic> {
         let identity = self
             .probe()
             .identity
@@ -5425,8 +5431,8 @@ impl crate::compiler::Compiler for HtmlCompiler {
                 kind: crate::compiler::Kind::Resource,
             })
             .collect();
-        Ok(crate::compiler::Plan {
-            key: crate::compiler::Plan::key_for(&identity, request),
+        Ok(crate::compiler::BuildPlan {
+            key: crate::compiler::BuildPlan::key_for(&identity, request),
             identity,
             expected,
             reproducibility: crate::compiler::Reproducibility::Always,
@@ -5435,7 +5441,7 @@ impl crate::compiler::Compiler for HtmlCompiler {
 
     fn compile(
         &self,
-        plan: &crate::compiler::Plan,
+        plan: &crate::compiler::BuildPlan,
         request: &crate::compiler::Request,
         mut session: crate::compiler::Session<'_>,
     ) -> Result<crate::compiler::Compiled, Diagnostic> {

@@ -3026,7 +3026,7 @@ fn is_unicode_whitespace(value: u32) -> bool {
 }
 
 #[derive(Clone, Debug)]
-struct SeenComment {
+struct PendingComment {
     start: Place,
     text: Rc<[u8]>,
 }
@@ -3058,7 +3058,7 @@ struct Lexer {
     conflict_marker: u8,
     gap: Option<String>,
     reports: Vec<LexerReport>,
-    comments: Vec<SeenComment>,
+    comments: Vec<PendingComment>,
 }
 
 impl Lexer {
@@ -3308,7 +3308,7 @@ impl Lexer {
             return;
         }
         let text: Rc<[u8]> = Rc::from(&self.bytes[start..end.min(self.bytes.len())]);
-        let comment = SeenComment {
+        let comment = PendingComment {
             start: self.place(start),
             text,
         };

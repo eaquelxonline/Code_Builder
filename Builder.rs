@@ -1654,24 +1654,24 @@ pub mod compiler {
     }
 
     #[derive(Clone, Debug)]
-    pub struct Probe {
+    pub struct CompilerProbe {
         pub identity: Option<Identity>,
         pub reproducibility: Reproducibility,
 
         pub unavailable: Option<Diagnostic>,
     }
 
-    impl Probe {
-        pub fn usable(identity: Identity, reproducibility: Reproducibility) -> Probe {
-            Probe {
+    impl CompilerProbe {
+        pub fn usable(identity: Identity, reproducibility: Reproducibility) -> CompilerProbe {
+            CompilerProbe {
                 identity: Some(identity),
                 reproducibility,
                 unavailable: None,
             }
         }
 
-        pub fn unavailable(why: Diagnostic) -> Probe {
-            Probe {
+        pub fn unavailable(why: Diagnostic) -> CompilerProbe {
+            CompilerProbe {
                 identity: None,
                 reproducibility: Reproducibility::Unknown,
                 unavailable: Some(why),
@@ -1737,14 +1737,14 @@ pub mod compiler {
     }
 
     #[derive(Clone, PartialEq, Eq, Debug)]
-    pub struct Plan {
+    pub struct BuildPlan {
         pub key: cache::Key,
         pub identity: Identity,
         pub expected: Vec<Expected>,
         pub reproducibility: Reproducibility,
     }
 
-    impl Plan {
+    impl BuildPlan {
         pub fn key_for(identity: &Identity, request: &Request) -> cache::Key {
             let mut record = crate::canonical::Record::new();
             record
@@ -1815,7 +1815,7 @@ pub mod compiler {
     }
 
     #[derive(Clone, PartialEq, Eq, Debug)]
-    pub struct Produced {
+    pub struct ProducedArtifact {
         pub name: String,
         pub kind: Kind,
         pub digest: Digest,
@@ -1826,7 +1826,7 @@ pub mod compiler {
     pub struct Compiled {
         pub key: cache::Key,
         pub identity: Identity,
-        pub produced: Vec<Produced>,
+        pub produced: Vec<ProducedArtifact>,
         pub reproducibility: Reproducibility,
     }
 
@@ -1962,7 +1962,7 @@ pub mod compiler {
             self.offered.len()
         }
 
-        pub fn commit(self, plan: &Plan) -> Result<Compiled, Diagnostic> {
+        pub fn commit(self, plan: &BuildPlan) -> Result<Compiled, Diagnostic> {
             if plan.expected.len() != self.offered.len() {
                 return Err(fail(
                     self.origin,
@@ -2011,7 +2011,7 @@ pub mod compiler {
                     )
                     .with_context(format!("Name: {name}")));
                 }
-                produced.push(Produced {
+                produced.push(ProducedArtifact {
                     name: name.clone(),
                     kind: *kind,
                     digest,
@@ -2043,13 +2043,13 @@ pub mod compiler {
     pub trait Compiler: Sync {
         fn contract(&self) -> &'static Contract;
 
-        fn probe(&self) -> Probe;
+        fn probe(&self) -> CompilerProbe;
 
-        fn plan(&self, request: &Request) -> Result<Plan, Diagnostic>;
+        fn plan(&self, request: &Request) -> Result<BuildPlan, Diagnostic>;
 
         fn compile(
             &self,
-            plan: &Plan,
+            plan: &BuildPlan,
             request: &Request,
             session: Session<'_>,
         ) -> Result<Compiled, Diagnostic>;
@@ -5591,7 +5591,7 @@ pub mod store {
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    pub struct Held {
+    pub struct StoredEntry {
         pub digest: Digest,
         pub bytes: u64,
 
@@ -5599,7 +5599,7 @@ pub mod store {
     }
 
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-    pub struct Swept {
+    pub struct StoreSweep {
         pub removed: u64,
         pub freed: u64,
         pub kept: u64,
@@ -5763,7 +5763,7 @@ pub mod store {
             })
         }
 
-        pub fn list(&self) -> Vec<Held> {
+        pub fn list(&self) -> Vec<StoredEntry> {
             let mut found = Vec::new();
             let Ok(folders) = std::fs::read_dir(&self.root) else {
                 return found;
@@ -5792,7 +5792,7 @@ pub mod store {
                     if !facts.is_file() {
                         continue;
                     }
-                    found.push(Held {
+                    found.push(StoredEntry {
                         digest,
                         bytes: facts.len(),
                         touched: facts
@@ -5812,12 +5812,12 @@ pub mod store {
             self.list().iter().map(|held| held.bytes).sum()
         }
 
-        pub fn sweep(&self, budget: u64, keep: &BTreeSet<Digest>) -> Swept {
+        pub fn sweep(&self, budget: u64, keep: &BTreeSet<Digest>) -> StoreSweep {
             let held = self.list();
             let mut total: u64 = held.iter().map(|one| one.bytes).sum();
-            let mut swept = Swept {
+            let mut swept = StoreSweep {
                 kept: held.len() as u64,
-                ..Swept::default()
+                ..StoreSweep::default()
             };
             if total <= budget {
                 return swept;
@@ -5994,7 +5994,7 @@ pub mod cache {
     }
 
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-    pub struct Swept {
+    pub struct CacheSweep {
         pub dropped: usize,
         pub freed: u64,
     }
@@ -6059,9 +6059,9 @@ pub mod cache {
             self.entries.iter().map(|entry| entry.used).min()
         }
 
-        pub fn sweep(&mut self, budget: Budget, now: i64) -> Swept {
-            let mut swept = Swept::default();
-            let freed = |entry: &Entry, swept: &mut Swept| {
+        pub fn sweep(&mut self, budget: Budget, now: i64) -> CacheSweep {
+            let mut swept = CacheSweep::default();
+            let freed = |entry: &Entry, swept: &mut CacheSweep| {
                 swept.dropped += 1;
                 if entry.valid {
                     swept.freed += entry.bytes;
@@ -7624,7 +7624,7 @@ pub mod scheduler {
         ) -> Result<NodeResult, Diagnostic>;
     }
 
-    pub trait Crew: Sync {
+    pub trait ExecutorPool: Sync {
         fn hand(&self) -> Box<dyn NodeExecutor + Send>;
     }
 
@@ -7676,7 +7676,7 @@ pub mod scheduler {
     #[derive(Clone, Copy, Default)]
     pub struct PluginCrew;
 
-    impl Crew for PluginCrew {
+    impl ExecutorPool for PluginCrew {
         fn hand(&self) -> Box<dyn NodeExecutor + Send> {
             Box::new(PluginRegistryExecutor::new())
         }
@@ -7776,7 +7776,7 @@ pub mod scheduler {
         resume: Checkpoint,
     }
 
-    struct Done {
+    struct JobResult {
         at: usize,
         result: Result<NodeResult, Diagnostic>,
         said: Vec<Diagnostic>,
@@ -7785,13 +7785,13 @@ pub mod scheduler {
     }
 
     #[derive(PartialEq, Eq, Debug)]
-    enum Standing {
+    enum NodeReadiness {
         Ready,
         Waiting,
         Blocked(Vec<String>),
     }
 
-    fn execute_job(hand: &mut dyn NodeExecutor, job: Job, grants: &Policy) -> Done {
+    fn execute_job(hand: &mut dyn NodeExecutor, job: Job, grants: &Policy) -> JobResult {
         let Job {
             at,
             node,
@@ -7815,7 +7815,7 @@ pub mod scheduler {
                 said.push(why);
             }
         }
-        Done {
+        JobResult {
             at,
             result,
             said,
@@ -7824,7 +7824,7 @@ pub mod scheduler {
         }
     }
 
-    struct Board {
+    struct SchedulerBoard {
         order: Vec<NodeId>,
         held: Vec<Node>,
         deps: Vec<Vec<usize>>,
@@ -7838,8 +7838,8 @@ pub mod scheduler {
         report: Report,
     }
 
-    impl Board {
-        fn of(graph: &Graph, order: Vec<NodeId>) -> Board {
+    impl SchedulerBoard {
+        fn of(graph: &Graph, order: Vec<NodeId>) -> SchedulerBoard {
             let held: Vec<Node> = order
                 .iter()
                 .filter_map(|id| graph.node(id).cloned())
@@ -7857,7 +7857,7 @@ pub mod scheduler {
             let count = held.len();
             let mut report = Report::empty_report(Outcome::Completed);
             report.order = order.clone();
-            Board {
+            SchedulerBoard {
                 order,
                 held,
                 deps,
@@ -7872,7 +7872,7 @@ pub mod scheduler {
             }
         }
 
-        fn standing(&self, index: usize) -> Standing {
+        fn standing(&self, index: usize) -> NodeReadiness {
             let mut blocked: Vec<String> = Vec::new();
             let mut waiting = false;
             for dependency in &self.deps[index] {
@@ -7887,11 +7887,11 @@ pub mod scheduler {
                 }
             }
             if !blocked.is_empty() {
-                Standing::Blocked(blocked)
+                NodeReadiness::Blocked(blocked)
             } else if waiting {
-                Standing::Waiting
+                NodeReadiness::Waiting
             } else {
-                Standing::Ready
+                NodeReadiness::Ready
             }
         }
 
@@ -7909,7 +7909,7 @@ pub mod scheduler {
                         moved = true;
                         continue;
                     }
-                    let Standing::Blocked(blocked) = self.standing(index) else {
+                    let NodeReadiness::Blocked(blocked) = self.standing(index) else {
                         at += 1;
                         continue;
                     };
@@ -7939,7 +7939,7 @@ pub mod scheduler {
             self.waiting
                 .iter()
                 .copied()
-                .find(|index| self.standing(*index) == Standing::Ready)
+                .find(|index| self.standing(*index) == NodeReadiness::Ready)
         }
 
         fn take(&mut self, index: usize) {
@@ -7972,7 +7972,7 @@ pub mod scheduler {
             }
         }
 
-        fn finish(&mut self, done: Done) {
+        fn finish(&mut self, done: JobResult) {
             let at = done.at;
             self.report.duration_micros += done.elapsed;
             self.audited[at] = done.audited;
@@ -8032,14 +8032,14 @@ pub mod scheduler {
         }
     }
 
-    enum Hands<'a> {
+    enum Executors<'a> {
         One(&'a mut dyn NodeExecutor),
-        Many(&'a dyn Crew),
+        Many(&'a dyn ExecutorPool),
     }
 
     fn run_schedule(
         graph: &mut Graph,
-        hands: Hands<'_>,
+        hands: Executors<'_>,
         policy: &mut Policy,
         sink: &mut Sink,
         cancellation: &Cancellation,
@@ -8055,11 +8055,11 @@ pub mod scheduler {
 
         let conditions = Conditions::read();
         let wanted = match &hands {
-            Hands::One(_) => 1,
-            Hands::Many(_) => settings.limits.lanes_under(&conditions),
+            Executors::One(_) => 1,
+            Executors::Many(_) => settings.limits.lanes_under(&conditions),
         };
 
-        let mut board = Board::of(graph, order);
+        let mut board = SchedulerBoard::of(graph, order);
         board.report.conditions = conditions;
         board.report.lanes = wanted;
 
@@ -8067,14 +8067,14 @@ pub mod scheduler {
         let opened = Instant::now();
 
         match hands {
-            Hands::One(executor) => {
+            Executors::One(executor) => {
                 execute_sequentially(&mut board, executor, cancellation, settings, &grants)
             }
-            Hands::Many(crew) if wanted <= 1 => {
+            Executors::Many(crew) if wanted <= 1 => {
                 let mut hand = crew.hand();
                 execute_sequentially(&mut board, hand.as_mut(), cancellation, settings, &grants)
             }
-            Hands::Many(crew) => {
+            Executors::Many(crew) => {
                 execute_in_parallel(&mut board, crew, cancellation, settings, &grants, wanted)
             }
         }
@@ -8084,7 +8084,7 @@ pub mod scheduler {
     }
 
     fn execute_sequentially(
-        board: &mut Board,
+        board: &mut SchedulerBoard,
         executor: &mut dyn NodeExecutor,
         cancellation: &Cancellation,
         settings: &Settings,
@@ -8101,8 +8101,8 @@ pub mod scheduler {
     }
 
     fn execute_in_parallel(
-        board: &mut Board,
-        crew: &dyn Crew,
+        board: &mut SchedulerBoard,
+        crew: &dyn ExecutorPool,
         cancellation: &Cancellation,
         settings: &Settings,
         grants: &Policy,
@@ -8110,7 +8110,7 @@ pub mod scheduler {
     ) {
         std::thread::scope(|scope| {
             let (give, take) = mpsc::channel::<Job>();
-            let (tell, heard) = mpsc::channel::<Done>();
+            let (tell, heard) = mpsc::channel::<JobResult>();
             let take = Arc::new(Mutex::new(take));
 
             for _ in 0..lanes {
@@ -8186,7 +8186,7 @@ pub mod scheduler {
     ) -> Report {
         run_schedule(
             graph,
-            Hands::One(executor),
+            Executors::One(executor),
             policy,
             sink,
             cancellation,
@@ -8204,7 +8204,7 @@ pub mod scheduler {
     ) -> Report {
         run_schedule(
             graph,
-            Hands::One(executor),
+            Executors::One(executor),
             policy,
             sink,
             cancellation,
@@ -8214,7 +8214,7 @@ pub mod scheduler {
 
     pub fn run_across(
         graph: &mut Graph,
-        crew: &dyn Crew,
+        crew: &dyn ExecutorPool,
         policy: &mut Policy,
         sink: &mut Sink,
         cancellation: &Cancellation,
@@ -8222,7 +8222,7 @@ pub mod scheduler {
     ) -> Report {
         run_schedule(
             graph,
-            Hands::Many(crew),
+            Executors::Many(crew),
             policy,
             sink,
             cancellation,
@@ -9147,7 +9147,7 @@ pub mod xml {
         elements: usize,
     }
 
-    struct Open {
+    struct OpenElement {
         name: String,
         attributes: Vec<Attribute>,
         children: Vec<Element>,
@@ -9240,7 +9240,7 @@ pub mod xml {
                 self.skip("\u{feff}".len());
             }
 
-            let mut stack: Vec<Open> = Vec::new();
+            let mut stack: Vec<OpenElement> = Vec::new();
             let mut root: Option<Element> = None;
 
             loop {
@@ -9357,7 +9357,7 @@ pub mod xml {
 
                     let (name, attributes, self_closing) = self.read_opening_tag(sink)?;
 
-                    let element = Open {
+                    let element = OpenElement {
                         name,
                         attributes,
                         children: Vec::new(),
@@ -9762,7 +9762,7 @@ pub mod xml {
         }
     }
 
-    fn finish(open: Open) -> Element {
+    fn finish(open: OpenElement) -> Element {
         Element {
             name: open.name,
             attributes: open.attributes,
@@ -9774,7 +9774,7 @@ pub mod xml {
     }
 
     fn push_text(
-        open: &mut Open,
+        open: &mut OpenElement,
         text: &str,
         parser: &Parser<'_>,
         sink: &mut Sink,
@@ -12157,7 +12157,9 @@ pub mod resources {
         }
     }
 
-    pub fn inlined(files: Vec<crate::scaffold::Supplied>) -> Vec<crate::scaffold::Supplied> {
+    pub fn inlined(
+        files: Vec<crate::scaffold::ProvidedFile>,
+    ) -> Vec<crate::scaffold::ProvidedFile> {
         let mut out = Vec::with_capacity(files.len());
         for held in files {
             let wanted = held.name.ends_with(".xml")
@@ -12189,7 +12191,7 @@ pub mod resources {
                 .collect();
             let mut pulled: Vec<Element> = Vec::new();
             pull_inline(&mut root, &stem, &kind, &mut pulled);
-            out.push(crate::scaffold::Supplied {
+            out.push(crate::scaffold::ProvidedFile {
                 folder: held.folder.clone(),
                 name: held.name.clone(),
                 bytes: xml::serialize_element(&root).into_bytes(),
@@ -12200,7 +12202,7 @@ pub mod resources {
                         one.attributes.insert(0, space.clone());
                     }
                 }
-                out.push(crate::scaffold::Supplied {
+                out.push(crate::scaffold::ProvidedFile {
                     folder: held.folder.clone(),
                     name: format!("${stem}__{at}.xml"),
                     bytes: xml::serialize_element(&one).into_bytes(),
@@ -17315,7 +17317,7 @@ pub mod dex {
     }
 
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    pub enum Points {
+    pub enum IndexTarget {
         Nowhere,
         Strings,
         Types,
@@ -17324,14 +17326,14 @@ pub mod dex {
         Prototypes,
     }
 
-    pub const fn points_at(opcode: u8) -> Points {
+    pub const fn points_at(opcode: u8) -> IndexTarget {
         match opcode {
-            0x1a | 0x1b => Points::Strings,
-            0x1c | 0x1f | 0x20 | 0x22 | 0x23 | 0x24 | 0x25 => Points::Types,
-            0x52..=0x6d => Points::Fields,
-            0x6e..=0x72 | 0x74..=0x78 | 0xfa | 0xfb => Points::Methods,
-            0xff => Points::Prototypes,
-            _ => Points::Nowhere,
+            0x1a | 0x1b => IndexTarget::Strings,
+            0x1c | 0x1f | 0x20 | 0x22 | 0x23 | 0x24 | 0x25 => IndexTarget::Types,
+            0x52..=0x6d => IndexTarget::Fields,
+            0x6e..=0x72 | 0x74..=0x78 | 0xfa | 0xfb => IndexTarget::Methods,
+            0xff => IndexTarget::Prototypes,
+            _ => IndexTarget::Nowhere,
         }
     }
 
@@ -17478,15 +17480,15 @@ pub mod dex {
         fn operand_description(&self, opcode: u8, index: u32) -> Option<String> {
             let at = index as usize;
             match points_at(opcode) {
-                Points::Nowhere => None,
-                Points::Strings => self.strings.get(at).map(|held| display_text(held)),
-                Points::Types => self.types.get(at).cloned(),
-                Points::Fields => self
+                IndexTarget::Nowhere => None,
+                IndexTarget::Strings => self.strings.get(at).map(|held| display_text(held)),
+                IndexTarget::Types => self.types.get(at).cloned(),
+                IndexTarget::Fields => self
                     .fields
                     .get(at)
                     .map(|held| format!("{}.{} {}", held.class, held.name, held.type_name)),
-                Points::Methods => self.methods.get(at).map(|held| held.signature()),
-                Points::Prototypes => self.protos.get(at).map(|held| held.to_text()),
+                IndexTarget::Methods => self.methods.get(at).map(|held| held.signature()),
+                IndexTarget::Prototypes => self.protos.get(at).map(|held| held.to_text()),
             }
         }
     }
@@ -22616,7 +22618,7 @@ pub mod axml {
         framework_attribute(local).map(|(_, formats, symbols)| (formats, symbols))
     }
 
-    pub type Says = (u32, &'static str, &'static [(&'static str, u32)]);
+    pub type AttributeFormat = (u32, &'static str, &'static [(&'static str, u32)]);
 
     #[derive(Clone, Debug, Default)]
     pub struct Declared {
@@ -22630,7 +22632,7 @@ pub mod axml {
 
     pub const TOOLS_NAMESPACE: &str = "http://schemas.android.com/tools";
 
-    pub fn framework_attribute(local: &str) -> Option<Says> {
+    pub fn framework_attribute(local: &str) -> Option<AttributeFormat> {
         crate::compilers::android::THE_FRAMEWORK_ATTRIBUTES
             .iter()
             .find(|(name, _, _, _)| *name == local)
@@ -23223,7 +23225,7 @@ pub mod axml {
     }
 
     #[derive(Clone, Debug, PartialEq)]
-    pub struct Read {
+    pub struct ParsedAttributeName {
         pub namespace: String,
         pub name: String,
 
@@ -23238,7 +23240,7 @@ pub mod axml {
     #[derive(Clone, Debug, PartialEq)]
     pub struct Node {
         pub name: String,
-        pub attributes: Vec<Read>,
+        pub attributes: Vec<ParsedAttributeName>,
         pub children: Vec<Node>,
         pub line: u32,
     }
@@ -23646,7 +23648,7 @@ pub mod axml {
                 .at(named)
                 .ok_or_else(|| fail("EA029", "An attribute names a string that is not there."))?
                 .to_string();
-            attributes.push(Read {
+            attributes.push(ParsedAttributeName {
                 namespace: strings.at(namespace).unwrap_or("").to_string(),
 
                 name: if local.is_empty() {
@@ -24628,7 +24630,7 @@ pub mod dexwrite {
     const MOST_OF_ONE_THING: usize = 65_536;
 
     #[derive(Default)]
-    struct Needs {
+    struct PoolRequirements {
         types: Vec<String>,
         strings: Vec<String>,
         fields: Vec<FieldRef>,
@@ -24640,7 +24642,7 @@ pub mod dexwrite {
         seen_methods: HashSet<MethodRef>,
     }
 
-    impl Needs {
+    impl PoolRequirements {
         fn kind(&mut self, descriptor: &str) {
             self.text(descriptor);
             if !self.seen_types.contains(descriptor) {
@@ -24718,8 +24720,8 @@ pub mod dexwrite {
         }
     }
 
-    fn needs_of(class: &Class) -> Needs {
-        let mut needs = Needs::default();
+    fn needs_of(class: &Class) -> PoolRequirements {
+        let mut needs = PoolRequirements::default();
         needs.kind(&class.descriptor);
         needs.kind(&class.superclass);
         for one in &class.interfaces {
@@ -24782,14 +24784,14 @@ pub mod dexwrite {
             return Err(fail("EW010", "A dex file must define at least one class."));
         }
 
-        let mut shared = Needs::default();
+        let mut shared = PoolRequirements::default();
         for one in extra {
             shared.method(one);
         }
 
         let mut parts: Vec<Vec<Class>> = Vec::new();
         let mut here: Vec<Class> = Vec::new();
-        let mut running = Needs::default();
+        let mut running = PoolRequirements::default();
         for class in classes {
             let needs = needs_of(class);
             let would = |mine: &HashSet<String>, theirs: &[String]| -> usize {
@@ -24823,7 +24825,7 @@ pub mod dexwrite {
             }
             if over {
                 parts.push(std::mem::take(&mut here));
-                running = Needs::default();
+                running = PoolRequirements::default();
             }
 
             let needs = if over { needs_of(class) } else { needs };
@@ -25135,21 +25137,21 @@ pub mod dexwrite {
             .copied()
             .find(|at| *at != 0);
 
-        struct Wanted {
+        struct AnnotationIndices {
             class: Vec<usize>,
             fields: Vec<(u32, Vec<usize>)>,
             methods: Vec<(u32, Vec<usize>)>,
             parameters: Vec<(u32, Vec<Vec<usize>>)>,
         }
 
-        struct Written {
+        struct AnnotationOffsets {
             class: u32,
             fields: Vec<(u32, u32)>,
             methods: Vec<(u32, u32)>,
             parameters: Vec<(u32, Vec<u32>)>,
         }
 
-        let mut wanted: Vec<Wanted> = Vec::with_capacity(classes.len());
+        let mut wanted: Vec<AnnotationIndices> = Vec::with_capacity(classes.len());
         let mut every: Vec<crate::jvm::Annotation> = Vec::new();
         fn intern_annotations(
             every: &mut Vec<crate::jvm::Annotation>,
@@ -25163,7 +25165,7 @@ pub mod dexwrite {
                 .collect()
         }
         for class in classes {
-            let mut held = Wanted {
+            let mut held = AnnotationIndices {
                 class: intern_annotations(&mut every, &class.annotations),
                 fields: Vec::new(),
                 methods: Vec::new(),
@@ -25238,7 +25240,7 @@ pub mod dexwrite {
             Ok(at)
         };
 
-        let mut sets: Vec<Written> = Vec::with_capacity(wanted.len());
+        let mut sets: Vec<AnnotationOffsets> = Vec::with_capacity(wanted.len());
         for held in &wanted {
             let on_the_class = set_of(&mut data, &mut set_offsets, &held.class)?;
             let mut fields = Vec::new();
@@ -25257,7 +25259,7 @@ pub mod dexwrite {
                 }
                 parameters.push((*which, list));
             }
-            sets.push(Written {
+            sets.push(AnnotationOffsets {
                 class: on_the_class,
                 fields,
                 methods,
@@ -25870,10 +25872,10 @@ pub mod dalvik {
         aliased: Option<(u16, u16)>,
         far: bool,
 
-        made: &'a mut Synthesised,
+        made: &'a mut SyntheticClasses,
 
         kinds: Vec<Slot>,
-        locals: std::collections::BTreeMap<u16, Held>,
+        locals: std::collections::BTreeMap<u16, ArrayShape>,
 
         scratch: u16,
 
@@ -25885,13 +25887,13 @@ pub mod dalvik {
     }
 
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    struct Held {
+    struct ArrayShape {
         dimensions: u8,
         element: u8,
     }
 
-    impl Held {
-        fn of(descriptor: &str) -> Option<Held> {
+    impl ArrayShape {
+        fn of(descriptor: &str) -> Option<ArrayShape> {
             let held = descriptor.as_bytes();
             let mut deep = 0usize;
             while held.get(deep) == Some(&b'[') {
@@ -25900,15 +25902,15 @@ pub mod dalvik {
             if deep == 0 || deep > 255 {
                 return None;
             }
-            held.get(deep).map(|element| Held {
+            held.get(deep).map(|element| ArrayShape {
                 dimensions: deep as u8,
                 element: *element,
             })
         }
 
-        const fn inner(self) -> Option<Held> {
+        const fn inner(self) -> Option<ArrayShape> {
             if self.dimensions > 1 {
-                Some(Held {
+                Some(ArrayShape {
                     dimensions: self.dimensions - 1,
                     element: self.element,
                 })
@@ -25924,25 +25926,25 @@ pub mod dalvik {
 
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     struct Slot {
-        kept: Kept,
-        array: Option<Held>,
+        kept: RegisterKind,
+        array: Option<ArrayShape>,
     }
 
     impl Slot {
-        const fn of(kept: Kept) -> Slot {
+        const fn of(kept: RegisterKind) -> Slot {
             Slot { kept, array: None }
         }
 
         fn slot_for_descriptor(descriptor: &str) -> Slot {
             Slot {
-                kept: Kept::of(descriptor),
-                array: Held::of(descriptor),
+                kept: RegisterKind::of(descriptor),
+                array: ArrayShape::of(descriptor),
             }
         }
     }
 
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    enum Kept {
+    enum RegisterKind {
         Number,
         Reference,
 
@@ -25951,20 +25953,20 @@ pub mod dalvik {
         Half,
     }
 
-    impl Kept {
+    impl RegisterKind {
         const fn moved_by(self) -> u8 {
             match self {
-                Kept::Number => 0x01,
-                Kept::Reference => 0x07,
-                Kept::Wide | Kept::Half => 0x04,
+                RegisterKind::Number => 0x01,
+                RegisterKind::Reference => 0x07,
+                RegisterKind::Wide | RegisterKind::Half => 0x04,
             }
         }
 
-        fn of(descriptor: &str) -> Kept {
+        fn of(descriptor: &str) -> RegisterKind {
             match descriptor.chars().next() {
-                Some('J') | Some('D') => Kept::Wide,
-                Some('L') | Some('[') => Kept::Reference,
-                _ => Kept::Number,
+                Some('J') | Some('D') => RegisterKind::Wide,
+                Some('L') | Some('[') => RegisterKind::Reference,
+                _ => RegisterKind::Number,
             }
         }
     }
@@ -25985,7 +25987,7 @@ pub mod dalvik {
             class: &'a jvm::Class,
             code: &jvm::Code,
             low: u16,
-            made: &'a mut Synthesised,
+            made: &'a mut SyntheticClasses,
         ) -> Translator<'a> {
             Translator {
                 class,
@@ -26038,15 +26040,15 @@ pub mod dalvik {
             self.stack_base + self.depth - from_top
         }
 
-        fn puts(&mut self, kept: Kept) {
+        fn puts(&mut self, kept: RegisterKind) {
             self.puts_slot(Slot::of(kept));
         }
 
         fn puts_slot(&mut self, slot: Slot) {
             match slot.kept {
-                Kept::Wide | Kept::Half => {
-                    self.kinds.push(Slot::of(Kept::Wide));
-                    self.kinds.push(Slot::of(Kept::Half));
+                RegisterKind::Wide | RegisterKind::Half => {
+                    self.kinds.push(Slot::of(RegisterKind::Wide));
+                    self.kinds.push(Slot::of(RegisterKind::Half));
                     self.depth += 2;
                 }
                 _ => {
@@ -26062,7 +26064,7 @@ pub mod dalvik {
         }
 
         pub fn note_local(&mut self, local: u16, descriptor: &str) {
-            match Held::of(descriptor) {
+            match ArrayShape::of(descriptor) {
                 Some(held) => {
                     self.locals.insert(local, held);
                 }
@@ -26075,8 +26077,8 @@ pub mod dalvik {
         fn puts_wide(&mut self, width: u16) {
             match width {
                 0 => {}
-                2 => self.puts(Kept::Wide),
-                _ => self.puts(Kept::Number),
+                2 => self.puts(RegisterKind::Wide),
+                _ => self.puts(RegisterKind::Number),
             }
         }
 
@@ -26132,7 +26134,7 @@ pub mod dalvik {
                     unreachable = false;
                 }
                 if unreachable && !seeded {
-                    self.kinds = vec![Slot::of(Kept::Reference); 4];
+                    self.kinds = vec![Slot::of(RegisterKind::Reference); 4];
                     self.depth = 4;
                     seeded = true;
                 }
@@ -26146,7 +26148,7 @@ pub mod dalvik {
                         .with_context(format!("Register {register}")));
                     }
                     self.push(Insn::raw(vec![0x000d | (register << 8)]));
-                    self.kinds = vec![Slot::of(Kept::Reference)];
+                    self.kinds = vec![Slot::of(RegisterKind::Reference)];
                     self.depth = 1;
                 }
                 let opcode = bytes[at];
@@ -26357,8 +26359,8 @@ pub mod dalvik {
             ])
         }
 
-        fn constant(&mut self, value: i32, kept: Kept) {
-            let wide = kept == Kept::Wide;
+        fn constant(&mut self, value: i32, kept: RegisterKind) {
+            let wide = kept == RegisterKind::Wide;
             let to = self.stack_base + self.depth;
             if wide {
                 if i16::try_from(value).is_ok() {
@@ -26370,7 +26372,7 @@ pub mod dalvik {
                         (value as u32 >> 16) as u16,
                     ]));
                 }
-                self.puts(Kept::Wide);
+                self.puts(RegisterKind::Wide);
                 return;
             }
             if (-8..=7).contains(&value) && to < 16 {
@@ -26414,7 +26416,7 @@ pub mod dalvik {
         fn load_constant(&mut self, index: u16, start: usize) -> Result<(), Diagnostic> {
             match self.constant_at(index).cloned() {
                 Some(jvm::Constant::Integer(value)) => {
-                    self.constant(value, Kept::Number);
+                    self.constant(value, RegisterKind::Number);
                     Ok(())
                 }
                 Some(jvm::Constant::String(text)) => {
@@ -26428,7 +26430,7 @@ pub mod dalvik {
                         1,
                         Operand::Text(text),
                     ));
-                    self.puts(Kept::Reference);
+                    self.puts(RegisterKind::Reference);
                     Ok(())
                 }
                 Some(jvm::Constant::Float(bits)) => {
@@ -26443,7 +26445,7 @@ pub mod dalvik {
                         1,
                         Operand::Type(typed(&name)),
                     ));
-                    self.puts(Kept::Reference);
+                    self.puts(RegisterKind::Reference);
                     Ok(())
                 }
                 other => Err(fail("ED011", "That constant is not one this translates.")
@@ -26457,7 +26459,7 @@ pub mod dalvik {
                 Some(jvm::Constant::Long(value)) => {
                     let to = self.stack_base + self.depth;
                     if let Ok(narrow) = i32::try_from(value) {
-                        self.constant(narrow, Kept::Wide);
+                        self.constant(narrow, RegisterKind::Wide);
                     } else {
                         let raw = value as u64;
                         self.push(Insn::raw(vec![
@@ -26467,7 +26469,7 @@ pub mod dalvik {
                             (raw >> 32) as u16,
                             (raw >> 48) as u16,
                         ]));
-                        self.puts(Kept::Wide);
+                        self.puts(RegisterKind::Wide);
                     }
                     Ok(())
                 }
@@ -26517,7 +26519,7 @@ pub mod dalvik {
         fn field(&mut self, opcode: u8, index: u16, start: usize) -> Result<(), Diagnostic> {
             let (class, name, descriptor) = self.member_at(index, start)?;
             let width = width_of(&descriptor);
-            let holds = Kept::of(&descriptor);
+            let holds = RegisterKind::of(&descriptor);
             let reference = FieldRef {
                 class: typed(&class),
                 name,
@@ -26557,7 +26559,7 @@ pub mod dalvik {
                     let object = self.slot(1);
                     self.shrink(1)?;
                     let to = self.stack_base + self.depth;
-                    let object = self.move_to_low_register(object, Kept::Reference, 0);
+                    let object = self.move_to_low_register(object, RegisterKind::Reference, 0);
                     let into = if to > 15 { 2 } else { to };
                     self.push(Insn::pointing(
                         vec![(0x0052 + kind) | (into << 8) | (object << 12), 0],
@@ -26572,7 +26574,7 @@ pub mod dalvik {
                     let object = self.slot(width + 1);
                     self.shrink(width + 1)?;
                     let value = self.move_to_low_register(value, holds, 0);
-                    let object = self.move_to_low_register(object, Kept::Reference, 2);
+                    let object = self.move_to_low_register(object, RegisterKind::Reference, 2);
                     self.push(Insn::pointing(
                         vec![(0x0059 + kind) | (value << 8) | (object << 12), 0],
                         1,
@@ -26748,7 +26750,7 @@ pub mod dalvik {
                 return Err(refused("what it comes to is not an interface"));
             }
             let named = self.made.named();
-            let written = build_lambda_class(&Recipe {
+            let written = build_lambda_class(&LambdaRecipe {
                 named: &named,
                 interface: returns,
                 markers: &markers,
@@ -26778,7 +26780,7 @@ pub mod dalvik {
             ));
             let mut at = 0u16;
             for descriptor in parameters {
-                let kept = Kept::of(descriptor);
+                let kept = RegisterKind::of(descriptor);
                 self.push(move_register(kept.moved_by(), object + 1 + at, base + at));
                 at += width_of(descriptor);
             }
@@ -26795,7 +26797,7 @@ pub mod dalvik {
                 }),
             ));
             self.push(move_register(0x07, base, object));
-            self.puts(Kept::Reference);
+            self.puts(RegisterKind::Reference);
             Ok(())
         }
 
@@ -26878,7 +26880,7 @@ pub mod dalvik {
                             )
                             .with_context(format!("Offset {start}")));
                         };
-                        let kept = Kept::of(descriptor);
+                        let kept = RegisterKind::of(descriptor);
                         self.push(move_register(kept.moved_by(), argument, *register));
                         (kept, string_builder_append_descriptor(descriptor))
                     }
@@ -26898,7 +26900,7 @@ pub mod dalvik {
                             1,
                             Operand::Text(text),
                         ));
-                        (Kept::Reference, "Ljava/lang/String;")
+                        (RegisterKind::Reference, "Ljava/lang/String;")
                     }
                     Piece::Text(text) => {
                         self.push(Insn::pointing(
@@ -26906,10 +26908,10 @@ pub mod dalvik {
                             1,
                             Operand::Text(text),
                         ));
-                        (Kept::Reference, "Ljava/lang/String;")
+                        (RegisterKind::Reference, "Ljava/lang/String;")
                     }
                 };
-                let width = if kept == Kept::Wide { 2 } else { 1 };
+                let width = if kept == RegisterKind::Wide { 2 } else { 1 };
                 self.invoke_at(
                     0x006e,
                     MethodRef {
@@ -26937,7 +26939,7 @@ pub mod dalvik {
                 1,
             );
             self.push(Insn::raw(vec![0x000c | (base << 8)]));
-            self.puts(Kept::of(returns));
+            self.puts(RegisterKind::of(returns));
             Ok(())
         }
 
@@ -27019,10 +27021,10 @@ pub mod dalvik {
             match opcode {
                 0x00 => {}
                 0x01 => {
-                    self.constant(0, Kept::Reference);
+                    self.constant(0, RegisterKind::Reference);
                 }
-                0x02..=0x08 => self.constant(i32::from(opcode) - 0x03, Kept::Number),
-                0x09 | 0x0a => self.constant(i32::from(opcode) - 0x09, Kept::Wide),
+                0x02..=0x08 => self.constant(i32::from(opcode) - 0x03, RegisterKind::Number),
+                0x09 | 0x0a => self.constant(i32::from(opcode) - 0x09, RegisterKind::Wide),
                 0x0b..=0x0d => {
                     let value = (f32::from(opcode - 0x0b)).to_bits();
                     self.wide_bits(u64::from(value), false);
@@ -27034,12 +27036,12 @@ pub mod dalvik {
                 0x10 => {
                     let value = bytes[*at] as i8;
                     *at += 1;
-                    self.constant(i32::from(value), Kept::Number);
+                    self.constant(i32::from(value), RegisterKind::Number);
                 }
                 0x11 => {
                     let value = Self::u16_at(bytes, *at) as i16;
                     *at += 2;
-                    self.constant(i32::from(value), Kept::Number);
+                    self.constant(i32::from(value), RegisterKind::Number);
                 }
                 0x12 | 0x13 => {
                     let index = if opcode == 0x12 {
@@ -27098,16 +27100,16 @@ pub mod dalvik {
                 0x2e..=0x35 => {
                     let held = self.slot_at(2).and_then(|one| one.array);
                     let (dalvik, holds) = match opcode {
-                        0x2e => (0x0044u16, Slot::of(Kept::Number)),
-                        0x2f => (0x0045, Slot::of(Kept::Wide)),
+                        0x2e => (0x0044u16, Slot::of(RegisterKind::Number)),
+                        0x2f => (0x0045, Slot::of(RegisterKind::Wide)),
 
-                        0x30 => (0x0044, Slot::of(Kept::Number)),
-                        0x31 => (0x0045, Slot::of(Kept::Wide)),
+                        0x30 => (0x0044, Slot::of(RegisterKind::Number)),
+                        0x31 => (0x0045, Slot::of(RegisterKind::Wide)),
                         0x32 => (
                             0x0046,
                             Slot {
-                                kept: Kept::Reference,
-                                array: held.and_then(Held::inner),
+                                kept: RegisterKind::Reference,
+                                array: held.and_then(ArrayShape::inner),
                             },
                         ),
                         0x33 => (
@@ -27116,10 +27118,10 @@ pub mod dalvik {
                             } else {
                                 0x0048
                             },
-                            Slot::of(Kept::Number),
+                            Slot::of(RegisterKind::Number),
                         ),
-                        0x34 => (0x0049, Slot::of(Kept::Number)),
-                        _ => (0x004a, Slot::of(Kept::Number)),
+                        0x34 => (0x0049, Slot::of(RegisterKind::Number)),
+                        _ => (0x004a, Slot::of(RegisterKind::Number)),
                     };
                     let array = self.slot(2);
                     let index = self.slot(1);
@@ -27245,9 +27247,9 @@ pub mod dalvik {
                     self.shrink(2)?;
 
                     let (dalvik, kept) = match opcode {
-                        0xa5 => (0x0032, Kept::Reference),
-                        0xa6 => (0x0033, Kept::Reference),
-                        _ => (0x0032 + u16::from(opcode) - 0x9f, Kept::Number),
+                        0xa5 => (0x0032, RegisterKind::Reference),
+                        0xa6 => (0x0033, RegisterKind::Reference),
+                        _ => (0x0032 + u16::from(opcode) - 0x9f, RegisterKind::Number),
                     };
                     let left = self.move_to_low_register(left, kept, 0);
                     let right = self.move_to_low_register(right, kept, 2);
@@ -27383,17 +27385,17 @@ pub mod dalvik {
                         1,
                         Operand::Type(format!("L{name};")),
                     ));
-                    self.puts(Kept::Reference);
+                    self.puts(RegisterKind::Reference);
                 }
                 0xbe => {
                     let from = self.slot(1);
                     self.shrink(1)?;
                     let to = self.stack_base + self.depth;
-                    let from = self.move_to_low_register(from, Kept::Reference, 0);
+                    let from = self.move_to_low_register(from, RegisterKind::Reference, 0);
                     let into = if to > 15 { 2 } else { to };
                     self.push(Insn::raw(vec![0x0021 | (into << 8) | (from << 12)]));
-                    self.put_back(to, Kept::Number, into);
-                    self.puts(Kept::Number);
+                    self.put_back(to, RegisterKind::Number, into);
+                    self.puts(RegisterKind::Number);
                 }
                 0xc0 | 0xc1 => {
                     let index = Self::u16_at(bytes, *at);
@@ -27406,7 +27408,7 @@ pub mod dalvik {
                     };
                     let register = self.slot(1);
                     if opcode == 0xc0 {
-                        let held = Held::of(&descriptor);
+                        let held = ArrayShape::of(&descriptor);
                         self.push(Insn::pointing(
                             vec![0x001f | (register << 8), 0],
                             1,
@@ -27418,15 +27420,16 @@ pub mod dalvik {
                     } else {
                         self.shrink(1)?;
                         let to = self.stack_base + self.depth;
-                        let register = self.move_to_low_register(register, Kept::Reference, 0);
+                        let register =
+                            self.move_to_low_register(register, RegisterKind::Reference, 0);
                         let into = if to > 15 { 2 } else { to };
                         self.push(Insn::pointing(
                             vec![0x0020 | (into << 8) | (register << 12), 0],
                             1,
                             Operand::Type(descriptor),
                         ));
-                        self.put_back(to, Kept::Number, into);
-                        self.puts(Kept::Number);
+                        self.put_back(to, RegisterKind::Number, into);
+                        self.puts(RegisterKind::Number);
                     }
                 }
 
@@ -27553,7 +27556,7 @@ pub mod dalvik {
             Ok(())
         }
 
-        fn move_to_low_register(&mut self, register: u16, kept: Kept, into: u16) -> u16 {
+        fn move_to_low_register(&mut self, register: u16, kept: RegisterKind, into: u16) -> u16 {
             if register <= 15 {
                 return register;
             }
@@ -27561,7 +27564,7 @@ pub mod dalvik {
             into
         }
 
-        fn put_back(&mut self, register: u16, kept: Kept, from: u16) {
+        fn put_back(&mut self, register: u16, kept: RegisterKind, from: u16) {
             if register <= 15 {
                 return;
             }
@@ -27590,11 +27593,15 @@ pub mod dalvik {
                 let mut at = from;
                 while at < from + slots {
                     let held = kinds[usize::from(at)];
-                    if held.kept == Kept::Half {
+                    if held.kept == RegisterKind::Half {
                         return None;
                     }
                     out.push((held, base + at));
-                    at += if held.kept == Kept::Wide { 2 } else { 1 };
+                    at += if held.kept == RegisterKind::Wide {
+                        2
+                    } else {
+                        1
+                    };
                 }
                 (at == from + slots).then_some(out)
             };
@@ -27616,7 +27623,11 @@ pub mod dalvik {
                 let mut to = base + above;
                 for (kept, from) in &over {
                     self.push(move_register(kept.kept.moved_by(), to, *from));
-                    to += if kept.kept == Kept::Wide { 2 } else { 1 };
+                    to += if kept.kept == RegisterKind::Wide {
+                        2
+                    } else {
+                        1
+                    };
                 }
                 for (kept, _) in &over {
                     self.puts_slot(*kept);
@@ -27630,7 +27641,11 @@ pub mod dalvik {
                 for (kept, from) in values {
                     out.push(move_register(kept.kept.moved_by(), kept_at, *from));
                     done.push((*kept, kept_at));
-                    kept_at += if kept.kept == Kept::Wide { 2 } else { 1 };
+                    kept_at += if kept.kept == RegisterKind::Wide {
+                        2
+                    } else {
+                        1
+                    };
                 }
                 done
             };
@@ -27648,7 +27663,11 @@ pub mod dalvik {
             let mut to = base;
             for (kept, from) in &order {
                 moves.push(move_register(kept.kept.moved_by(), to, *from));
-                to += if kept.kept == Kept::Wide { 2 } else { 1 };
+                to += if kept.kept == RegisterKind::Wide {
+                    2
+                } else {
+                    1
+                };
             }
             for one in moves {
                 self.push(one);
@@ -27689,14 +27708,14 @@ pub mod dalvik {
             let to = self.stack_base + self.depth;
             self.push(move_register(kind, to, local));
             let kept = match kind {
-                0x07 => Kept::Reference,
-                0x04 => Kept::Wide,
+                0x07 => RegisterKind::Reference,
+                0x04 => RegisterKind::Wide,
                 _ => {
                     debug_assert_eq!(width, 1);
-                    Kept::Number
+                    RegisterKind::Number
                 }
             };
-            let array = if kept == Kept::Reference {
+            let array = if kept == RegisterKind::Reference {
                 self.locals.get(&local).copied()
             } else {
                 None
@@ -27732,14 +27751,14 @@ pub mod dalvik {
             self.shrink(from_width)?;
             let to = self.stack_base + self.depth;
             let from_kept = if from_width == 2 {
-                Kept::Wide
+                RegisterKind::Wide
             } else {
-                Kept::Number
+                RegisterKind::Number
             };
             let to_kept = if to_width == 2 {
-                Kept::Wide
+                RegisterKind::Wide
             } else {
-                Kept::Number
+                RegisterKind::Number
             };
             let from = self.move_to_low_register(from, from_kept, 0);
             let into = if to > 15 { 2 } else { to };
@@ -27758,7 +27777,7 @@ pub mod dalvik {
                 opcode | (to << 8),
                 (left & 0xff) | ((right & 0xff) << 8),
             ]));
-            self.puts(Kept::Number);
+            self.puts(RegisterKind::Number);
             Ok(())
         }
 
@@ -27915,7 +27934,7 @@ pub mod dalvik {
                 1,
                 Operand::Type(whole),
             ));
-            self.puts(Kept::Reference);
+            self.puts(RegisterKind::Reference);
             Ok(())
         }
 
@@ -27923,14 +27942,14 @@ pub mod dalvik {
             let length = self.slot(1);
             self.shrink(1)?;
             let to = self.stack_base + self.depth;
-            let length = self.move_to_low_register(length, Kept::Number, 0);
+            let length = self.move_to_low_register(length, RegisterKind::Number, 0);
             let into = if to > 15 { 2 } else { to };
             self.push(Insn::pointing(
                 vec![0x0023 | (into << 8) | (length << 12), 0],
                 1,
                 Operand::Type(descriptor.to_string()),
             ));
-            self.put_back(to, Kept::Reference, into);
+            self.put_back(to, RegisterKind::Reference, into);
             self.puts_slot(Slot::slot_for_descriptor(descriptor));
             Ok(())
         }
@@ -27945,7 +27964,7 @@ pub mod dalvik {
                     (bits >> 32) as u16,
                     (bits >> 48) as u16,
                 ]));
-                self.puts(Kept::Wide);
+                self.puts(RegisterKind::Wide);
                 return;
             }
             self.push(Insn::raw(vec![
@@ -27953,7 +27972,7 @@ pub mod dalvik {
                 bits as u16,
                 (bits >> 16) as u16,
             ]));
-            self.puts(Kept::Number);
+            self.puts(RegisterKind::Number);
         }
 
         fn branch(&mut self, opcode: u16, registers: Vec<u16>, target: usize) {
@@ -28247,15 +28266,15 @@ pub mod dalvik {
         classes
     }
 
-    pub struct Synthesised {
+    pub struct SyntheticClasses {
         pub made: Vec<crate::dexwrite::Class>,
         owner: String,
         next: usize,
     }
 
-    impl Synthesised {
-        fn new(owner: &str) -> Synthesised {
-            Synthesised {
+    impl SyntheticClasses {
+        fn new(owner: &str) -> SyntheticClasses {
+            SyntheticClasses {
                 made: Vec::new(),
                 owner: owner.to_string(),
                 next: 0,
@@ -28308,20 +28327,20 @@ pub mod dalvik {
     const SELF: u16 = 4;
     const LOW: u16 = 5;
 
-    struct Writing {
+    struct EmittedCode {
         code: Vec<Insn>,
         outputs: u16,
     }
 
-    impl Writing {
-        fn new() -> Writing {
-            Writing {
+    impl EmittedCode {
+        fn new() -> EmittedCode {
+            EmittedCode {
                 code: Vec::new(),
                 outputs: 0,
             }
         }
 
-        fn moved(&mut self, kept: Kept, to: u16, from: u16) {
+        fn moved(&mut self, kept: RegisterKind, to: u16, from: u16) {
             if to != from {
                 self.code.push(move_register(kept.moved_by(), to, from));
             }
@@ -28336,11 +28355,11 @@ pub mod dalvik {
             ));
         }
 
-        fn result(&mut self, kept: Kept, to: u16) {
+        fn result(&mut self, kept: RegisterKind, to: u16) {
             let fetch = match kept {
-                Kept::Reference => 0x000cu16,
-                Kept::Wide | Kept::Half => 0x000b,
-                Kept::Number => 0x000a,
+                RegisterKind::Reference => 0x000cu16,
+                RegisterKind::Wide | RegisterKind::Half => 0x000b,
+                RegisterKind::Number => 0x000a,
             };
             self.code.push(Insn::raw(vec![fetch | (to << 8)]));
         }
@@ -28372,7 +28391,7 @@ pub mod dalvik {
 
             match (is_primitive_descriptor(from), is_primitive_descriptor(to)) {
                 (false, false) => {
-                    self.moved(Kept::Reference, target, source);
+                    self.moved(RegisterKind::Reference, target, source);
                     if from != to && to != "Ljava/lang/Object;" {
                         self.cast(target, to);
                     }
@@ -28382,13 +28401,13 @@ pub mod dalvik {
                         return Err(refused("one does not widen into the other"));
                     };
                     match widening {
-                        None => self.moved(Kept::of(from), target, source),
+                        None => self.moved(RegisterKind::of(from), target, source),
                         Some(opcode) => {
-                            self.moved(Kept::of(from), SPARE_IN, source);
+                            self.moved(RegisterKind::of(from), SPARE_IN, source);
                             self.code.push(Insn::raw(vec![
                                 opcode | (SPARE_OUT << 8) | (SPARE_IN << 12),
                             ]));
-                            self.moved(Kept::of(to), target, SPARE_OUT);
+                            self.moved(RegisterKind::of(to), target, SPARE_OUT);
                         }
                     }
                 }
@@ -28398,7 +28417,7 @@ pub mod dalvik {
                         return Err(refused("it is not a primitive with a box"));
                     };
                     let width = width_of(from);
-                    self.moved(Kept::of(from), SPARE_IN, source);
+                    self.moved(RegisterKind::of(from), SPARE_IN, source);
                     self.call(
                         0x0071,
                         MethodRef {
@@ -28410,7 +28429,7 @@ pub mod dalvik {
                         SPARE_IN,
                         width,
                     );
-                    self.result(Kept::Reference, target);
+                    self.result(RegisterKind::Reference, target);
                     if to != "Ljava/lang/Object;" && to != box_class {
                         self.cast(target, to);
                     }
@@ -28420,7 +28439,7 @@ pub mod dalvik {
                     let Some((box_class, taken)) = boxes(to) else {
                         return Err(refused("it is not a primitive with a box"));
                     };
-                    self.moved(Kept::Reference, SPARE_IN, source);
+                    self.moved(RegisterKind::Reference, SPARE_IN, source);
                     self.cast(SPARE_IN, box_class);
                     self.call(
                         0x006e,
@@ -28433,14 +28452,14 @@ pub mod dalvik {
                         SPARE_IN,
                         1,
                     );
-                    self.result(Kept::of(to), target);
+                    self.result(RegisterKind::of(to), target);
                 }
             }
             Ok(())
         }
     }
 
-    struct Recipe<'a> {
+    struct LambdaRecipe<'a> {
         named: &'a str,
 
         interface: &'a str,
@@ -28456,7 +28475,7 @@ pub mod dalvik {
         captured: &'a [String],
     }
 
-    fn build_lambda_class(recipe: &Recipe<'_>) -> Result<crate::dexwrite::Class, Diagnostic> {
+    fn build_lambda_class(recipe: &LambdaRecipe<'_>) -> Result<crate::dexwrite::Class, Diagnostic> {
         let mut out =
             crate::dexwrite::Class::named(recipe.named, "Ljava/lang/Object;", 0x0011 | 0x1000);
         out.interfaces.push(recipe.interface.to_string());
@@ -28506,7 +28525,7 @@ pub mod dalvik {
     }
 
     fn build_lambda_constructor(
-        recipe: &Recipe<'_>,
+        recipe: &LambdaRecipe<'_>,
         held: &[(FieldRef, String)],
     ) -> Result<Method, Diagnostic> {
         let words: u16 = recipe.captured.iter().map(|one| width_of(one)).sum();
@@ -28514,7 +28533,7 @@ pub mod dalvik {
         let registers = LOW + inputs;
         let this = registers - inputs;
 
-        let mut writing = Writing::new();
+        let mut writing = EmittedCode::new();
         writing.call(
             0x0070,
             MethodRef {
@@ -28526,10 +28545,10 @@ pub mod dalvik {
             this,
             1,
         );
-        writing.moved(Kept::Reference, SELF, this);
+        writing.moved(RegisterKind::Reference, SELF, this);
         let mut at = this + 1;
         for (reference, descriptor) in held {
-            let kept = Kept::of(descriptor);
+            let kept = RegisterKind::of(descriptor);
             writing.moved(kept, SPARE_IN, at);
             writing.code.push(Insn::pointing(
                 vec![
@@ -28576,7 +28595,7 @@ pub mod dalvik {
     }
 
     fn build_lambda_method(
-        recipe: &Recipe<'_>,
+        recipe: &LambdaRecipe<'_>,
         held: &[(FieldRef, String)],
         sam: &str,
     ) -> Result<Method, Diagnostic> {
@@ -28628,8 +28647,8 @@ pub mod dalvik {
         }
         let this = registers - inputs;
 
-        let mut writing = Writing::new();
-        writing.moved(Kept::Reference, SELF, this);
+        let mut writing = EmittedCode::new();
+        writing.moved(RegisterKind::Reference, SELF, this);
 
         let mut slot = run;
         if makes {
@@ -28697,14 +28716,14 @@ pub mod dalvik {
                         "the body gives nothing back and the interface wants something",
                     ));
                 }
-                writing.result(Kept::of(&returns), answer);
+                writing.result(RegisterKind::of(&returns), answer);
                 (returns.clone(), answer)
             };
             writing.adapted(&came, from, &gives, turned, &where_from)?;
-            let back = match Kept::of(&gives) {
-                Kept::Reference => 0x0011u16,
-                Kept::Wide | Kept::Half => 0x0010,
-                Kept::Number => 0x000f,
+            let back = match RegisterKind::of(&gives) {
+                RegisterKind::Reference => 0x0011u16,
+                RegisterKind::Wide | RegisterKind::Half => 0x0010,
+                RegisterKind::Number => 0x000f,
             };
             writing.code.push(Insn::raw(vec![back | (turned << 8)]));
         }
@@ -28923,7 +28942,7 @@ pub mod dalvik {
             }
         }
 
-        let mut made = Synthesised::new(&descriptor);
+        let mut made = SyntheticClasses::new(&descriptor);
         for method in &class.methods {
             let translated = translate_method(class, method, &descriptor, &mut made)?;
 
@@ -28977,7 +28996,7 @@ pub mod dalvik {
             End,
         }
 
-        struct Ins {
+        struct DecodedInstruction {
             off: usize,
             op: u8,
             bytes: Vec<u8>,
@@ -29006,8 +29025,8 @@ pub mod dalvik {
             main: bool,
         }
 
-        struct Out<'a> {
-            ins: &'a [Ins],
+        struct SubroutineInliner<'a> {
+            ins: &'a [DecodedInstruction],
             index_of: HashMap<usize, usize>,
             handlers: &'a [(u16, u16, u16, u16)],
             items: Vec<Item>,
@@ -29019,7 +29038,7 @@ pub mod dalvik {
             i32::from_be_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])
         }
 
-        fn decode(bytes: &[u8]) -> Option<Vec<Ins>> {
+        fn decode(bytes: &[u8]) -> Option<Vec<DecodedInstruction>> {
             let mut out = Vec::new();
             let mut at = 0usize;
             while at < bytes.len() {
@@ -29111,7 +29130,7 @@ pub mod dalvik {
                     _ => (1, Kind::Plain),
                 };
                 let raw = bytes.get(start..start + length)?.to_vec();
-                out.push(Ins {
+                out.push(DecodedInstruction {
                     off: start,
                     op,
                     bytes: raw,
@@ -29122,7 +29141,7 @@ pub mod dalvik {
             Some(out)
         }
 
-        impl Out<'_> {
+        impl SubroutineInliner<'_> {
             fn label(&mut self) -> usize {
                 self.labels.push(usize::MAX);
                 self.labels.len() - 1
@@ -29313,7 +29332,7 @@ pub mod dalvik {
             if !sound {
                 return Ok(None);
             }
-            let mut out = Out {
+            let mut out = SubroutineInliner {
                 ins: &ins,
                 index_of,
                 handlers: &code.handlers,
@@ -29477,7 +29496,7 @@ pub mod dalvik {
         class: &jvm::Class,
         method: &jvm::Member,
         owner: &str,
-        made: &mut Synthesised,
+        made: &mut SyntheticClasses,
     ) -> Result<Method, Diagnostic> {
         let (parameters, returns) = split_descriptor(&method.descriptor).ok_or_else(|| {
             fail("ED002", "A method descriptor could not be read.")
@@ -29740,18 +29759,18 @@ pub mod integrity {
     use crate::FailureClass;
 
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    pub enum Standing {
+    pub enum TrustLevel {
         Trusted,
         Unverified,
         Tampered,
     }
 
-    impl Standing {
+    impl TrustLevel {
         pub fn as_str(self) -> &'static str {
             match self {
-                Standing::Trusted => "TRUSTED",
-                Standing::Unverified => "UNVERIFIED",
-                Standing::Tampered => "TAMPERED",
+                TrustLevel::Trusted => "TRUSTED",
+                TrustLevel::Unverified => "UNVERIFIED",
+                TrustLevel::Tampered => "TAMPERED",
             }
         }
     }
@@ -29766,7 +29785,7 @@ pub mod integrity {
         pub signature_failed: bool,
         pub certificate: Option<String>,
         pub expected: Option<String>,
-        pub standing: Standing,
+        pub standing: TrustLevel,
         pub reason: String,
     }
 
@@ -29820,7 +29839,7 @@ pub mod integrity {
                     signature_failed: false,
                     certificate: None,
                     expected: expected_clean,
-                    standing: Standing::Unverified,
+                    standing: TrustLevel::Unverified,
                     reason: format!("The package could not be read: {why}"),
                 }
             }
@@ -29836,7 +29855,7 @@ pub mod integrity {
                 signature_failed: false,
                 certificate: None,
                 expected: expected_clean,
-                standing: Standing::Tampered,
+                standing: TrustLevel::Tampered,
                 reason: "The package is not a readable archive.".to_string(),
             };
         };
@@ -29861,53 +29880,53 @@ pub mod integrity {
 
         let (standing, reason) = if !report.has_block {
             (
-                Standing::Tampered,
+                TrustLevel::Tampered,
                 "The package carries no signature at all.".to_string(),
             )
         } else if digest_failed {
             (
-                Standing::Tampered,
+                TrustLevel::Tampered,
                 "The package does not match the digest recorded when it was signed.".to_string(),
             )
         } else if !report.key_matches_certificate {
             (
-                Standing::Tampered,
+                TrustLevel::Tampered,
                 "The key that signed this package is not the key in the certificate it presents."
                     .to_string(),
             )
         } else if report.signatures_failed > 0 {
             (
-                Standing::Tampered,
+                TrustLevel::Tampered,
                 "The signature on this package does not check out against the key that presents it."
                     .to_string(),
             )
         } else if !digest_verified {
             (
-                Standing::Unverified,
+                TrustLevel::Unverified,
                 "The signature uses a digest this build cannot recompute.".to_string(),
             )
         } else if !signature_verified {
             (
-                Standing::Unverified,
+                TrustLevel::Unverified,
                 "The contents are unchanged, but the signature over them is of a kind this build cannot check.".to_string(),
             )
         } else {
             match (&certificate, &expected_clean) {
                 (Some(found), Some(wanted)) if found == wanted => (
-                    Standing::Trusted,
+                    TrustLevel::Trusted,
                     "The contents are unchanged and the certificate is the expected one."
                         .to_string(),
                 ),
                 (Some(_), Some(_)) => (
-                    Standing::Tampered,
+                    TrustLevel::Tampered,
                     "The contents are unchanged but the package was signed by a different key than the one this build expects.".to_string(),
                 ),
                 (Some(_), None) => (
-                    Standing::Unverified,
+                    TrustLevel::Unverified,
                     "The contents are unchanged, but this build carries no expected certificate to compare against.".to_string(),
                 ),
                 (None, _) => (
-                    Standing::Unverified,
+                    TrustLevel::Unverified,
                     "No certificate could be read from the signature.".to_string(),
                 ),
             }
@@ -29927,17 +29946,17 @@ pub mod integrity {
     }
 
     pub fn emit(check: &SelfCheck, sink: &mut Sink) {
-        if check.standing == Standing::Trusted {
+        if check.standing == TrustLevel::Trusted {
             return;
         }
         let severity = match check.standing {
-            Standing::Tampered => Severity::Fatal,
+            TrustLevel::Tampered => Severity::Fatal,
             _ => Severity::Warning,
         };
         sink.emit(
             Diagnostic::new(
                 match check.standing {
-                    Standing::Tampered => "EI001",
+                    TrustLevel::Tampered => "EI001",
                     _ => "EI002",
                 },
                 severity,
@@ -30309,7 +30328,7 @@ pub mod debugger {
     }
 
     #[derive(Clone, Debug, PartialEq, Eq)]
-    pub struct Plan {
+    pub struct DebuggerPlan {
         pub level: Level,
         pub profile: String,
         pub factory: String,
@@ -30321,7 +30340,7 @@ pub mod debugger {
         host: &Host,
         settings: Option<&crate::settings::Settings>,
         manifest: &str,
-    ) -> Option<Plan> {
+    ) -> Option<DebuggerPlan> {
         if !host.debugger {
             return None;
         }
@@ -30354,7 +30373,7 @@ pub mod debugger {
                 }
             })
             .unwrap_or_default();
-        Some(Plan {
+        Some(DebuggerPlan {
             level,
             profile: debugging.profile.clone(),
             factory,
@@ -30378,7 +30397,7 @@ pub mod debugger {
         out
     }
 
-    pub fn build_facts(plan: &Plan) -> String {
+    pub fn build_facts(plan: &DebuggerPlan) -> String {
         format!(
             "package {PACKAGE};\n\npublic final class BuildFacts {{\n\n    public static final String LEVEL = {};\n\n    public static final String PROFILE = {};\n\n    public static final String HOST = {};\n\n    public static final String HOST_CERTIFICATE = {};\n\n    public static final String BUILDER_VERSION = {};\n\n    public static final String FACTORY = {};\n\n    public static final int RUNTIME_VERSION = {RUNTIME_VERSION};\n\n    private BuildFacts() {{\n    }}\n}}\n",
             java_string(plan.level.as_str()),
@@ -30390,7 +30409,7 @@ pub mod debugger {
         )
     }
 
-    pub fn sources(plan: &Plan) -> Vec<(String, String)> {
+    pub fn sources(plan: &DebuggerPlan) -> Vec<(String, String)> {
         let mut out: Vec<(String, String)> = RUNTIME
             .iter()
             .map(|(name, text)| (name.to_string(), text.to_string()))
@@ -30407,7 +30426,7 @@ pub mod debugger {
         format!("{application_id}{AUTHORITY_SUFFIX}")
     }
 
-    pub fn declare(root: &mut crate::xml::Element, application_id: &str, plan: &Plan) {
+    pub fn declare(root: &mut crate::xml::Element, application_id: &str, plan: &DebuggerPlan) {
         let where_at = root.position;
         let said = |name: &str, value: &str| crate::xml::Attribute {
             name: name.to_string(),
@@ -33801,7 +33820,7 @@ public interface ViewBinding {
 ";
 
     #[derive(Clone, Debug, PartialEq, Eq)]
-    struct Found {
+    struct BindingCandidate {
         id: String,
         kind: String,
         included: Option<String>,
@@ -33936,7 +33955,7 @@ public interface ViewBinding {
         }
     }
 
-    fn gather(element: &crate::xml::Element, into: &mut Vec<Found>, top: bool) {
+    fn gather(element: &crate::xml::Element, into: &mut Vec<BindingCandidate>, top: bool) {
         for child in &element.children {
             let tag = child.name.as_str();
             if let Some(id) = id_of(child) {
@@ -33945,7 +33964,7 @@ public interface ViewBinding {
                         .attribute("layout")
                         .and_then(|held| held.strip_prefix("@layout/"))
                     {
-                        into.push(Found {
+                        into.push(BindingCandidate {
                             id,
                             kind: class_name(layout),
                             included: Some(layout.to_string()),
@@ -33954,7 +33973,7 @@ public interface ViewBinding {
                         });
                     }
                 } else if let Some(kind) = view_class(tag, child) {
-                    into.push(Found {
+                    into.push(BindingCandidate {
                         id,
                         kind,
                         included: None,
@@ -34024,7 +34043,7 @@ public interface ViewBinding {
                 }
             };
 
-            let mut fields: Vec<Found> = Vec::new();
+            let mut fields: Vec<BindingCandidate> = Vec::new();
             let mut root_field: Option<String> = None;
             for (at, root) in roots.iter().enumerate() {
                 let mut seen = Vec::new();
@@ -35461,7 +35480,7 @@ pub mod databinding {
     }
 
     #[derive(Clone, Debug)]
-    struct Renamed {
+    struct AttributeRename {
         attribute: String,
         view: String,
         method: String,
@@ -35476,7 +35495,7 @@ pub mod databinding {
     }
 
     #[derive(Clone, Debug)]
-    struct Inverse {
+    struct InverseBindingAdapter {
         attribute: String,
         view: String,
         value: Option<Type>,
@@ -35490,9 +35509,9 @@ pub mod databinding {
     struct Store {
         single: Vec<Adapter>,
         multi: Vec<Adapter>,
-        renamed: Vec<Renamed>,
+        renamed: Vec<AttributeRename>,
         conversions: Vec<Conversion>,
-        inverse: Vec<Inverse>,
+        inverse: Vec<InverseBindingAdapter>,
     }
 
     fn attribute_key(written: &str) -> String {
@@ -35578,7 +35597,7 @@ pub mod databinding {
                     let Some(view) = class(&view) else {
                         continue;
                     };
-                    self.renamed.push(Renamed {
+                    self.renamed.push(AttributeRename {
                         attribute: attribute.clone(),
                         view,
                         method: text_of(&call, "method"),
@@ -35681,7 +35700,7 @@ pub mod databinding {
                     ) else {
                         continue;
                     };
-                    self.inverse.push(Inverse {
+                    self.inverse.push(InverseBindingAdapter {
                         attribute: attribute.clone(),
                         view,
                         value: value(&text_of(key, "valueType")),
@@ -35698,7 +35717,7 @@ pub mod databinding {
                     else {
                         continue;
                     };
-                    self.inverse.push(Inverse {
+                    self.inverse.push(InverseBindingAdapter {
                         attribute: attribute.clone(),
                         view,
                         value: None,
@@ -35793,7 +35812,7 @@ pub mod databinding {
                                 };
                                 self.inverse.insert(
                                     0,
-                                    Inverse {
+                                    InverseBindingAdapter {
                                         attribute,
                                         view,
                                         value: Some(found.returns.clone()),
@@ -35844,7 +35863,7 @@ pub mod databinding {
                         if inverse {
                             self.inverse.insert(
                                 0,
-                                Inverse {
+                                InverseBindingAdapter {
                                     event: text("event")
                                         .map(|one| attribute_key(&one))
                                         .unwrap_or_else(|| format!("{attribute}AttrChanged")),
@@ -35862,7 +35881,7 @@ pub mod databinding {
                             });
                             self.renamed.insert(
                                 0,
-                                Renamed {
+                                AttributeRename {
                                     attribute,
                                     view,
                                     method,
@@ -35944,7 +35963,7 @@ pub mod databinding {
     }
 
     #[derive(Clone, Debug, Default)]
-    pub struct Made {
+    pub struct GeneratedBindings {
         pub sources: Vec<(String, String)>,
         pub layouts: Vec<(String, String, String)>,
     }
@@ -36332,7 +36351,7 @@ pub mod databinding {
     }
 
     #[derive(Clone, Debug)]
-    enum Held {
+    enum ResolvedName {
         Value(String, Type),
         Class(String),
         Package(String),
@@ -36616,15 +36635,17 @@ pub mod databinding {
             expr: &Expr,
         ) -> Result<(String, Type), String> {
             match self.value(model, plan, expr)? {
-                Held::Value(code, what) => {
+                ResolvedName::Value(code, what) => {
                     let (code, what) = self.plain(model, plan, &code, &what);
                     Ok(self.number(model, plan, &code, &what))
                 }
-                Held::Class(name) => Err(format!(
+                ResolvedName::Class(name) => Err(format!(
                     "`{}` is a class, not a value",
                     name.replace('/', ".")
                 )),
-                Held::Package(name) => Err(format!("`{name}` is not anything this layout knows")),
+                ResolvedName::Package(name) => {
+                    Err(format!("`{name}` is not anything this layout knows"))
+                }
             }
         }
 
@@ -36638,15 +36659,22 @@ pub mod databinding {
             held.map(|one| (taken, one))
         }
 
-        fn value(&mut self, model: &Model, plan: &mut Plan, expr: &Expr) -> Result<Held, String> {
+        fn value(
+            &mut self,
+            model: &Model,
+            plan: &mut Plan,
+            expr: &Expr,
+        ) -> Result<ResolvedName, String> {
             let key = format!("{expr:?}");
             match expr {
-                Expr::Literal(what, spelled) => Ok(Held::Value(spelled.clone(), what.clone())),
+                Expr::Literal(what, spelled) => {
+                    Ok(ResolvedName::Value(spelled.clone(), what.clone()))
+                }
                 Expr::Name(name) => {
                     if let Some((_, java, what)) =
                         self.parameters.iter().find(|(held, _, _)| held == name)
                     {
-                        return Ok(Held::Value(java.clone(), what.clone()));
+                        return Ok(ResolvedName::Value(java.clone(), what.clone()));
                     }
                     if let Some(variable) =
                         plan.variables.iter().find(|one| one.name == *name).cloned()
@@ -36656,38 +36684,38 @@ pub mod databinding {
                         }
                         let code = format!("{}.m{}", self.this(plan), capitalized(name));
                         let local = self.declare(model, plan, &variable.what, &code);
-                        return Ok(Held::Value(local, variable.what));
+                        return Ok(ResolvedName::Value(local, variable.what));
                     }
                     if name == "context" {
                         let what = object("android/content/Context");
                         let code = format!("{}.getContext()", self.root(plan));
                         let local = self.declare(model, plan, &what, &code);
-                        return Ok(Held::Value(local, what));
+                        return Ok(ResolvedName::Value(local, what));
                     }
                     if let Some(found) = model.class_named(name) {
-                        return Ok(Held::Class(found));
+                        return Ok(ResolvedName::Class(found));
                     }
-                    Ok(Held::Package(name.clone()))
+                    Ok(ResolvedName::Package(name.clone()))
                 }
                 Expr::Field(of, name) => match self.value(model, plan, of)? {
-                    Held::Package(package) => {
+                    ResolvedName::Package(package) => {
                         let dotted = format!("{package}.{name}");
                         match model.dotted_class(&dotted) {
-                            Some(found) => Ok(Held::Class(found)),
-                            None => Ok(Held::Package(dotted)),
+                            Some(found) => Ok(ResolvedName::Class(found)),
+                            None => Ok(ResolvedName::Package(dotted)),
                         }
                     }
-                    Held::Class(class) => {
+                    ResolvedName::Class(class) => {
                         if name == "class" {
                             let what =
                                 Type::Object("java/lang/Class".to_string(), vec![object(&class)]);
                             let code = format!("{}.class", model.class_source(&class));
                             let local = self.declare(model, plan, &what, &code);
-                            return Ok(Held::Value(local, what));
+                            return Ok(ResolvedName::Value(local, what));
                         }
                         let nested = format!("{class}${name}");
                         if model.known(&nested) {
-                            return Ok(Held::Class(nested));
+                            return Ok(ResolvedName::Class(nested));
                         }
                         let receiver = object(&class);
                         let (code, what) = match model.property(&receiver, name, true) {
@@ -36709,21 +36737,23 @@ pub mod databinding {
                         };
                         let local = self.declare(model, plan, &what, &code);
                         self.watched(model, plan, &key, &local, &what);
-                        Ok(Held::Value(local, what))
+                        Ok(ResolvedName::Value(local, what))
                     }
-                    Held::Value(code, what) => self.member(model, plan, &key, &code, &what, name),
+                    ResolvedName::Value(code, what) => {
+                        self.member(model, plan, &key, &code, &what, name)
+                    }
                 },
                 Expr::Call(of, name, arguments) => {
                     let receiver = self.value(model, plan, of)?;
                     let mut given = Vec::new();
                     for argument in arguments {
                         match self.value(model, plan, argument)? {
-                            Held::Value(code, what) => given.push((code, what)),
+                            ResolvedName::Value(code, what) => given.push((code, what)),
                             _ => return Err(format!("an argument to `{name}` is not a value")),
                         }
                     }
                     match receiver {
-                        Held::Class(class) => {
+                        ResolvedName::Class(class) => {
                             let owner = object(&class);
                             let (signature, arguments) =
                                 self.choose(model, plan, &owner, name, &given, true)?;
@@ -36736,17 +36766,17 @@ pub mod databinding {
                             );
                             if what == Type::Void {
                                 self.line(format!("{call};"));
-                                return Ok(Held::Value(String::new(), Type::Void));
+                                return Ok(ResolvedName::Value(String::new(), Type::Void));
                             }
                             let call = cast_to(model, &what, &signature.returns, call);
                             let local = self.declare(model, plan, &what, &call);
                             self.watched(model, plan, &key, &local, &what);
-                            Ok(Held::Value(local, what))
+                            Ok(ResolvedName::Value(local, what))
                         }
-                        Held::Package(package) => {
+                        ResolvedName::Package(package) => {
                             Err(format!("`{package}` is not anything this layout knows"))
                         }
-                        Held::Value(code, what) => {
+                        ResolvedName::Value(code, what) => {
                             let (code, what) = if what.is_reference()
                                 && model
                                     .method(
@@ -36777,22 +36807,22 @@ pub mod databinding {
                                 self.line(format!("if ({code} != null) {{"));
                                 self.line(format!("    {call};"));
                                 self.line("}");
-                                return Ok(Held::Value(String::new(), Type::Void));
+                                return Ok(ResolvedName::Value(String::new(), Type::Void));
                             }
                             let call = cast_to(model, &result, &signature.returns, call);
                             let local = self.guarded(model, plan, &code, &what, &result, &call);
                             self.watched(model, plan, &key, &local, &result);
-                            Ok(Held::Value(local, result))
+                            Ok(ResolvedName::Value(local, result))
                         }
                     }
                 }
                 Expr::Index(of, at) => {
                     let (code, what) = match self.value(model, plan, of)? {
-                        Held::Value(code, what) => self.plain(model, plan, &code, &what),
+                        ResolvedName::Value(code, what) => self.plain(model, plan, &code, &what),
                         _ => return Err("only a value can be indexed".to_string()),
                     };
                     let (index, index_type) = match self.value(model, plan, at)? {
-                        Held::Value(code, what) => self.plain(model, plan, &code, &what),
+                        ResolvedName::Value(code, what) => self.plain(model, plan, &code, &what),
                         _ => return Err("an index has to be a value".to_string()),
                     };
                     let result;
@@ -36875,7 +36905,7 @@ pub mod databinding {
                     self.line(format!("    {name} = {access};"));
                     self.line("}");
                     self.watched(model, plan, &key, &name, &result);
-                    Ok(Held::Value(name, result))
+                    Ok(ResolvedName::Value(name, result))
                 }
                 Expr::Unary(operator, of) => {
                     let (code, what) = self.settled(model, plan, of)?;
@@ -36890,7 +36920,7 @@ pub mod databinding {
                         _ => return Err(format!("`{operator}` needs a number")),
                     };
                     let local = self.declare(model, plan, &result, &format!("{operator}{code}"));
-                    Ok(Held::Value(local, result))
+                    Ok(ResolvedName::Value(local, result))
                 }
                 Expr::Binary(operator, left, right) if *operator == "&&" || *operator == "||" => {
                     let (code, what) = self.settled(model, plan, left)?;
@@ -36912,15 +36942,15 @@ pub mod databinding {
                     self.nest(lines);
                     self.line(format!("    {name} = {other};"));
                     self.line("}");
-                    Ok(Held::Value(name, Type::Boolean))
+                    Ok(ResolvedName::Value(name, Type::Boolean))
                 }
                 Expr::Binary(operator, left, right) => {
                     let (left_code, left_type) = match self.value(model, plan, left)? {
-                        Held::Value(code, what) => self.plain(model, plan, &code, &what),
+                        ResolvedName::Value(code, what) => self.plain(model, plan, &code, &what),
                         _ => return Err(format!("`{operator}` needs values")),
                     };
                     let (right_code, right_type) = match self.value(model, plan, right)? {
-                        Held::Value(code, what) => self.plain(model, plan, &code, &what),
+                        ResolvedName::Value(code, what) => self.plain(model, plan, &code, &what),
                         _ => return Err(format!("`{operator}` needs values")),
                     };
                     let text =
@@ -36933,7 +36963,7 @@ pub mod databinding {
                             &string,
                             &format!("\"\" + {left_code} + {right_code}"),
                         );
-                        return Ok(Held::Value(local, string));
+                        return Ok(ResolvedName::Value(local, string));
                     }
                     if matches!(*operator, "==" | "!=")
                         && left_type.is_reference()
@@ -36945,7 +36975,7 @@ pub mod databinding {
                             &Type::Boolean,
                             &format!("{left_code} {operator} {right_code}"),
                         );
-                        return Ok(Held::Value(local, Type::Boolean));
+                        return Ok(ResolvedName::Value(local, Type::Boolean));
                     }
                     let (left_code, left_type) = self.number(model, plan, &left_code, &left_type);
                     let (right_code, right_type) =
@@ -36977,7 +37007,7 @@ pub mod databinding {
                         &result,
                         &format!("{left_code} {operator} {right_code}"),
                     );
-                    Ok(Held::Value(local, result))
+                    Ok(ResolvedName::Value(local, result))
                 }
                 Expr::Ternary(condition, then, otherwise) => {
                     let (code, what) = self.settled(model, plan, condition)?;
@@ -36986,12 +37016,16 @@ pub mod databinding {
                     }
                     let (first_lines, first) =
                         self.captured(|inner| match inner.value(model, plan, then)? {
-                            Held::Value(code, what) => Ok(inner.plain(model, plan, &code, &what)),
+                            ResolvedName::Value(code, what) => {
+                                Ok(inner.plain(model, plan, &code, &what))
+                            }
                             _ => Err("a branch has to be a value".to_string()),
                         })?;
                     let (second_lines, second) =
                         self.captured(|inner| match inner.value(model, plan, otherwise)? {
-                            Held::Value(code, what) => Ok(inner.plain(model, plan, &code, &what)),
+                            ResolvedName::Value(code, what) => {
+                                Ok(inner.plain(model, plan, &code, &what))
+                            }
                             _ => Err("a branch has to be a value".to_string()),
                         })?;
                     let result = model.common(&first.1, &second.1);
@@ -37014,19 +37048,21 @@ pub mod databinding {
                         convert(model, &second.0, &second.1, &result)?
                     ));
                     self.line("}");
-                    Ok(Held::Value(name, result))
+                    Ok(ResolvedName::Value(name, result))
                 }
                 Expr::Coalesce(left, right) => {
                     let (code, what) = match self.value(model, plan, left)? {
-                        Held::Value(code, what) => self.plain(model, plan, &code, &what),
+                        ResolvedName::Value(code, what) => self.plain(model, plan, &code, &what),
                         _ => return Err("`??` needs values".to_string()),
                     };
                     if !what.is_reference() {
-                        return Ok(Held::Value(code, what));
+                        return Ok(ResolvedName::Value(code, what));
                     }
                     let (lines, (other, other_type)) =
                         self.captured(|inner| match inner.value(model, plan, right)? {
-                            Held::Value(code, what) => Ok(inner.plain(model, plan, &code, &what)),
+                            ResolvedName::Value(code, what) => {
+                                Ok(inner.plain(model, plan, &code, &what))
+                            }
                             _ => Err("`??` needs values".to_string()),
                         })?;
                     let common = model.common(&what, &other_type);
@@ -37044,14 +37080,14 @@ pub mod databinding {
                         convert(model, &other, &other_type, &result)?
                     ));
                     self.line("}");
-                    Ok(Held::Value(name, result))
+                    Ok(ResolvedName::Value(name, result))
                 }
                 Expr::Cast(written, of) => {
                     let target = model
                         .type_named(written)
                         .ok_or_else(|| format!("`{written}` is not a type this layout knows"))?;
                     let (code, what) = match self.value(model, plan, of)? {
-                        Held::Value(code, what) => self.plain(model, plan, &code, &what),
+                        ResolvedName::Value(code, what) => self.plain(model, plan, &code, &what),
                         _ => return Err("only a value can be cast".to_string()),
                     };
                     let access = if target.is_reference() && !what.is_reference() {
@@ -37063,14 +37099,14 @@ pub mod databinding {
                         format!("({}) {code}", model.source(&target))
                     };
                     let local = self.declare(model, plan, &target, &access);
-                    Ok(Held::Value(local, target))
+                    Ok(ResolvedName::Value(local, target))
                 }
                 Expr::InstanceOf(of, written) => {
                     let target = model
                         .type_named(written)
                         .ok_or_else(|| format!("`{written}` is not a type this layout knows"))?;
                     let (code, _) = match self.value(model, plan, of)? {
-                        Held::Value(code, what) => self.plain(model, plan, &code, &what),
+                        ResolvedName::Value(code, what) => self.plain(model, plan, &code, &what),
                         _ => return Err("only a value can be tested".to_string()),
                     };
                     let local = self.declare(
@@ -37079,7 +37115,7 @@ pub mod databinding {
                         &Type::Boolean,
                         &format!("{code} instanceof {}", model.source(&target)),
                     );
-                    Ok(Held::Value(local, Type::Boolean))
+                    Ok(ResolvedName::Value(local, Type::Boolean))
                 }
                 Expr::Resource(spelled, arguments) => {
                     self.resource(model, plan, spelled, arguments.as_deref())
@@ -37098,7 +37134,7 @@ pub mod databinding {
             code: &str,
             what: &Type,
             name: &str,
-        ) -> Result<Held, String> {
+        ) -> Result<ResolvedName, String> {
             if let Type::Array(_) = what {
                 if name == "length" {
                     let local = self.guarded(
@@ -37109,7 +37145,7 @@ pub mod databinding {
                         &Type::Int,
                         &format!("{code}.length"),
                     );
-                    return Ok(Held::Value(local, Type::Int));
+                    return Ok(ResolvedName::Value(local, Type::Int));
                 }
             }
             if !what.is_reference() || is_null(what) {
@@ -37139,7 +37175,7 @@ pub mod databinding {
             };
             let local = self.guarded(model, plan, code, what, &result, &access);
             self.watched(model, plan, key, &local, &result);
-            Ok(Held::Value(local, result))
+            Ok(ResolvedName::Value(local, result))
         }
 
         fn choose(
@@ -37191,7 +37227,7 @@ pub mod databinding {
             plan: &mut Plan,
             spelled: &str,
             arguments: Option<&[Expr]>,
-        ) -> Result<Held, String> {
+        ) -> Result<ResolvedName, String> {
             let (package, rest) = match spelled.strip_prefix("android:") {
                 Some(rest) => ("android".to_string(), rest),
                 None => (plan.package.clone(), spelled),
@@ -37216,7 +37252,9 @@ pub mod databinding {
             let mut given = Vec::new();
             for argument in arguments.unwrap_or_default() {
                 match self.value(model, plan, argument)? {
-                    Held::Value(code, what) => given.push(self.plain(model, plan, &code, &what)),
+                    ResolvedName::Value(code, what) => {
+                        given.push(self.plain(model, plan, &code, &what))
+                    }
                     _ => return Err("a resource takes values".to_string()),
                 }
             }
@@ -37303,7 +37341,7 @@ pub mod databinding {
                 _ => (id, Type::Int),
             };
             let local = self.declare(model, plan, &what, &code);
-            Ok(Held::Value(local, what))
+            Ok(ResolvedName::Value(local, what))
         }
     }
 
@@ -37346,7 +37384,7 @@ pub mod databinding {
         }
         let returns = sam.returns.clone();
         match inner.value(model, plan, body)? {
-            Held::Value(code, what) => {
+            ResolvedName::Value(code, what) => {
                 if returns != Type::Void {
                     if what == Type::Void {
                         inner.line(format!("return {};", default_of(&returns)));
@@ -37865,7 +37903,7 @@ pub mod databinding {
             }
             Expr::Field(of, name) => {
                 let (receiver, receiver_type) = match emit.value(model, plan, of)? {
-                    Held::Value(code, what) => (code, what),
+                    ResolvedName::Value(code, what) => (code, what),
                     _ => return Err("only a value's property can be written".to_string()),
                 };
                 let (receiver, receiver_type) =
@@ -37955,13 +37993,13 @@ pub mod databinding {
         what: String,
     }
 
-    struct Shared<'a> {
+    struct BindingContext<'a> {
         store: &'a Store,
         classes: &'a [(String, String)],
         variables_of: &'a [(String, Vec<(String, Type)>)],
     }
 
-    fn view_type_source(model: &Model, shared: &Shared, view: &View) -> String {
+    fn view_type_source(model: &Model, shared: &BindingContext, view: &View) -> String {
         if view.stub {
             return STUB_PROXY.to_string();
         }
@@ -37989,7 +38027,7 @@ pub mod databinding {
     #[allow(clippy::too_many_arguments)]
     fn impl_source(
         model: &Model,
-        shared: &Shared,
+        shared: &BindingContext,
         variant: &Variant,
         binding: &str,
         simple: &str,
@@ -38045,21 +38083,21 @@ pub mod databinding {
                             .value(model, &mut plan, receiver)
                             .map_err(|why| unknown(&label, &bound.written, &bound.text, &why))?
                         {
-                            Held::Value(code, what) => Given::Reference {
+                            ResolvedName::Value(code, what) => Given::Reference {
                                 lines: emit.lines,
                                 code: Some(code),
                                 what,
                                 name: name.clone(),
                                 bits: emit.bits,
                             },
-                            Held::Class(class) => Given::Reference {
+                            ResolvedName::Class(class) => Given::Reference {
                                 lines: Vec::new(),
                                 code: None,
                                 what: object(&class),
                                 name: name.clone(),
                                 bits: Vec::new(),
                             },
-                            Held::Package(package) => {
+                            ResolvedName::Package(package) => {
                                 return Err(unknown(
                                     &label,
                                     &bound.written,
@@ -38072,7 +38110,7 @@ pub mod databinding {
                     other => {
                         let mut emit = Emit::new(false);
                         match emit.value(model, &mut plan, other) {
-                            Ok(Held::Value(code, what)) => Given::Value {
+                            Ok(ResolvedName::Value(code, what)) => Given::Value {
                                 lines: emit.lines,
                                 code,
                                 what,
@@ -38091,13 +38129,15 @@ pub mod databinding {
                                     Expr::Field(receiver, name) => {
                                         let mut again = Emit::new(false);
                                         match again.value(model, &mut plan, receiver) {
-                                            Ok(Held::Value(code, what)) => Some(Given::Reference {
-                                                lines: again.lines,
-                                                code: Some(code),
-                                                what,
-                                                name: name.clone(),
-                                                bits: again.bits,
-                                            }),
+                                            Ok(ResolvedName::Value(code, what)) => {
+                                                Some(Given::Reference {
+                                                    lines: again.lines,
+                                                    code: Some(code),
+                                                    what,
+                                                    name: name.clone(),
+                                                    bits: again.bits,
+                                                })
+                                            }
                                             _ => None,
                                         }
                                     }
@@ -38307,7 +38347,7 @@ pub mod databinding {
                     .value(model, &mut plan, &passed.expr)
                     .map_err(|why| unknown(&label, &passed.written, &passed.text, &why))?
                 {
-                    Held::Value(code, what) => (code, what),
+                    ResolvedName::Value(code, what) => (code, what),
                     _ => {
                         return Err(unknown(
                             &label,
@@ -38726,7 +38766,7 @@ pub mod databinding {
         sources: &[(String, String)],
         classpath: &Classpath,
         stores: &[String],
-    ) -> Result<Made, Diagnostic> {
+    ) -> Result<GeneratedBindings, Diagnostic> {
         if classpath.get(RUNTIME).is_none() {
             return Err(fail("EH005", "Data binding needs its runtime library.").with_suggestion(
                 "Add androidx.databinding:databinding-runtime and androidx.databinding:databinding-adapters to the dependencies.",
@@ -38818,12 +38858,12 @@ pub mod databinding {
         names.dedup();
         names.retain(|one| one != "_all");
 
-        let shared = Shared {
+        let shared = BindingContext {
             store: &store,
             classes: &classes,
             variables_of: &variables_of,
         };
-        let mut made = Made::default();
+        let mut made = GeneratedBindings::default();
         let mut components: Vec<String> = Vec::new();
         let mut lookups: Vec<Lookup> = Vec::new();
         for (name, binding) in &classes {
@@ -39029,158 +39069,158 @@ pub mod desugar {
     pub const HOME: &str = "com/code/builder/desugar/Backports";
 
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    pub enum Called {
+    pub enum InvokeKind {
         Static,
         Virtual,
         Interface,
     }
 
-    pub const BACKPORTS: &[(&str, &str, &str, Called, u32, &str)] = &[
-        ("java/lang/String", "isBlank", "()Z", Called::Virtual, 33, "isBlank"),
-        ("java/lang/String", "strip", "()Ljava/lang/String;", Called::Virtual, 33, "strip"),
-        ("java/lang/String", "stripLeading", "()Ljava/lang/String;", Called::Virtual, 33, "stripLeading"),
-        ("java/lang/String", "stripTrailing", "()Ljava/lang/String;", Called::Virtual, 33, "stripTrailing"),
-        ("java/lang/String", "repeat", "(I)Ljava/lang/String;", Called::Virtual, 33, "repeat"),
-        ("java/lang/String", "lines", "()Ljava/util/stream/Stream;", Called::Virtual, 33, "lines"),
-        ("java/lang/String", "formatted", "([Ljava/lang/Object;)Ljava/lang/String;", Called::Virtual, 34, "formatted"),
-        ("java/lang/String", "transform", "(Ljava/util/function/Function;)Ljava/lang/Object;", Called::Virtual, 34, "transform"),
-        ("java/lang/CharSequence", "isEmpty", "()Z", Called::Interface, 35, "isEmpty"),
-        ("java/lang/CharSequence", "compare", "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)I", Called::Static, 34, "compare"),
-        ("java/util/function/Predicate", "not", "(Ljava/util/function/Predicate;)Ljava/util/function/Predicate;", Called::Static, 33, "not"),
-        ("java/util/Optional", "isEmpty", "()Z", Called::Virtual, 33, "isEmpty"),
-        ("java/util/Optional", "orElseThrow", "()Ljava/lang/Object;", Called::Virtual, 33, "orElseThrow"),
-        ("java/util/Optional", "ifPresentOrElse", "(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V", Called::Virtual, 33, "ifPresentOrElse"),
-        ("java/util/Optional", "or", "(Ljava/util/function/Supplier;)Ljava/util/Optional;", Called::Virtual, 33, "or"),
-        ("java/util/Optional", "stream", "()Ljava/util/stream/Stream;", Called::Virtual, 33, "stream"),
-        ("java/util/OptionalInt", "isEmpty", "()Z", Called::Virtual, 33, "isEmpty"),
-        ("java/util/OptionalInt", "orElseThrow", "()I", Called::Virtual, 33, "orElseThrow"),
-        ("java/util/OptionalLong", "isEmpty", "()Z", Called::Virtual, 33, "isEmpty"),
-        ("java/util/OptionalLong", "orElseThrow", "()J", Called::Virtual, 33, "orElseThrow"),
-        ("java/util/OptionalDouble", "isEmpty", "()Z", Called::Virtual, 33, "isEmpty"),
-        ("java/util/OptionalDouble", "orElseThrow", "()D", Called::Virtual, 33, "orElseThrow"),
-        ("java/util/stream/Stream", "toList", "()Ljava/util/List;", Called::Interface, 34, "toList"),
-        ("java/util/stream/Stream", "ofNullable", "(Ljava/lang/Object;)Ljava/util/stream/Stream;", Called::Static, 34, "ofNullable"),
-        ("java/util/stream/Stream", "takeWhile", "(Ljava/util/function/Predicate;)Ljava/util/stream/Stream;", Called::Interface, 34, "takeWhile"),
-        ("java/util/stream/Stream", "dropWhile", "(Ljava/util/function/Predicate;)Ljava/util/stream/Stream;", Called::Interface, 34, "dropWhile"),
-        ("java/util/stream/Stream", "iterate", "(Ljava/lang/Object;Ljava/util/function/Predicate;Ljava/util/function/UnaryOperator;)Ljava/util/stream/Stream;", Called::Static, 34, "iterate"),
-        ("java/util/stream/Stream", "mapMulti", "(Ljava/util/function/BiConsumer;)Ljava/util/stream/Stream;", Called::Interface, 34, "mapMulti"),
-        ("java/util/List", "of", "()Ljava/util/List;", Called::Static, 30, "listOf"),
-        ("java/util/List", "of", "(Ljava/lang/Object;)Ljava/util/List;", Called::Static, 30, "listOf"),
-        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", Called::Static, 30, "listOf"),
-        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", Called::Static, 30, "listOf"),
-        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", Called::Static, 30, "listOf"),
-        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", Called::Static, 30, "listOf"),
-        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", Called::Static, 30, "listOf"),
-        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", Called::Static, 30, "listOf"),
-        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", Called::Static, 30, "listOf"),
-        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", Called::Static, 30, "listOf"),
-        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", Called::Static, 30, "listOf"),
-        ("java/util/List", "of", "([Ljava/lang/Object;)Ljava/util/List;", Called::Static, 30, "listOf"),
-        ("java/util/List", "copyOf", "(Ljava/util/Collection;)Ljava/util/List;", Called::Static, 31, "listCopyOf"),
-        ("java/util/Set", "of", "()Ljava/util/Set;", Called::Static, 30, "setOf"),
-        ("java/util/Set", "of", "(Ljava/lang/Object;)Ljava/util/Set;", Called::Static, 30, "setOf"),
-        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", Called::Static, 30, "setOf"),
-        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", Called::Static, 30, "setOf"),
-        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", Called::Static, 30, "setOf"),
-        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", Called::Static, 30, "setOf"),
-        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", Called::Static, 30, "setOf"),
-        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", Called::Static, 30, "setOf"),
-        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", Called::Static, 30, "setOf"),
-        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", Called::Static, 30, "setOf"),
-        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", Called::Static, 30, "setOf"),
-        ("java/util/Set", "of", "([Ljava/lang/Object;)Ljava/util/Set;", Called::Static, 30, "setOf"),
-        ("java/util/Set", "copyOf", "(Ljava/util/Collection;)Ljava/util/Set;", Called::Static, 31, "setCopyOf"),
-        ("java/util/Map", "of", "()Ljava/util/Map;", Called::Static, 30, "mapOf"),
-        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", Called::Static, 30, "mapOf"),
-        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", Called::Static, 30, "mapOf"),
-        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", Called::Static, 30, "mapOf"),
-        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", Called::Static, 30, "mapOf"),
-        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", Called::Static, 30, "mapOf"),
-        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", Called::Static, 30, "mapOf"),
-        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", Called::Static, 30, "mapOf"),
-        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", Called::Static, 30, "mapOf"),
-        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", Called::Static, 30, "mapOf"),
-        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", Called::Static, 30, "mapOf"),
-        ("java/util/Map", "ofEntries", "([Ljava/util/Map$Entry;)Ljava/util/Map;", Called::Static, 30, "mapOfEntries"),
-        ("java/util/Map", "entry", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;", Called::Static, 30, "mapEntry"),
-        ("java/util/Map", "copyOf", "(Ljava/util/Map;)Ljava/util/Map;", Called::Static, 31, "mapCopyOf"),
-        ("java/util/stream/Collectors", "toUnmodifiableList", "()Ljava/util/stream/Collector;", Called::Static, 33, "toUnmodifiableList"),
-        ("java/util/stream/Collectors", "toUnmodifiableSet", "()Ljava/util/stream/Collector;", Called::Static, 33, "toUnmodifiableSet"),
-        ("java/util/stream/Collectors", "toUnmodifiableMap", "(Ljava/util/function/Function;Ljava/util/function/Function;)Ljava/util/stream/Collector;", Called::Static, 33, "toUnmodifiableMap"),
-        ("java/util/stream/Collectors", "toUnmodifiableMap", "(Ljava/util/function/Function;Ljava/util/function/Function;Ljava/util/function/BinaryOperator;)Ljava/util/stream/Collector;", Called::Static, 33, "toUnmodifiableMap"),
-        ("java/util/Objects", "requireNonNullElse", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", Called::Static, 30, "requireNonNullElse"),
-        ("java/util/Objects", "requireNonNullElseGet", "(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;", Called::Static, 30, "requireNonNullElseGet"),
-        ("java/util/Objects", "checkIndex", "(II)I", Called::Static, 30, "checkIndex"),
-        ("java/util/Objects", "checkFromToIndex", "(III)I", Called::Static, 30, "checkFromToIndex"),
-        ("java/util/Objects", "checkFromIndexSize", "(III)I", Called::Static, 30, "checkFromIndexSize"),
-        ("java/lang/Math", "floorDiv", "(JI)J", Called::Static, 31, "floorDiv"),
-        ("java/lang/Math", "floorMod", "(JI)I", Called::Static, 31, "floorMod"),
-        ("java/lang/Math", "multiplyExact", "(JI)J", Called::Static, 31, "multiplyExact"),
-        ("java/lang/Math", "multiplyFull", "(II)J", Called::Static, 31, "multiplyFull"),
-        ("java/lang/Math", "multiplyHigh", "(JJ)J", Called::Static, 31, "multiplyHigh"),
-        ("java/lang/Math", "absExact", "(I)I", Called::Static, 34, "absExact"),
-        ("java/lang/Math", "absExact", "(J)J", Called::Static, 34, "absExact"),
-        ("java/lang/Math", "clamp", "(JII)I", Called::Static, 35, "clamp"),
-        ("java/lang/Math", "clamp", "(JJJ)J", Called::Static, 35, "clamp"),
-        ("java/lang/Math", "clamp", "(DDD)D", Called::Static, 35, "clamp"),
-        ("java/lang/Math", "clamp", "(FFF)F", Called::Static, 35, "clamp"),
-        ("java/lang/Math", "ceilDiv", "(II)I", Called::Static, 35, "ceilDiv"),
-        ("java/lang/Math", "ceilDiv", "(JJ)J", Called::Static, 35, "ceilDiv"),
-        ("java/lang/Math", "divideExact", "(II)I", Called::Static, 35, "divideExact"),
-        ("java/lang/Math", "divideExact", "(JJ)J", Called::Static, 35, "divideExact"),
-        ("java/lang/Math", "floorDivExact", "(II)I", Called::Static, 35, "floorDivExact"),
-        ("java/lang/Math", "floorDivExact", "(JJ)J", Called::Static, 35, "floorDivExact"),
-        ("java/lang/Character", "toString", "(I)Ljava/lang/String;", Called::Static, 35, "toString"),
-        ("java/lang/Integer", "parseInt", "(Ljava/lang/CharSequence;III)I", Called::Static, 33, "parseInt"),
-        ("java/lang/Long", "parseLong", "(Ljava/lang/CharSequence;III)J", Called::Static, 33, "parseLong"),
-        ("java/io/InputStream", "readAllBytes", "()[B", Called::Virtual, 33, "readAllBytes"),
-        ("java/io/InputStream", "readNBytes", "(I)[B", Called::Virtual, 33, "readNBytes"),
-        ("java/io/InputStream", "readNBytes", "([BII)I", Called::Virtual, 33, "readNBytes"),
-        ("java/io/InputStream", "transferTo", "(Ljava/io/OutputStream;)J", Called::Virtual, 33, "transferTo"),
-        ("java/io/InputStream", "skipNBytes", "(J)V", Called::Virtual, 34, "skipNBytes"),
-        ("java/util/Collection", "toArray", "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;", Called::Interface, 33, "toArray"),
-        ("java/lang/Thread", "onSpinWait", "()V", Called::Static, 33, "onSpinWait"),
-        ("java/lang/Thread", "threadId", "()J", Called::Virtual, 36, "threadId"),
-        ("java/util/ServiceLoader", "stream", "()Ljava/util/stream/Stream;", Called::Virtual, 35, "stream"),
-        ("java/util/ServiceLoader", "findFirst", "()Ljava/util/Optional;", Called::Virtual, 34, "findFirst"),
-        ("java/util/Collection", "getFirst", "()Ljava/lang/Object;", Called::Interface, 35, "getFirst"),
-        ("java/util/Collection", "getLast", "()Ljava/lang/Object;", Called::Interface, 35, "getLast"),
-        ("java/util/Collection", "removeFirst", "()Ljava/lang/Object;", Called::Interface, 35, "removeFirst"),
-        ("java/util/Collection", "removeLast", "()Ljava/lang/Object;", Called::Interface, 35, "removeLast"),
-        ("java/util/Collection", "addFirst", "(Ljava/lang/Object;)V", Called::Interface, 35, "addFirst"),
-        ("java/util/Collection", "addLast", "(Ljava/lang/Object;)V", Called::Interface, 35, "addLast"),
-        ("java/util/List", "reversed", "()Ljava/util/List;", Called::Interface, 35, "reversed"),
-        ("java/util/Deque", "reversed", "()Ljava/util/Deque;", Called::Interface, 35, "reversed"),
-        ("java/util/LinkedList", "reversed", "()Ljava/util/LinkedList;", Called::Virtual, 35, "reversed"),
-        ("java/util/Map", "firstEntry", "()Ljava/util/Map$Entry;", Called::Interface, 35, "firstEntry"),
-        ("java/util/Map", "lastEntry", "()Ljava/util/Map$Entry;", Called::Interface, 35, "lastEntry"),
-        ("java/util/Map", "pollFirstEntry", "()Ljava/util/Map$Entry;", Called::Interface, 35, "pollFirstEntry"),
-        ("java/util/Map", "pollLastEntry", "()Ljava/util/Map$Entry;", Called::Interface, 35, "pollLastEntry"),
-        ("java/lang/String", "indent", "(I)Ljava/lang/String;", Called::Virtual, 34, "indent"),
-        ("java/lang/String", "stripIndent", "()Ljava/lang/String;", Called::Virtual, 34, "stripIndent"),
-        ("java/lang/String", "translateEscapes", "()Ljava/lang/String;", Called::Virtual, 34, "translateEscapes"),
-        ("java/lang/String", "splitWithDelimiters", "(Ljava/lang/String;I)[Ljava/lang/String;", Called::Virtual, 36, "splitWithDelimiters"),
-        ("java/lang/String", "indexOf", "(III)I", Called::Virtual, 36, "indexOf"),
-        ("java/lang/String", "indexOf", "(Ljava/lang/String;II)I", Called::Virtual, 36, "indexOf"),
-        ("java/lang/StringBuilder", "repeat", "(Ljava/lang/CharSequence;I)Ljava/lang/StringBuilder;", Called::Virtual, 36, "repeat"),
-        ("java/lang/StringBuilder", "repeat", "(II)Ljava/lang/StringBuilder;", Called::Virtual, 36, "repeat"),
-        ("java/util/stream/Collectors", "teeing", "(Ljava/util/stream/Collector;Ljava/util/stream/Collector;Ljava/util/function/BiFunction;)Ljava/util/stream/Collector;", Called::Static, 34, "teeing"),
-        ("java/util/stream/Collectors", "filtering", "(Ljava/util/function/Predicate;Ljava/util/stream/Collector;)Ljava/util/stream/Collector;", Called::Static, 34, "filtering"),
-        ("java/util/stream/Collectors", "flatMapping", "(Ljava/util/function/Function;Ljava/util/stream/Collector;)Ljava/util/stream/Collector;", Called::Static, 34, "flatMapping"),
-        ("java/util/HashMap", "newHashMap", "(I)Ljava/util/HashMap;", Called::Static, 36, "newHashMap"),
-        ("java/util/LinkedHashMap", "newLinkedHashMap", "(I)Ljava/util/LinkedHashMap;", Called::Static, 36, "newLinkedHashMap"),
-        ("java/util/HashSet", "newHashSet", "(I)Ljava/util/HashSet;", Called::Static, 36, "newHashSet"),
-        ("java/util/LinkedHashSet", "newLinkedHashSet", "(I)Ljava/util/LinkedHashSet;", Called::Static, 36, "newLinkedHashSet"),
-        ("java/util/concurrent/Executors", "newVirtualThreadPerTaskExecutor", "()Ljava/util/concurrent/ExecutorService;", Called::Static, 1000, "newVirtualThreadPerTaskExecutor"),
-        ("java/nio/file/Path", "of", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;", Called::Static, 34, "pathOf"),
-        ("java/nio/file/Path", "of", "(Ljava/net/URI;)Ljava/nio/file/Path;", Called::Static, 34, "pathOf"),
-        ("java/nio/file/Files", "readString", "(Ljava/nio/file/Path;)Ljava/lang/String;", Called::Static, 34, "readString"),
-        ("java/nio/file/Files", "readString", "(Ljava/nio/file/Path;Ljava/nio/charset/Charset;)Ljava/lang/String;", Called::Static, 34, "readString"),
-        ("java/nio/file/Files", "writeString", "(Ljava/nio/file/Path;Ljava/lang/CharSequence;[Ljava/nio/file/OpenOption;)Ljava/nio/file/Path;", Called::Static, 34, "writeString"),
-        ("java/nio/file/Files", "writeString", "(Ljava/nio/file/Path;Ljava/lang/CharSequence;Ljava/nio/charset/Charset;[Ljava/nio/file/OpenOption;)Ljava/nio/file/Path;", Called::Static, 34, "writeString"),
-        ("java/io/Reader", "transferTo", "(Ljava/io/Writer;)J", Called::Virtual, 34, "transferTo"),
-        ("java/io/InputStream", "nullInputStream", "()Ljava/io/InputStream;", Called::Static, 34, "nullInputStream"),
-        ("java/io/OutputStream", "nullOutputStream", "()Ljava/io/OutputStream;", Called::Static, 34, "nullOutputStream"),
+    pub const BACKPORTS: &[(&str, &str, &str, InvokeKind, u32, &str)] = &[
+        ("java/lang/String", "isBlank", "()Z", InvokeKind::Virtual, 33, "isBlank"),
+        ("java/lang/String", "strip", "()Ljava/lang/String;", InvokeKind::Virtual, 33, "strip"),
+        ("java/lang/String", "stripLeading", "()Ljava/lang/String;", InvokeKind::Virtual, 33, "stripLeading"),
+        ("java/lang/String", "stripTrailing", "()Ljava/lang/String;", InvokeKind::Virtual, 33, "stripTrailing"),
+        ("java/lang/String", "repeat", "(I)Ljava/lang/String;", InvokeKind::Virtual, 33, "repeat"),
+        ("java/lang/String", "lines", "()Ljava/util/stream/Stream;", InvokeKind::Virtual, 33, "lines"),
+        ("java/lang/String", "formatted", "([Ljava/lang/Object;)Ljava/lang/String;", InvokeKind::Virtual, 34, "formatted"),
+        ("java/lang/String", "transform", "(Ljava/util/function/Function;)Ljava/lang/Object;", InvokeKind::Virtual, 34, "transform"),
+        ("java/lang/CharSequence", "isEmpty", "()Z", InvokeKind::Interface, 35, "isEmpty"),
+        ("java/lang/CharSequence", "compare", "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)I", InvokeKind::Static, 34, "compare"),
+        ("java/util/function/Predicate", "not", "(Ljava/util/function/Predicate;)Ljava/util/function/Predicate;", InvokeKind::Static, 33, "not"),
+        ("java/util/Optional", "isEmpty", "()Z", InvokeKind::Virtual, 33, "isEmpty"),
+        ("java/util/Optional", "orElseThrow", "()Ljava/lang/Object;", InvokeKind::Virtual, 33, "orElseThrow"),
+        ("java/util/Optional", "ifPresentOrElse", "(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V", InvokeKind::Virtual, 33, "ifPresentOrElse"),
+        ("java/util/Optional", "or", "(Ljava/util/function/Supplier;)Ljava/util/Optional;", InvokeKind::Virtual, 33, "or"),
+        ("java/util/Optional", "stream", "()Ljava/util/stream/Stream;", InvokeKind::Virtual, 33, "stream"),
+        ("java/util/OptionalInt", "isEmpty", "()Z", InvokeKind::Virtual, 33, "isEmpty"),
+        ("java/util/OptionalInt", "orElseThrow", "()I", InvokeKind::Virtual, 33, "orElseThrow"),
+        ("java/util/OptionalLong", "isEmpty", "()Z", InvokeKind::Virtual, 33, "isEmpty"),
+        ("java/util/OptionalLong", "orElseThrow", "()J", InvokeKind::Virtual, 33, "orElseThrow"),
+        ("java/util/OptionalDouble", "isEmpty", "()Z", InvokeKind::Virtual, 33, "isEmpty"),
+        ("java/util/OptionalDouble", "orElseThrow", "()D", InvokeKind::Virtual, 33, "orElseThrow"),
+        ("java/util/stream/Stream", "toList", "()Ljava/util/List;", InvokeKind::Interface, 34, "toList"),
+        ("java/util/stream/Stream", "ofNullable", "(Ljava/lang/Object;)Ljava/util/stream/Stream;", InvokeKind::Static, 34, "ofNullable"),
+        ("java/util/stream/Stream", "takeWhile", "(Ljava/util/function/Predicate;)Ljava/util/stream/Stream;", InvokeKind::Interface, 34, "takeWhile"),
+        ("java/util/stream/Stream", "dropWhile", "(Ljava/util/function/Predicate;)Ljava/util/stream/Stream;", InvokeKind::Interface, 34, "dropWhile"),
+        ("java/util/stream/Stream", "iterate", "(Ljava/lang/Object;Ljava/util/function/Predicate;Ljava/util/function/UnaryOperator;)Ljava/util/stream/Stream;", InvokeKind::Static, 34, "iterate"),
+        ("java/util/stream/Stream", "mapMulti", "(Ljava/util/function/BiConsumer;)Ljava/util/stream/Stream;", InvokeKind::Interface, 34, "mapMulti"),
+        ("java/util/List", "of", "()Ljava/util/List;", InvokeKind::Static, 30, "listOf"),
+        ("java/util/List", "of", "(Ljava/lang/Object;)Ljava/util/List;", InvokeKind::Static, 30, "listOf"),
+        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", InvokeKind::Static, 30, "listOf"),
+        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", InvokeKind::Static, 30, "listOf"),
+        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", InvokeKind::Static, 30, "listOf"),
+        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", InvokeKind::Static, 30, "listOf"),
+        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", InvokeKind::Static, 30, "listOf"),
+        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", InvokeKind::Static, 30, "listOf"),
+        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", InvokeKind::Static, 30, "listOf"),
+        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", InvokeKind::Static, 30, "listOf"),
+        ("java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;", InvokeKind::Static, 30, "listOf"),
+        ("java/util/List", "of", "([Ljava/lang/Object;)Ljava/util/List;", InvokeKind::Static, 30, "listOf"),
+        ("java/util/List", "copyOf", "(Ljava/util/Collection;)Ljava/util/List;", InvokeKind::Static, 31, "listCopyOf"),
+        ("java/util/Set", "of", "()Ljava/util/Set;", InvokeKind::Static, 30, "setOf"),
+        ("java/util/Set", "of", "(Ljava/lang/Object;)Ljava/util/Set;", InvokeKind::Static, 30, "setOf"),
+        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", InvokeKind::Static, 30, "setOf"),
+        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", InvokeKind::Static, 30, "setOf"),
+        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", InvokeKind::Static, 30, "setOf"),
+        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", InvokeKind::Static, 30, "setOf"),
+        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", InvokeKind::Static, 30, "setOf"),
+        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", InvokeKind::Static, 30, "setOf"),
+        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", InvokeKind::Static, 30, "setOf"),
+        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", InvokeKind::Static, 30, "setOf"),
+        ("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;", InvokeKind::Static, 30, "setOf"),
+        ("java/util/Set", "of", "([Ljava/lang/Object;)Ljava/util/Set;", InvokeKind::Static, 30, "setOf"),
+        ("java/util/Set", "copyOf", "(Ljava/util/Collection;)Ljava/util/Set;", InvokeKind::Static, 31, "setCopyOf"),
+        ("java/util/Map", "of", "()Ljava/util/Map;", InvokeKind::Static, 30, "mapOf"),
+        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", InvokeKind::Static, 30, "mapOf"),
+        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", InvokeKind::Static, 30, "mapOf"),
+        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", InvokeKind::Static, 30, "mapOf"),
+        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", InvokeKind::Static, 30, "mapOf"),
+        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", InvokeKind::Static, 30, "mapOf"),
+        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", InvokeKind::Static, 30, "mapOf"),
+        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", InvokeKind::Static, 30, "mapOf"),
+        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", InvokeKind::Static, 30, "mapOf"),
+        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", InvokeKind::Static, 30, "mapOf"),
+        ("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;", InvokeKind::Static, 30, "mapOf"),
+        ("java/util/Map", "ofEntries", "([Ljava/util/Map$Entry;)Ljava/util/Map;", InvokeKind::Static, 30, "mapOfEntries"),
+        ("java/util/Map", "entry", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;", InvokeKind::Static, 30, "mapEntry"),
+        ("java/util/Map", "copyOf", "(Ljava/util/Map;)Ljava/util/Map;", InvokeKind::Static, 31, "mapCopyOf"),
+        ("java/util/stream/Collectors", "toUnmodifiableList", "()Ljava/util/stream/Collector;", InvokeKind::Static, 33, "toUnmodifiableList"),
+        ("java/util/stream/Collectors", "toUnmodifiableSet", "()Ljava/util/stream/Collector;", InvokeKind::Static, 33, "toUnmodifiableSet"),
+        ("java/util/stream/Collectors", "toUnmodifiableMap", "(Ljava/util/function/Function;Ljava/util/function/Function;)Ljava/util/stream/Collector;", InvokeKind::Static, 33, "toUnmodifiableMap"),
+        ("java/util/stream/Collectors", "toUnmodifiableMap", "(Ljava/util/function/Function;Ljava/util/function/Function;Ljava/util/function/BinaryOperator;)Ljava/util/stream/Collector;", InvokeKind::Static, 33, "toUnmodifiableMap"),
+        ("java/util/Objects", "requireNonNullElse", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", InvokeKind::Static, 30, "requireNonNullElse"),
+        ("java/util/Objects", "requireNonNullElseGet", "(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;", InvokeKind::Static, 30, "requireNonNullElseGet"),
+        ("java/util/Objects", "checkIndex", "(II)I", InvokeKind::Static, 30, "checkIndex"),
+        ("java/util/Objects", "checkFromToIndex", "(III)I", InvokeKind::Static, 30, "checkFromToIndex"),
+        ("java/util/Objects", "checkFromIndexSize", "(III)I", InvokeKind::Static, 30, "checkFromIndexSize"),
+        ("java/lang/Math", "floorDiv", "(JI)J", InvokeKind::Static, 31, "floorDiv"),
+        ("java/lang/Math", "floorMod", "(JI)I", InvokeKind::Static, 31, "floorMod"),
+        ("java/lang/Math", "multiplyExact", "(JI)J", InvokeKind::Static, 31, "multiplyExact"),
+        ("java/lang/Math", "multiplyFull", "(II)J", InvokeKind::Static, 31, "multiplyFull"),
+        ("java/lang/Math", "multiplyHigh", "(JJ)J", InvokeKind::Static, 31, "multiplyHigh"),
+        ("java/lang/Math", "absExact", "(I)I", InvokeKind::Static, 34, "absExact"),
+        ("java/lang/Math", "absExact", "(J)J", InvokeKind::Static, 34, "absExact"),
+        ("java/lang/Math", "clamp", "(JII)I", InvokeKind::Static, 35, "clamp"),
+        ("java/lang/Math", "clamp", "(JJJ)J", InvokeKind::Static, 35, "clamp"),
+        ("java/lang/Math", "clamp", "(DDD)D", InvokeKind::Static, 35, "clamp"),
+        ("java/lang/Math", "clamp", "(FFF)F", InvokeKind::Static, 35, "clamp"),
+        ("java/lang/Math", "ceilDiv", "(II)I", InvokeKind::Static, 35, "ceilDiv"),
+        ("java/lang/Math", "ceilDiv", "(JJ)J", InvokeKind::Static, 35, "ceilDiv"),
+        ("java/lang/Math", "divideExact", "(II)I", InvokeKind::Static, 35, "divideExact"),
+        ("java/lang/Math", "divideExact", "(JJ)J", InvokeKind::Static, 35, "divideExact"),
+        ("java/lang/Math", "floorDivExact", "(II)I", InvokeKind::Static, 35, "floorDivExact"),
+        ("java/lang/Math", "floorDivExact", "(JJ)J", InvokeKind::Static, 35, "floorDivExact"),
+        ("java/lang/Character", "toString", "(I)Ljava/lang/String;", InvokeKind::Static, 35, "toString"),
+        ("java/lang/Integer", "parseInt", "(Ljava/lang/CharSequence;III)I", InvokeKind::Static, 33, "parseInt"),
+        ("java/lang/Long", "parseLong", "(Ljava/lang/CharSequence;III)J", InvokeKind::Static, 33, "parseLong"),
+        ("java/io/InputStream", "readAllBytes", "()[B", InvokeKind::Virtual, 33, "readAllBytes"),
+        ("java/io/InputStream", "readNBytes", "(I)[B", InvokeKind::Virtual, 33, "readNBytes"),
+        ("java/io/InputStream", "readNBytes", "([BII)I", InvokeKind::Virtual, 33, "readNBytes"),
+        ("java/io/InputStream", "transferTo", "(Ljava/io/OutputStream;)J", InvokeKind::Virtual, 33, "transferTo"),
+        ("java/io/InputStream", "skipNBytes", "(J)V", InvokeKind::Virtual, 34, "skipNBytes"),
+        ("java/util/Collection", "toArray", "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;", InvokeKind::Interface, 33, "toArray"),
+        ("java/lang/Thread", "onSpinWait", "()V", InvokeKind::Static, 33, "onSpinWait"),
+        ("java/lang/Thread", "threadId", "()J", InvokeKind::Virtual, 36, "threadId"),
+        ("java/util/ServiceLoader", "stream", "()Ljava/util/stream/Stream;", InvokeKind::Virtual, 35, "stream"),
+        ("java/util/ServiceLoader", "findFirst", "()Ljava/util/Optional;", InvokeKind::Virtual, 34, "findFirst"),
+        ("java/util/Collection", "getFirst", "()Ljava/lang/Object;", InvokeKind::Interface, 35, "getFirst"),
+        ("java/util/Collection", "getLast", "()Ljava/lang/Object;", InvokeKind::Interface, 35, "getLast"),
+        ("java/util/Collection", "removeFirst", "()Ljava/lang/Object;", InvokeKind::Interface, 35, "removeFirst"),
+        ("java/util/Collection", "removeLast", "()Ljava/lang/Object;", InvokeKind::Interface, 35, "removeLast"),
+        ("java/util/Collection", "addFirst", "(Ljava/lang/Object;)V", InvokeKind::Interface, 35, "addFirst"),
+        ("java/util/Collection", "addLast", "(Ljava/lang/Object;)V", InvokeKind::Interface, 35, "addLast"),
+        ("java/util/List", "reversed", "()Ljava/util/List;", InvokeKind::Interface, 35, "reversed"),
+        ("java/util/Deque", "reversed", "()Ljava/util/Deque;", InvokeKind::Interface, 35, "reversed"),
+        ("java/util/LinkedList", "reversed", "()Ljava/util/LinkedList;", InvokeKind::Virtual, 35, "reversed"),
+        ("java/util/Map", "firstEntry", "()Ljava/util/Map$Entry;", InvokeKind::Interface, 35, "firstEntry"),
+        ("java/util/Map", "lastEntry", "()Ljava/util/Map$Entry;", InvokeKind::Interface, 35, "lastEntry"),
+        ("java/util/Map", "pollFirstEntry", "()Ljava/util/Map$Entry;", InvokeKind::Interface, 35, "pollFirstEntry"),
+        ("java/util/Map", "pollLastEntry", "()Ljava/util/Map$Entry;", InvokeKind::Interface, 35, "pollLastEntry"),
+        ("java/lang/String", "indent", "(I)Ljava/lang/String;", InvokeKind::Virtual, 34, "indent"),
+        ("java/lang/String", "stripIndent", "()Ljava/lang/String;", InvokeKind::Virtual, 34, "stripIndent"),
+        ("java/lang/String", "translateEscapes", "()Ljava/lang/String;", InvokeKind::Virtual, 34, "translateEscapes"),
+        ("java/lang/String", "splitWithDelimiters", "(Ljava/lang/String;I)[Ljava/lang/String;", InvokeKind::Virtual, 36, "splitWithDelimiters"),
+        ("java/lang/String", "indexOf", "(III)I", InvokeKind::Virtual, 36, "indexOf"),
+        ("java/lang/String", "indexOf", "(Ljava/lang/String;II)I", InvokeKind::Virtual, 36, "indexOf"),
+        ("java/lang/StringBuilder", "repeat", "(Ljava/lang/CharSequence;I)Ljava/lang/StringBuilder;", InvokeKind::Virtual, 36, "repeat"),
+        ("java/lang/StringBuilder", "repeat", "(II)Ljava/lang/StringBuilder;", InvokeKind::Virtual, 36, "repeat"),
+        ("java/util/stream/Collectors", "teeing", "(Ljava/util/stream/Collector;Ljava/util/stream/Collector;Ljava/util/function/BiFunction;)Ljava/util/stream/Collector;", InvokeKind::Static, 34, "teeing"),
+        ("java/util/stream/Collectors", "filtering", "(Ljava/util/function/Predicate;Ljava/util/stream/Collector;)Ljava/util/stream/Collector;", InvokeKind::Static, 34, "filtering"),
+        ("java/util/stream/Collectors", "flatMapping", "(Ljava/util/function/Function;Ljava/util/stream/Collector;)Ljava/util/stream/Collector;", InvokeKind::Static, 34, "flatMapping"),
+        ("java/util/HashMap", "newHashMap", "(I)Ljava/util/HashMap;", InvokeKind::Static, 36, "newHashMap"),
+        ("java/util/LinkedHashMap", "newLinkedHashMap", "(I)Ljava/util/LinkedHashMap;", InvokeKind::Static, 36, "newLinkedHashMap"),
+        ("java/util/HashSet", "newHashSet", "(I)Ljava/util/HashSet;", InvokeKind::Static, 36, "newHashSet"),
+        ("java/util/LinkedHashSet", "newLinkedHashSet", "(I)Ljava/util/LinkedHashSet;", InvokeKind::Static, 36, "newLinkedHashSet"),
+        ("java/util/concurrent/Executors", "newVirtualThreadPerTaskExecutor", "()Ljava/util/concurrent/ExecutorService;", InvokeKind::Static, 1000, "newVirtualThreadPerTaskExecutor"),
+        ("java/nio/file/Path", "of", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;", InvokeKind::Static, 34, "pathOf"),
+        ("java/nio/file/Path", "of", "(Ljava/net/URI;)Ljava/nio/file/Path;", InvokeKind::Static, 34, "pathOf"),
+        ("java/nio/file/Files", "readString", "(Ljava/nio/file/Path;)Ljava/lang/String;", InvokeKind::Static, 34, "readString"),
+        ("java/nio/file/Files", "readString", "(Ljava/nio/file/Path;Ljava/nio/charset/Charset;)Ljava/lang/String;", InvokeKind::Static, 34, "readString"),
+        ("java/nio/file/Files", "writeString", "(Ljava/nio/file/Path;Ljava/lang/CharSequence;[Ljava/nio/file/OpenOption;)Ljava/nio/file/Path;", InvokeKind::Static, 34, "writeString"),
+        ("java/nio/file/Files", "writeString", "(Ljava/nio/file/Path;Ljava/lang/CharSequence;Ljava/nio/charset/Charset;[Ljava/nio/file/OpenOption;)Ljava/nio/file/Path;", InvokeKind::Static, 34, "writeString"),
+        ("java/io/Reader", "transferTo", "(Ljava/io/Writer;)J", InvokeKind::Virtual, 34, "transferTo"),
+        ("java/io/InputStream", "nullInputStream", "()Ljava/io/InputStream;", InvokeKind::Static, 34, "nullInputStream"),
+        ("java/io/OutputStream", "nullOutputStream", "()Ljava/io/OutputStream;", InvokeKind::Static, 34, "nullOutputStream"),
     ];
     pub const OVERRIDDEN: &[(&str, &str, &str, u32)] = &[
         ("java/lang/String", "isEmpty", "()Z", 9),
@@ -41095,14 +41135,14 @@ public abstract class RecordTag {
         name: &str,
         descriptor: &str,
         min_sdk: u32,
-    ) -> Option<(Called, String, String)> {
+    ) -> Option<(InvokeKind, String, String)> {
         let found = BACKPORTS
             .iter()
             .find(|(held, named, taken, called, since, _)| {
                 *since > min_sdk
                     && *named == name
                     && *taken == descriptor
-                    && if *called == Called::Static {
+                    && if *called == InvokeKind::Static {
                         *held == owner
                     } else {
                         owner.starts_with("java/") && reaches(owner, held)
@@ -41114,7 +41154,7 @@ public abstract class RecordTag {
             return None;
         }
         let (held, _, _, called, _, helper) = found;
-        let descriptor = if *called == Called::Static {
+        let descriptor = if *called == InvokeKind::Static {
             descriptor.to_string()
         } else {
             format!("(L{held};{}", &descriptor[1..])
@@ -41213,7 +41253,7 @@ public abstract class RecordTag {
             entry.extend_from_slice(&class_at.to_be_bytes());
             entry.extend_from_slice(&pair_now.to_be_bytes());
             patches.push((at, entry));
-            if called != Called::Static {
+            if called != InvokeKind::Static {
                 instance.push(index as u16);
             }
         }
@@ -41397,7 +41437,7 @@ pub mod shrink {
     use std::collections::BTreeSet;
 
     #[derive(Clone, Debug, Default, PartialEq, Eq)]
-    pub struct Trimmed {
+    pub struct ShrinkSummary {
         pub kept: usize,
         pub dropped: usize,
         pub names: Vec<String>,
@@ -41405,7 +41445,7 @@ pub mod shrink {
         pub fields: usize,
     }
 
-    impl Trimmed {
+    impl ShrinkSummary {
         pub fn write_json(&self, w: &mut crate::json::Writer, key: &str) {
             w.begin_object(Some(key));
             w.field_u64("kept", self.kept as u64);
@@ -41962,12 +42002,12 @@ pub mod shrink {
         out
     }
 
-    pub fn apply(classes: Vec<Class>, roots: &[String]) -> (Vec<Class>, Trimmed) {
+    pub fn apply(classes: Vec<Class>, roots: &[String]) -> (Vec<Class>, ShrinkSummary) {
         if roots.is_empty() {
             let kept = classes.len();
             return (
                 classes,
-                Trimmed {
+                ShrinkSummary {
                     kept,
                     dropped: 0,
                     names: Vec::new(),
@@ -41988,7 +42028,7 @@ pub mod shrink {
             let kept = classes.len();
             return (
                 classes,
-                Trimmed {
+                ShrinkSummary {
                     kept,
                     dropped: 0,
                     names: Vec::new(),
@@ -42008,7 +42048,7 @@ pub mod shrink {
             }
         }
         names.sort();
-        let trimmed = Trimmed {
+        let trimmed = ShrinkSummary {
             kept: out.len(),
             dropped: names.len(),
             names,
@@ -42083,7 +42123,7 @@ pub mod shrink {
         "readResolve",
     ];
 
-    enum Work {
+    enum ReachabilityItem {
         Class(String),
         Method(String, String, String),
         Field(String, String, String),
@@ -42101,7 +42141,7 @@ pub mod shrink {
         called: std::collections::HashMap<(String, String), BTreeSet<String>>,
         declarers: std::collections::HashMap<(String, String), Vec<String>>,
         reflected: BTreeSet<String>,
-        waiting: Vec<Work>,
+        waiting: Vec<ReachabilityItem>,
     }
 
     impl<'a> Graph<'a> {
@@ -42130,7 +42170,8 @@ pub mod shrink {
         fn note(&mut self, descriptor: &str) {
             let element = descriptor.trim_start_matches('[');
             if element.starts_with('L') && self.by_name.contains_key(element) {
-                self.waiting.push(Work::Class(element.to_string()));
+                self.waiting
+                    .push(ReachabilityItem::Class(element.to_string()));
             }
         }
 
@@ -42277,7 +42318,7 @@ pub mod shrink {
                             )));
                 if keep {
                     self.waiting
-                        .push(Work::Method(descriptor.clone(), name, proto));
+                        .push(ReachabilityItem::Method(descriptor.clone(), name, proto));
                 }
             }
             for field in class
@@ -42291,7 +42332,7 @@ pub mod shrink {
                     || runtime_visible(&field.annotations)
                     || field.reference.name == "CREATOR";
                 if keep {
-                    self.waiting.push(Work::Field(
+                    self.waiting.push(ReachabilityItem::Field(
                         descriptor.clone(),
                         field.reference.name.clone(),
                         field.reference.descriptor.clone(),
@@ -42307,10 +42348,11 @@ pub mod shrink {
             if !self.reflected.insert(descriptor.clone()) {
                 return;
             }
-            self.waiting.push(Work::Class(descriptor.clone()));
+            self.waiting
+                .push(ReachabilityItem::Class(descriptor.clone()));
             for method in &class.direct_methods {
                 if method.reference.name == "<init>" {
-                    self.waiting.push(Work::Method(
+                    self.waiting.push(ReachabilityItem::Method(
                         descriptor.clone(),
                         "<init>".to_string(),
                         proto_of(&method.reference),
@@ -42318,7 +42360,7 @@ pub mod shrink {
                 }
             }
             for field in class.instance_fields.iter() {
-                self.waiting.push(Work::Field(
+                self.waiting.push(ReachabilityItem::Field(
                     descriptor.clone(),
                     field.reference.name.clone(),
                     field.reference.descriptor.clone(),
@@ -42335,7 +42377,7 @@ pub mod shrink {
             if !self.methods.insert(key) {
                 return;
             }
-            self.waiting.push(Work::Class(declared.clone()));
+            self.waiting.push(ReachabilityItem::Class(declared.clone()));
             let Some(class) = self.class(&declared) else {
                 return;
             };
@@ -42360,7 +42402,7 @@ pub mod shrink {
                     }
                 }
             }
-            let mut later: Vec<Work> = Vec::new();
+            let mut later: Vec<ReachabilityItem> = Vec::new();
             let mut virtuals: Vec<(String, String, String)> = Vec::new();
             for insn in &method.instructions {
                 let opcode = insn.units.first().map(|one| one & 0xff).unwrap_or(0);
@@ -42370,7 +42412,7 @@ pub mod shrink {
                         notes.push(reference.return_type.clone());
                         notes.extend(reference.parameters.iter().cloned());
                         let proto = proto_of(reference);
-                        later.push(Work::Method(
+                        later.push(ReachabilityItem::Method(
                             reference.class.clone(),
                             reference.name.clone(),
                             proto.clone(),
@@ -42383,7 +42425,7 @@ pub mod shrink {
                     Operand::Field(reference) => {
                         notes.push(reference.class.clone());
                         notes.push(reference.descriptor.clone());
-                        later.push(Work::Field(
+                        later.push(ReachabilityItem::Field(
                             reference.class.clone(),
                             reference.name.clone(),
                             reference.descriptor.clone(),
@@ -42392,14 +42434,16 @@ pub mod shrink {
                     Operand::Type(held) => {
                         notes.push(held.clone());
                         if opcode == 0x1c {
-                            later.push(Work::Reflected(held.trim_start_matches('[').to_string()));
+                            later.push(ReachabilityItem::Reflected(
+                                held.trim_start_matches('[').to_string(),
+                            ));
                         }
                     }
                     Operand::Text(held) => {
                         if held.contains('.') && !held.contains(' ') {
                             let named = format!("L{};", held.replace('.', "/"));
                             if self.by_name.contains_key(named.as_str()) {
-                                later.push(Work::Reflected(named));
+                                later.push(ReachabilityItem::Reflected(named));
                             }
                         }
                     }
@@ -42426,8 +42470,11 @@ pub mod shrink {
                     .unwrap_or_default();
                 for one in declaring {
                     if self.live.contains(&one) && self.supertype_chain(&one).contains(&owner) {
-                        self.waiting
-                            .push(Work::Method(one, name.clone(), proto.clone()));
+                        self.waiting.push(ReachabilityItem::Method(
+                            one,
+                            name.clone(),
+                            proto.clone(),
+                        ));
                     }
                 }
             }
@@ -42442,19 +42489,21 @@ pub mod shrink {
             if !self.fields.insert(key) {
                 return;
             }
-            self.waiting.push(Work::Class(declared));
+            self.waiting.push(ReachabilityItem::Class(declared));
             self.note(&descriptor);
         }
 
         fn run(&mut self) {
             while let Some(work) = self.waiting.pop() {
                 match work {
-                    Work::Class(one) => self.visit_class(one),
-                    Work::Method(owner, name, proto) => self.visit_method(owner, name, proto),
-                    Work::Field(owner, name, descriptor) => {
+                    ReachabilityItem::Class(one) => self.visit_class(one),
+                    ReachabilityItem::Method(owner, name, proto) => {
+                        self.visit_method(owner, name, proto)
+                    }
+                    ReachabilityItem::Field(owner, name, descriptor) => {
                         self.visit_field(owner, name, descriptor)
                     }
-                    Work::Reflected(one) => self.visit_reflected(one),
+                    ReachabilityItem::Reflected(one) => self.visit_reflected(one),
                 }
             }
         }
@@ -42485,7 +42534,11 @@ pub mod shrink {
         out
     }
 
-    pub fn apply_deep(classes: Vec<Class>, roots: &[String], keep: &Keep) -> (Vec<Class>, Trimmed) {
+    pub fn apply_deep(
+        classes: Vec<Class>,
+        roots: &[String],
+        keep: &Keep,
+    ) -> (Vec<Class>, ShrinkSummary) {
         let present: BTreeSet<&str> = classes.iter().map(|one| one.descriptor.as_str()).collect();
         if roots.is_empty() || !roots.iter().any(|one| present.contains(one.as_str())) {
             return apply(classes, roots);
@@ -42532,11 +42585,11 @@ pub mod shrink {
             };
             for one in roots {
                 if present.contains(one.as_str()) {
-                    graph.waiting.push(Work::Reflected(one.clone()));
+                    graph.waiting.push(ReachabilityItem::Reflected(one.clone()));
                 }
             }
             for one in &whole {
-                graph.waiting.push(Work::Class(one.clone()));
+                graph.waiting.push(ReachabilityItem::Class(one.clone()));
             }
             graph.run();
             (graph.live, graph.methods, graph.fields)
@@ -42580,7 +42633,7 @@ pub mod shrink {
             out.push(one);
         }
         names.sort();
-        let trimmed = Trimmed {
+        let trimmed = ShrinkSummary {
             kept: out.len(),
             dropped: names.len(),
             names,
@@ -43774,7 +43827,7 @@ pub mod gradle {
     }
 
     #[derive(Clone, Debug, Default)]
-    pub struct Read {
+    pub struct GradleBuild {
         pub settings: Settings,
         pub modules: Vec<String>,
         pub plugins: Vec<String>,
@@ -44875,7 +44928,7 @@ pub mod gradle {
         out
     }
 
-    pub fn dependencies(text: &str, held: &crate::settings::Catalogue, into: &mut Read) {
+    pub fn dependencies(text: &str, held: &crate::settings::Catalogue, into: &mut GradleBuild) {
         dependencies_knowing(text, held, &std::collections::BTreeMap::new(), into);
     }
 
@@ -44883,7 +44936,7 @@ pub mod gradle {
         text: &str,
         held: &crate::settings::Catalogue,
         known: &std::collections::BTreeMap<String, String>,
-        into: &mut Read,
+        into: &mut GradleBuild,
     ) {
         dependencies_of(text, held, known, None, into);
     }
@@ -44896,7 +44949,7 @@ pub mod gradle {
         held: &crate::settings::Catalogue,
         known: &std::collections::BTreeMap<String, String>,
         flavors: Option<&[String]>,
-        into: &mut Read,
+        into: &mut GradleBuild,
     ) {
         let bodies = every_block(text, "dependencies");
         let mut locals: std::collections::BTreeMap<String, String> =
@@ -45263,7 +45316,7 @@ pub mod gradle {
         (chosen, left)
     }
 
-    pub fn plugins(text: &str, into: &mut Read) {
+    pub fn plugins(text: &str, into: &mut GradleBuild) {
         if let Some(body) = block(text, "plugins") {
             for said in statements(&body) {
                 let named = if said.trim_start().starts_with("id") {
@@ -45389,7 +45442,7 @@ pub mod gradle {
             let Some(text) = text_of(&path) else {
                 continue;
             };
-            let mut found = Read::default();
+            let mut found = GradleBuild::default();
             if let Some(listed) = text_of(&here.join(CATALOGUE_FILE)) {
                 found.settings.catalogue = catalogue(&listed);
             }
@@ -45401,7 +45454,7 @@ pub mod gradle {
         None
     }
 
-    fn languages_of(found: &Read, root: &std::path::Path, module: &str) -> Vec<String> {
+    fn languages_of(found: &GradleBuild, root: &std::path::Path, module: &str) -> Vec<String> {
         let mut out = vec!["java".to_string()];
         let kotlin = found
             .plugins
@@ -45421,7 +45474,7 @@ pub mod gradle {
         out
     }
 
-    pub fn read(root: &str, module: &str) -> Result<Read, Diagnostic> {
+    pub fn read(root: &str, module: &str) -> Result<GradleBuild, Diagnostic> {
         let here = std::path::Path::new(root);
         let folder = if module.is_empty() {
             here.to_path_buf()
@@ -45439,7 +45492,7 @@ pub mod gradle {
         };
         let text = with_applied(&plain(&raw), &folder, here, 0);
 
-        let mut found = Read::default();
+        let mut found = GradleBuild::default();
         let held = match text_of(&here.join(CATALOGUE_FILE)) {
             Some(text) => catalogue(&text),
             None => crate::settings::Catalogue::default(),
@@ -46489,7 +46542,7 @@ pub mod maven {
     }
 
     #[derive(Clone, Debug, PartialEq, Eq)]
-    pub struct Want {
+    pub struct DownloadRequest {
         pub coordinate: String,
         pub kind: String,
         pub urls: Vec<String>,
@@ -46497,8 +46550,8 @@ pub mod maven {
     }
 
     #[derive(Clone, Debug, Default)]
-    pub struct Plan {
-        pub wanted: Vec<Want>,
+    pub struct DependencyPlan {
+        pub wanted: Vec<DownloadRequest>,
         pub held: Vec<String>,
         pub unresolved: Vec<String>,
         pub dropped: Vec<String>,
@@ -46562,7 +46615,7 @@ pub mod maven {
     }
 
     #[derive(Clone, Debug, PartialEq, Eq)]
-    pub struct Need {
+    pub struct DependencyRequest {
         pub coordinate: Coordinate,
         pub strictly: bool,
         pub excluded: Vec<(String, String)>,
@@ -46572,7 +46625,7 @@ pub mod maven {
     pub struct Pom {
         pub packaging: String,
         pub parent: Option<Coordinate>,
-        pub needs: Vec<Need>,
+        pub needs: Vec<DependencyRequest>,
         pub managed: Vec<Coordinate>,
         pub imported: Vec<Coordinate>,
         pub relocated: Option<Coordinate>,
@@ -46581,9 +46634,9 @@ pub mod maven {
     }
 
     #[derive(Clone, Debug, Default)]
-    pub struct Described {
+    pub struct PomDescription {
         pub kind: String,
-        pub needs: Vec<Need>,
+        pub needs: Vec<DependencyRequest>,
         pub aligned: Vec<Coordinate>,
         pub moved: Option<Coordinate>,
     }
@@ -46690,8 +46743,8 @@ pub mod maven {
     fn carried(
         held: &crate::xml::Element,
         known: &std::collections::BTreeMap<String, String>,
-    ) -> Vec<Need> {
-        let mut out: Vec<Need> = Vec::new();
+    ) -> Vec<DependencyRequest> {
+        let mut out: Vec<DependencyRequest> = Vec::new();
         for one in held.children_named("dependency") {
             let scope = child(one, "scope").unwrap_or_else(|| "compile".to_string());
             let optional = child(one, "optional").unwrap_or_default() == "true";
@@ -46727,7 +46780,7 @@ pub mod maven {
                 })
                 .unwrap_or_default();
             if !out.iter().any(|held| held.coordinate == found) {
-                out.push(Need {
+                out.push(DependencyRequest {
                     coordinate: found,
                     strictly: false,
                     excluded,
@@ -46737,7 +46790,7 @@ pub mod maven {
         out
     }
 
-    pub fn read_module(text: &str) -> Option<Described> {
+    pub fn read_module(text: &str) -> Option<PomDescription> {
         use crate::json::Json;
         let held = crate::json::read(text)?;
         let variants = held.get("variants")?.list()?;
@@ -46780,7 +46833,7 @@ pub mod maven {
             }
         }
         let (_, chosen) = best?;
-        let mut out = Described::default();
+        let mut out = PomDescription::default();
         if let Some(elsewhere) = chosen.get("available-at") {
             out.moved = Coordinate::parse(&format!(
                 "{}:{}:{}",
@@ -46825,7 +46878,7 @@ pub mod maven {
         Some(out)
     }
 
-    fn module_need(one: &crate::json::Json) -> Option<Need> {
+    fn module_need(one: &crate::json::Json) -> Option<DependencyRequest> {
         use crate::json::Json;
         let group = one.get("group")?.text()?;
         let module = one.get("module")?.text()?;
@@ -46856,7 +46909,7 @@ pub mod maven {
                 )
             })
             .collect();
-        Some(Need {
+        Some(DependencyRequest {
             coordinate,
             strictly,
             excluded,
@@ -46947,15 +47000,15 @@ pub mod maven {
         Ordering::Equal
     }
 
-    struct Looked {
-        described: std::collections::BTreeMap<String, Option<Described>>,
+    struct PomLookup {
+        described: std::collections::BTreeMap<String, Option<PomDescription>>,
         missing: Vec<(Coordinate, &'static str)>,
         unresolved: Vec<String>,
     }
 
     pub const OLD_SUPPORT_GROUP: &str = "com.android.support";
 
-    impl Looked {
+    impl PomLookup {
         fn record_missing(&mut self, one: &Coordinate, kind: &'static str) {
             if !self
                 .missing
@@ -47006,7 +47059,7 @@ pub mod maven {
             Some(held)
         }
 
-        fn describe(&mut self, root: &str, one: &Coordinate) -> Option<Described> {
+        fn describe(&mut self, root: &str, one: &Coordinate) -> Option<PomDescription> {
             let key = one.text();
             if let Some(found) = self.described.get(&key) {
                 return found.clone();
@@ -47016,15 +47069,15 @@ pub mod maven {
             found
         }
 
-        fn lookup_description(&mut self, root: &str, one: &Coordinate) -> Option<Described> {
+        fn lookup_description(&mut self, root: &str, one: &Coordinate) -> Option<PomDescription> {
             if !pom_path(root, one).is_file() {
                 if let Some(kind) = [AAR, JAR]
                     .into_iter()
                     .find(|kind| library_path(root, one, kind).is_file())
                 {
-                    return Some(Described {
+                    return Some(PomDescription {
                         kind: kind.to_string(),
-                        ..Described::default()
+                        ..PomDescription::default()
                     });
                 }
             }
@@ -47045,9 +47098,9 @@ pub mod maven {
                 }
             }
             if let Some(moved) = pom.relocated {
-                return Some(Described {
+                return Some(PomDescription {
                     moved: Some(moved),
-                    ..Described::default()
+                    ..PomDescription::default()
                 });
             }
             let mut needs = Vec::new();
@@ -47072,10 +47125,10 @@ pub mod maven {
                 AAR => AAR.to_string(),
                 _ => JAR.to_string(),
             };
-            Some(Described {
+            Some(PomDescription {
                 kind,
                 needs,
-                ..Described::default()
+                ..PomDescription::default()
             })
         }
     }
@@ -47094,8 +47147,8 @@ pub mod maven {
         pub rounds: usize,
     }
 
-    pub fn resolve(root: &str, roots: &[Need]) -> Resolved {
-        let mut looked = Looked {
+    pub fn resolve(root: &str, roots: &[DependencyRequest]) -> Resolved {
+        let mut looked = PomLookup {
             described: std::collections::BTreeMap::new(),
             missing: Vec::new(),
             unresolved: Vec::new(),
@@ -47112,7 +47165,8 @@ pub mod maven {
             let mut aligned: Vec<Coordinate> = Vec::new();
             let mut walked: Vec<String> = Vec::new();
             let mut reached: Vec<(Coordinate, String)> = Vec::new();
-            let mut waiting: std::collections::VecDeque<Need> = roots.iter().cloned().collect();
+            let mut waiting: std::collections::VecDeque<DependencyRequest> =
+                roots.iter().cloned().collect();
             while let Some(need) = waiting.pop_front() {
                 let named = need.coordinate.named();
                 asked
@@ -47134,7 +47188,7 @@ pub mod maven {
                     continue;
                 };
                 if let Some(moved) = described.moved {
-                    waiting.push_back(Need {
+                    waiting.push_back(DependencyRequest {
                         coordinate: moved,
                         strictly: false,
                         excluded: need.excluded.clone(),
@@ -47229,17 +47283,17 @@ pub mod maven {
         }
     }
 
-    pub type Roots = (Vec<Need>, Vec<String>);
+    pub type Roots = (Vec<DependencyRequest>, Vec<String>);
 
     pub fn root_dependencies(root: &str) -> Result<Option<Roots>, Diagnostic> {
         let Some(settings) = crate::settings::read_settings(root)? else {
             return Ok(None);
         };
-        let mut roots: Vec<Need> = Vec::new();
+        let mut roots: Vec<DependencyRequest> = Vec::new();
         let mut unresolved = Vec::new();
         let mut managed: Vec<Coordinate> = Vec::new();
         let mut waiting_for_a_bill = false;
-        let mut looked = Looked {
+        let mut looked = PomLookup {
             described: std::collections::BTreeMap::new(),
             missing: Vec::new(),
             unresolved: Vec::new(),
@@ -47260,7 +47314,7 @@ pub mod maven {
                 Some(found) => managed.extend(found.managed),
                 None => {
                     waiting_for_a_bill = true;
-                    roots.push(Need {
+                    roots.push(DependencyRequest {
                         coordinate: bill,
                         strictly: false,
                         excluded: Vec::new(),
@@ -47298,7 +47352,7 @@ pub mod maven {
                 continue;
             }
             if !roots.iter().any(|held| held.coordinate == found) {
-                roots.push(Need {
+                roots.push(DependencyRequest {
                     coordinate: found,
                     strictly: false,
                     excluded: one
@@ -47319,7 +47373,7 @@ pub mod maven {
             .any(|held| held.coordinate.named() == "org.jetbrains.kotlin:kotlin-stdlib");
         if writes_kotlin && !named_already {
             if let Some(found) = Coordinate::parse(KOTLIN_STANDARD_LIBRARY) {
-                roots.push(Need {
+                roots.push(DependencyRequest {
                     coordinate: found,
                     strictly: false,
                     excluded: Vec::new(),
@@ -47348,8 +47402,8 @@ pub mod maven {
         out
     }
 
-    pub fn plan(root: &str) -> Result<Plan, Diagnostic> {
-        let mut out = Plan::default();
+    pub fn plan(root: &str) -> Result<DependencyPlan, Diagnostic> {
+        let mut out = DependencyPlan::default();
         let extra = crate::settings::read_settings(root)
             .ok()
             .flatten()
@@ -47365,7 +47419,7 @@ pub mod maven {
                 out.held.push(one.text());
                 continue;
             }
-            out.wanted.push(Want {
+            out.wanted.push(DownloadRequest {
                 coordinate: one.text(),
                 kind: JAR.to_string(),
                 urls: one.urls_in(JAR, &extra),
@@ -47379,7 +47433,7 @@ pub mod maven {
 
         for (one, kind) in &resolved.missing {
             let file = one.stored(kind);
-            out.wanted.push(Want {
+            out.wanted.push(DownloadRequest {
                 coordinate: one.text(),
                 kind: kind.to_string(),
                 urls: one.urls_in(kind, &extra),
@@ -47407,7 +47461,7 @@ pub mod maven {
                 out.held.push(one.text());
                 continue;
             }
-            out.wanted.push(Want {
+            out.wanted.push(DownloadRequest {
                 coordinate: one.text(),
                 kind: kind.to_string(),
                 urls: one.urls_in(kind, &extra),
@@ -47438,7 +47492,7 @@ pub mod maven {
         )
     }
 
-    pub fn write_json(plan: &Plan, w: &mut crate::json::Writer) {
+    pub fn write_json(plan: &DependencyPlan, w: &mut crate::json::Writer) {
         w.field_bool("done", plan.done);
         w.field_u64("rounds", plan.rounds as u64);
         w.begin_array(Some("wanted"));
@@ -48294,13 +48348,13 @@ pub mod scaffold {
     }
 
     #[derive(Clone, Debug)]
-    pub struct Created {
+    pub struct CreatedProject {
         pub root: String,
         pub folders: Vec<String>,
         pub files: Vec<String>,
     }
 
-    impl Created {
+    impl CreatedProject {
         pub fn write_json(&self, w: &mut Writer, key: &str) {
             w.begin_object(Some(key));
             w.field_str("root", &self.root);
@@ -48318,7 +48372,7 @@ pub mod scaffold {
         }
     }
 
-    pub fn create(root: &str, spec: &Spec) -> Result<Created, Diagnostic> {
+    pub fn create(root: &str, spec: &Spec) -> Result<CreatedProject, Diagnostic> {
         spec.validate()?;
         let base = std::path::Path::new(root);
         if base.join("AndroidManifest.xml").exists() {
@@ -48434,7 +48488,7 @@ pub mod scaffold {
 
         generate_launcher_icon(root, &spec.package)?;
 
-        Ok(Created {
+        Ok(CreatedProject {
             root: root.to_string(),
             folders,
             files,
@@ -48529,13 +48583,13 @@ pub mod scaffold {
     }
 
     #[derive(Clone, Debug)]
-    pub struct Supplied {
+    pub struct ProvidedFile {
         pub folder: String,
         pub name: String,
         pub bytes: Vec<u8>,
     }
 
-    pub fn launcher_files(root: &str) -> Vec<Supplied> {
+    pub fn launcher_files(root: &str) -> Vec<ProvidedFile> {
         let base = format!("{}/{RES_FOLDER}", root.trim_end_matches('/'));
         let mut found = Vec::new();
         for (folder, file) in crate::image::launcher_files_expected() {
@@ -48551,7 +48605,7 @@ pub mod scaffold {
             } else if crate::image::read_png(&bytes).is_err() {
                 continue;
             }
-            found.push(Supplied {
+            found.push(ProvidedFile {
                 folder,
                 name: if drawn {
                     file
@@ -48701,7 +48755,7 @@ pub mod scaffold {
         }
     }
 
-    pub fn resource_files(root: &str) -> Vec<Supplied> {
+    pub fn resource_files(root: &str) -> Vec<ProvidedFile> {
         let base = format!("{}/{RES_FOLDER}", root.trim_end_matches('/'));
         let mut found = Vec::new();
         let Ok(entries) = std::fs::read_dir(&base) else {
@@ -48731,7 +48785,7 @@ pub mod scaffold {
                 let Ok(bytes) = std::fs::read(&path) else {
                     continue;
                 };
-                found.push(Supplied {
+                found.push(ProvidedFile {
                     folder: folder.clone(),
                     name: name.to_string(),
                     bytes,
@@ -52599,7 +52653,7 @@ pub mod workspace {
     }
 
     #[derive(Clone, Debug, Default)]
-    pub struct Found {
+    pub struct SearchResults {
         pub matches: Vec<Match>,
         pub files_searched: usize,
         pub files_too_large: usize,
@@ -52608,7 +52662,7 @@ pub mod workspace {
         pub stopped_early: bool,
     }
 
-    impl Found {
+    impl SearchResults {
         pub fn write_json(&self, w: &mut Writer, key: &str) {
             w.begin_object(Some(key));
             w.field_u64("matches", self.matches.len() as u64);
@@ -52675,7 +52729,7 @@ pub mod workspace {
         needle: &str,
         sensitive: bool,
         whole_word: bool,
-    ) -> Result<Found, Diagnostic> {
+    ) -> Result<SearchResults, Diagnostic> {
         if needle.is_empty() {
             return Err(fail("EW160", "A search needs something to look for."));
         }
@@ -52687,7 +52741,7 @@ pub mod workspace {
         }
 
         let entries = tree(root)?;
-        let mut found = Found::default();
+        let mut found = SearchResults::default();
         let wanted = needle.as_bytes();
         let mut at = Vec::new();
 
@@ -52820,7 +52874,7 @@ pub mod workspace {
     pub const MOST_UNPACKED_BYTES: u64 = 512 * 1024 * 1024;
 
     #[derive(Clone, Debug, Default, PartialEq, Eq)]
-    pub struct Unpacked {
+    pub struct ExtractionSummary {
         pub files: u64,
         pub folders: u64,
         pub bytes: u64,
@@ -52873,7 +52927,11 @@ pub mod workspace {
         first.unwrap_or("").to_string()
     }
 
-    pub fn unpack(archive_path: &str, into: &str, password: &str) -> Result<Unpacked, Diagnostic> {
+    pub fn unpack(
+        archive_path: &str,
+        into: &str,
+        password: &str,
+    ) -> Result<ExtractionSummary, Diagnostic> {
         let bytes = std::fs::read(archive_path).map_err(|why| {
             fail("EW170", "That archive could not be read.")
                 .with_context(format!("Path: {archive_path}"))
@@ -52904,9 +52962,9 @@ pub mod workspace {
                 .with_context(format!("Reason: {why}"))
         })?;
 
-        let mut out = Unpacked {
+        let mut out = ExtractionSummary {
             stripped: stripped.clone(),
-            ..Unpacked::default()
+            ..ExtractionSummary::default()
         };
         let mut had_settings = false;
         for entry in archive.entries() {
@@ -53221,7 +53279,7 @@ pub mod workspace {
     pub const BUNDLE_SUFFIX: &str = "aab";
 
     #[derive(Clone, Debug)]
-    pub struct Built {
+    pub struct BuiltPackage {
         pub name: String,
         pub path: String,
         pub folder: String,
@@ -53230,7 +53288,7 @@ pub mod workspace {
         pub bundle: bool,
     }
 
-    impl Built {
+    impl BuiltPackage {
         pub fn write_json(&self, w: &mut Writer) {
             w.begin_object(None);
             w.field_str("name", &self.name);
@@ -53247,7 +53305,7 @@ pub mod workspace {
 
     const OUTPUT_DEPTH: usize = 3;
 
-    fn built_at(path: &std::path::Path, under: &str) -> Option<Built> {
+    fn built_at(path: &std::path::Path, under: &str) -> Option<BuiltPackage> {
         let suffix = path.extension().and_then(|value| value.to_str())?;
         if suffix != PACKAGE_SUFFIX && suffix != BUNDLE_SUFFIX {
             return None;
@@ -53259,7 +53317,7 @@ pub mod workspace {
             .and_then(|when| when.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|elapsed| elapsed.as_secs() as i64)
             .unwrap_or(0);
-        Some(Built {
+        Some(BuiltPackage {
             name: path.file_name()?.to_str()?.to_string(),
             path: path.to_str()?.to_string(),
             folder: under.to_string(),
@@ -53269,7 +53327,12 @@ pub mod workspace {
         })
     }
 
-    fn gather_built(here: &std::path::Path, under: &str, left: usize, found: &mut Vec<Built>) {
+    fn gather_built(
+        here: &std::path::Path,
+        under: &str,
+        left: usize,
+        found: &mut Vec<BuiltPackage>,
+    ) {
         let Ok(entries) = std::fs::read_dir(here) else {
             return;
         };
@@ -53294,7 +53357,7 @@ pub mod workspace {
         }
     }
 
-    pub fn list_built(directory: &str) -> Vec<Built> {
+    pub fn list_built(directory: &str) -> Vec<BuiltPackage> {
         let mut found = Vec::new();
         gather_built(
             std::path::Path::new(directory),
@@ -55051,13 +55114,13 @@ pub mod keystore {
         }
     }
 
-    pub struct Unlocked {
+    pub struct UnlockedKey {
         pub key: rsa::PrivateKey,
         pub certificate: Vec<u8>,
         pub record: Record,
     }
 
-    impl std::fmt::Debug for Unlocked {
+    impl std::fmt::Debug for UnlockedKey {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(
                 f,
@@ -55364,7 +55427,7 @@ pub mod keystore {
         found
     }
 
-    pub fn unlock(path: &str, password: &str) -> Result<Unlocked, Diagnostic> {
+    pub fn unlock(path: &str, password: &str) -> Result<UnlockedKey, Diagnostic> {
         let data = read_file(path)?;
         let container = parts(&data)?;
         let alias = container.alias.clone();
@@ -55441,7 +55504,7 @@ pub mod keystore {
             }
         }
 
-        Ok(Unlocked {
+        Ok(UnlockedKey {
             key,
             certificate: certificate.to_vec(),
             record,
@@ -55459,7 +55522,7 @@ pub mod keystore {
 }
 
 pub mod room {
-    use crate::compilers::java::{Annotated, Classpath, Expression, Shape, Unit, Written};
+    use crate::compilers::java::{Annotated, Classpath, Expression, Shape, TypeSyntax, Unit};
     use crate::diag::{Diagnostic, Severity};
     use crate::FailureClass;
 
@@ -55489,14 +55552,14 @@ pub mod room {
     }
 
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    pub enum Era {
+    pub enum LibraryFamily {
         Arch,
         AndroidX,
     }
 
     #[derive(Clone, Debug)]
     pub struct Flavor {
-        pub era: Era,
+        pub era: LibraryFamily,
         pub room: &'static str,
         pub sqlite: &'static str,
         pub lifecycle: &'static str,
@@ -55533,14 +55596,16 @@ pub mod room {
         !arities(classpath, class, name).is_empty()
     }
 
-    pub fn flavor(era: Era, classpath: &Classpath) -> Option<Flavor> {
+    pub fn flavor(era: LibraryFamily, classpath: &Classpath) -> Option<Flavor> {
         let (room, sqlite, lifecycle) = match era {
-            Era::Arch => (
+            LibraryFamily::Arch => (
                 "android.arch.persistence.room",
                 "android.arch.persistence.db",
                 "android.arch.lifecycle",
             ),
-            Era::AndroidX => ("androidx.room", "androidx.sqlite.db", "androidx.lifecycle"),
+            LibraryFamily::AndroidX => {
+                ("androidx.room", "androidx.sqlite.db", "androidx.lifecycle")
+            }
         };
         let slashed = room.replace('.', "/");
         let database = format!("{slashed}/RoomDatabase");
@@ -55710,18 +55775,18 @@ pub mod room {
         }
     }
 
-    fn base_of(written: &Written) -> Option<(Base, bool)> {
+    fn base_of(written: &TypeSyntax) -> Option<(Base, bool)> {
         Some(match written {
-            Written::Boolean => (Base::Bool, true),
-            Written::Byte => (Base::Byte, true),
-            Written::Short => (Base::Short, true),
-            Written::Int => (Base::Int, true),
-            Written::Long => (Base::Long, true),
-            Written::Char => (Base::Char, true),
-            Written::Float => (Base::Float, true),
-            Written::Double => (Base::Double, true),
-            Written::Array(inside) if **inside == Written::Byte => (Base::Blob, false),
-            Written::Named(name, _) => {
+            TypeSyntax::Boolean => (Base::Bool, true),
+            TypeSyntax::Byte => (Base::Byte, true),
+            TypeSyntax::Short => (Base::Short, true),
+            TypeSyntax::Int => (Base::Int, true),
+            TypeSyntax::Long => (Base::Long, true),
+            TypeSyntax::Char => (Base::Char, true),
+            TypeSyntax::Float => (Base::Float, true),
+            TypeSyntax::Double => (Base::Double, true),
+            TypeSyntax::Array(inside) if **inside == TypeSyntax::Byte => (Base::Blob, false),
+            TypeSyntax::Named(name, _) => {
                 let bare = name.strip_prefix("java.lang.").unwrap_or(name);
                 let base = match bare {
                     "Boolean" => Base::Bool,
@@ -55742,7 +55807,7 @@ pub mod room {
     }
 
     #[derive(Clone, Debug)]
-    struct Via {
+    struct JunctionLink {
         to: String,
         from: String,
         guard_to: bool,
@@ -55753,7 +55818,7 @@ pub mod room {
     struct Kind {
         base: Base,
         primitive: bool,
-        via: Option<Via>,
+        via: Option<JunctionLink>,
     }
 
     #[derive(Clone, Debug)]
@@ -56048,7 +56113,7 @@ pub mod room {
         }
     }
 
-    struct Found<'a> {
+    struct UnitIndex<'a> {
         units: Vec<&'a Unit>,
     }
 
@@ -56075,7 +56140,7 @@ pub mod room {
         }
     }
 
-    impl<'a> Found<'a> {
+    impl<'a> UnitIndex<'a> {
         fn find(&self, from: &Unit, name: &str) -> Option<&'a Unit> {
             let name = name.split('<').next().unwrap_or(name).trim();
             if let Some(one) = self.units.iter().find(|one| dotted(one) == name) {
@@ -56123,10 +56188,10 @@ pub mod room {
             None
         }
 
-        fn qualify(&self, from: &Unit, written: &Written) -> String {
+        fn qualify(&self, from: &Unit, written: &TypeSyntax) -> String {
             match written {
-                Written::Array(inside) => format!("{}[]", self.qualify(from, inside)),
-                Written::Named(name, arguments) => {
+                TypeSyntax::Array(inside) => format!("{}[]", self.qualify(from, inside)),
+                TypeSyntax::Named(name, arguments) => {
                     let head = match self.find(from, name) {
                         Some(one) => dotted(one),
                         None => {
@@ -56155,24 +56220,24 @@ pub mod room {
                         )
                     }
                 }
-                Written::Variable(_, bound) | Written::OwnVariable(_, bound) => {
+                TypeSyntax::Variable(_, bound) | TypeSyntax::OwnVariable(_, bound) => {
                     self.qualify(from, bound)
                 }
-                Written::Inferred => "Object".to_string(),
+                TypeSyntax::Inferred => "Object".to_string(),
                 other => primitive_text(other).to_string(),
             }
         }
 
-        fn supertype_chain(&self, unit: &'a Unit) -> Vec<(&'a Unit, Vec<Written>)> {
+        fn supertype_chain(&self, unit: &'a Unit) -> Vec<(&'a Unit, Vec<TypeSyntax>)> {
             let mut out = Vec::new();
-            let mut waiting: Vec<(&'a Unit, Vec<Written>)> = vec![(unit, Vec::new())];
+            let mut waiting: Vec<(&'a Unit, Vec<TypeSyntax>)> = vec![(unit, Vec::new())];
             while let Some((one, given)) = waiting.pop() {
                 if out.len() > 32 {
                     break;
                 }
                 out.push((one, given.clone()));
                 for written in &one.above {
-                    let Written::Named(name, arguments) = written else {
+                    let TypeSyntax::Named(name, arguments) = written else {
                         continue;
                     };
                     if let Some(found) = self.find(one, name) {
@@ -56214,29 +56279,29 @@ pub mod room {
         "boolean", "byte", "short", "int", "long", "char", "float", "double",
     ];
 
-    fn primitive_text(written: &Written) -> &'static str {
+    fn primitive_text(written: &TypeSyntax) -> &'static str {
         match written {
-            Written::Void => "void",
-            Written::Boolean => "boolean",
-            Written::Byte => "byte",
-            Written::Short => "short",
-            Written::Char => "char",
-            Written::Int => "int",
-            Written::Long => "long",
-            Written::Float => "float",
-            Written::Double => "double",
+            TypeSyntax::Void => "void",
+            TypeSyntax::Boolean => "boolean",
+            TypeSyntax::Byte => "byte",
+            TypeSyntax::Short => "short",
+            TypeSyntax::Char => "char",
+            TypeSyntax::Int => "int",
+            TypeSyntax::Long => "long",
+            TypeSyntax::Float => "float",
+            TypeSyntax::Double => "double",
             _ => "Object",
         }
     }
 
-    fn substitute(written: &Written, given: &[Written]) -> Written {
+    fn substitute(written: &TypeSyntax, given: &[TypeSyntax]) -> TypeSyntax {
         match written {
-            Written::Variable(at, bound) => given
+            TypeSyntax::Variable(at, bound) => given
                 .get(*at)
                 .cloned()
                 .unwrap_or_else(|| substitute(bound, given)),
-            Written::Array(inside) => Written::Array(Box::new(substitute(inside, given))),
-            Written::Named(name, arguments) => Written::Named(
+            TypeSyntax::Array(inside) => TypeSyntax::Array(Box::new(substitute(inside, given))),
+            TypeSyntax::Named(name, arguments) => TypeSyntax::Named(
                 name.clone(),
                 arguments.iter().map(|one| substitute(one, given)).collect(),
             ),
@@ -56251,7 +56316,7 @@ pub mod room {
         is_static: bool,
         takes: String,
         gives: String,
-        gives_written: Written,
+        gives_written: TypeSyntax,
     }
 
     fn converter_call(one: &Converter, argument: &str) -> String {
@@ -56267,7 +56332,7 @@ pub mod room {
     }
 
     struct Context<'a> {
-        found: Found<'a>,
+        found: UnitIndex<'a>,
         flavor: Flavor,
         converters: Vec<Converter>,
         enums: Vec<String>,
@@ -56280,7 +56345,7 @@ pub mod room {
     }
 
     impl<'a> Context<'a> {
-        fn kind(&self, from: &Unit, written: &Written) -> Option<Kind> {
+        fn kind(&self, from: &Unit, written: &TypeSyntax) -> Option<Kind> {
             if let Some((base, primitive)) = base_of(written) {
                 return Some(Kind {
                     base,
@@ -56293,7 +56358,7 @@ pub mod room {
                 return Some(Kind {
                     base: Base::Text,
                     primitive: false,
-                    via: Some(Via {
+                    via: Some(JunctionLink {
                         to: "{}.name()".to_string(),
                         from: format!("{java}.valueOf({{}})"),
                         guard_to: true,
@@ -56318,7 +56383,7 @@ pub mod room {
                 return Some(Kind {
                     base,
                     primitive: false,
-                    via: Some(Via {
+                    via: Some(JunctionLink {
                         to: converter_call(to, "{}"),
                         from: converter_call(back, "{}"),
                         guard_to: false,
@@ -56329,8 +56394,8 @@ pub mod room {
             None
         }
 
-        fn is_pojo(&self, from: &Unit, written: &Written) -> Option<&'a Unit> {
-            let Written::Named(name, _) = written else {
+        fn is_pojo(&self, from: &Unit, written: &TypeSyntax) -> Option<&'a Unit> {
+            let TypeSyntax::Named(name, _) = written else {
                 return None;
             };
             let found = self.found.find(from, name)?;
@@ -56628,7 +56693,7 @@ pub mod room {
                         match key.as_str() {
                             "entity" => {
                                 if let Expression::ClassLiteral {
-                                    of: Written::Named(name, _),
+                                    of: TypeSyntax::Named(name, _),
                                     ..
                                 } = said
                                 {
@@ -57103,24 +57168,28 @@ pub mod room {
     }
 
     #[derive(Clone, Debug)]
-    enum Many {
+    enum Cardinality {
         One,
         List,
         Array,
     }
 
-    fn many_of(context: &Context<'_>, from: &Unit, written: &Written) -> Option<(Many, Written)> {
+    fn many_of(
+        context: &Context<'_>,
+        from: &Unit,
+        written: &TypeSyntax,
+    ) -> Option<(Cardinality, TypeSyntax)> {
         match written {
-            Written::Array(inside) if **inside != Written::Byte => {
-                Some((Many::Array, (**inside).clone()))
+            TypeSyntax::Array(inside) if **inside != TypeSyntax::Byte => {
+                Some((Cardinality::Array, (**inside).clone()))
             }
-            Written::Named(name, arguments) if arguments.len() == 1 => {
+            TypeSyntax::Named(name, arguments) if arguments.len() == 1 => {
                 let bare = name.rsplit('.').next().unwrap_or(name);
                 if matches!(
                     bare,
                     "List" | "ArrayList" | "Collection" | "Iterable" | "Set" | "HashSet"
                 ) {
-                    Some((Many::List, arguments[0].clone()))
+                    Some((Cardinality::List, arguments[0].clone()))
                 } else {
                     let _ = (context, from);
                     None
@@ -57286,8 +57355,8 @@ pub mod room {
             for (written, name) in &method.parameters {
                 let (many, inner) = match many_of(self.context, from, written) {
                     Some(found) => found,
-                    None if method.variadic => (Many::Array, written.clone()),
-                    None => (Many::One, written.clone()),
+                    None if method.variadic => (Cardinality::Array, written.clone()),
+                    None => (Cardinality::One, written.clone()),
                 };
                 let java = self.context.found.qualify(from, &inner);
                 let Some(entity) = self.entity_for(&java) else {
@@ -57314,7 +57383,7 @@ pub mod room {
                     let returning = single && returns != "void";
                     let call = match (many, returning, returns.as_str()) {
                         (_, false, _) => format!("{adapter}.insert({name});"),
-                        (Many::One, true, _) => {
+                        (Cardinality::One, true, _) => {
                             format!("final long _result = {adapter}.insertAndReturnId({name});")
                         }
                         (_, true, "long[]") => format!(
@@ -57337,7 +57406,7 @@ pub mod room {
                 }
                 for (adapter, many, name) in &calls {
                     let call = match many {
-                        Many::One => format!("{adapter}.handle({name})"),
+                        Cardinality::One => format!("{adapter}.handle({name})"),
                         _ => format!("{adapter}.handleMultiple({name})"),
                     };
                     if counting {
@@ -57401,8 +57470,8 @@ pub mod room {
                 let (written, name) = &method.parameters[*at];
                 let many = if method.variadic && *at + 1 == method.parameters.len() {
                     match written {
-                        Written::Array(inside) => Some((Many::Array, (**inside).clone())),
-                        other => Some((Many::Array, other.clone())),
+                        TypeSyntax::Array(inside) => Some((Cardinality::Array, (**inside).clone())),
+                        other => Some((Cardinality::Array, other.clone())),
                     }
                 } else {
                     many_of(self.context, from, written)
@@ -57455,7 +57524,7 @@ pub mod room {
             &self,
             from: &Unit,
             method: &crate::compilers::java::Method,
-            written: &Written,
+            written: &TypeSyntax,
         ) -> Result<Kind, Diagnostic> {
             self.context.kind(from, written).ok_or_else(|| {
                 fail("EO002", "Room cannot turn this type into a column.")
@@ -57514,7 +57583,7 @@ pub mod room {
                             || many_of(self.context, from, written).is_some();
                         if is_many {
                             let size = match many_of(self.context, from, written) {
-                                Some((Many::List, _)) => format!("{name}.size()"),
+                                Some((Cardinality::List, _)) => format!("{name}.size()"),
                                 _ => format!("{name}.length"),
                             };
                             self.body.line(&format!(
@@ -57569,7 +57638,7 @@ pub mod room {
                 return Ok(());
             }
             let (live, shown) = match &method.returns {
-                Written::Named(name, arguments)
+                TypeSyntax::Named(name, arguments)
                     if arguments.len() == 1 && name.rsplit('.').next() == Some("LiveData") =>
                 {
                     (true, arguments[0].clone())
@@ -57702,16 +57771,16 @@ pub mod room {
             w: &mut Writer,
             from: &Unit,
             method: &crate::compilers::java::Method,
-            shown: &Written,
+            shown: &TypeSyntax,
             shown_java: &str,
         ) -> Result<(), Diagnostic> {
             let (many, element) = match shown {
-                Written::Array(inside) if **inside != Written::Byte => {
-                    (Many::Array, (**inside).clone())
+                TypeSyntax::Array(inside) if **inside != TypeSyntax::Byte => {
+                    (Cardinality::Array, (**inside).clone())
                 }
                 other => match many_of(self.context, from, other) {
                     Some(found) => found,
-                    None => (Many::One, other.clone()),
+                    None => (Cardinality::One, other.clone()),
                 },
             };
             let element_java = self.context.found.qualify(from, &element);
@@ -57749,7 +57818,7 @@ pub mod room {
                 }
             };
             match many {
-                Many::One => {
+                Cardinality::One => {
                     w.line(&format!("final {shown_java} _result;"));
                     w.line("if (_cursor.moveToFirst()) {");
                     row(w, "_result");
@@ -57762,7 +57831,7 @@ pub mod room {
                     w.line("}");
                     w.line("return _result;");
                 }
-                Many::List => {
+                Cardinality::List => {
                     let made = if shown_java.starts_with("java.util.Set")
                         || shown_java.starts_with("Set<")
                         || shown_java.starts_with("java.util.HashSet")
@@ -57780,7 +57849,7 @@ pub mod room {
                     w.line("}");
                     w.line("return _result;");
                 }
-                Many::Array => {
+                Cardinality::Array => {
                     let bare = element_java.split('<').next().unwrap_or(&element_java);
                     w.line(&format!(
                         "final {shown_java} _result = new {bare}[_cursor.getCount()];"
@@ -58004,7 +58073,7 @@ pub mod room {
         let takes_database = dao.methods.iter().any(|one| {
             one.constructor
                 && one.parameters.len() == 1
-                && matches!(&one.parameters[0].0, Written::Named(named, _) if named.ends_with("RoomDatabase"))
+                && matches!(&one.parameters[0].0, TypeSyntax::Named(named, _) if named.ends_with("RoomDatabase"))
         });
         let mut out = String::new();
         if let Some(package) = &dao.package {
@@ -58488,7 +58557,7 @@ pub mod room {
         w.out
     }
 
-    fn era_of(unit: &Unit) -> Option<Era> {
+    fn era_of(unit: &Unit) -> Option<LibraryFamily> {
         let mentions = |prefix: &str| {
             unit.imports.iter().any(|one| one.starts_with(prefix))
                 || unit
@@ -58497,9 +58566,9 @@ pub mod room {
                     .any(|one| one.name.starts_with(prefix))
         };
         if mentions("androidx.room") {
-            Some(Era::AndroidX)
+            Some(LibraryFamily::AndroidX)
         } else if mentions("android.arch.persistence.room") {
-            Some(Era::Arch)
+            Some(LibraryFamily::Arch)
         } else {
             None
         }
@@ -58518,7 +58587,7 @@ pub mod room {
                 parsed.extend(units);
             }
         }
-        let found = Found {
+        let found = UnitIndex {
             units: parsed.iter().collect(),
         };
         let databases: Vec<&Unit> = found
@@ -58546,7 +58615,7 @@ pub mod room {
                 .collect();
             let context = Context {
                 converters: found.converters(),
-                found: Found {
+                found: UnitIndex {
                     units: found.units.clone(),
                 },
                 flavor,
@@ -58564,7 +58633,7 @@ pub mod room {
                 .unwrap_or_default()
             {
                 let Expression::ClassLiteral {
-                    of: Written::Named(name, _),
+                    of: TypeSyntax::Named(name, _),
                     ..
                 } = one
                 else {
@@ -58588,7 +58657,7 @@ pub mod room {
                         continue;
                     }
                     let returns = substitute(&method.returns, &given);
-                    let Written::Named(name, _) = &returns else {
+                    let TypeSyntax::Named(name, _) = &returns else {
                         continue;
                     };
                     let Some(dao) = context.found.find(owner, name) else {
@@ -58668,18 +58737,18 @@ pub mod builder {
         pub references: Vec<crate::dexwrite::MethodRef>,
         pub identity: Identity,
         pub icon: Option<Vec<u8>>,
-        pub launcher: Vec<crate::scaffold::Supplied>,
+        pub launcher: Vec<crate::scaffold::ProvidedFile>,
         pub values: Vec<(String, String)>,
 
         pub values_names: Vec<String>,
 
-        pub resources: Vec<crate::scaffold::Supplied>,
+        pub resources: Vec<crate::scaffold::ProvidedFile>,
 
         pub library_values: Vec<(String, String)>,
 
         pub library_values_names: Vec<String>,
 
-        pub library_resources: Vec<crate::scaffold::Supplied>,
+        pub library_resources: Vec<crate::scaffold::ProvidedFile>,
 
         pub application_id: String,
 
@@ -58687,7 +58756,7 @@ pub mod builder {
 
         pub sealed: Option<String>,
 
-        pub debugger: Option<crate::debugger::Plan>,
+        pub debugger: Option<crate::debugger::DebuggerPlan>,
 
         pub shrink: bool,
 
@@ -58764,7 +58833,7 @@ pub mod builder {
         format!("res/{folder}/{name}.png")
     }
 
-    fn launcher_icons(project: &Project) -> Result<Vec<crate::scaffold::Supplied>, Diagnostic> {
+    fn launcher_icons(project: &Project) -> Result<Vec<crate::scaffold::ProvidedFile>, Diagnostic> {
         if !project.launcher.is_empty() {
             return Ok(project.launcher.clone());
         }
@@ -58773,7 +58842,7 @@ pub mod builder {
         };
         Ok(crate::image::launcher_set(source)?
             .into_iter()
-            .map(|made| crate::scaffold::Supplied {
+            .map(|made| crate::scaffold::ProvidedFile {
                 folder: made.folder,
                 name: made.name,
                 bytes: made.bytes,
@@ -58842,7 +58911,7 @@ pub mod builder {
         table.set_macros(&macros);
 
         let mut naming = Naming::new(project.seal_resources);
-        let mut compiling: Vec<(String, crate::scaffold::Supplied)> = Vec::new();
+        let mut compiling: Vec<(String, crate::scaffold::ProvidedFile)> = Vec::new();
         for made in &set {
             let entry = naming.of(entry_for(&made.folder, &made.name));
             let drawn = made.name.ends_with(".xml");
@@ -58954,7 +59023,7 @@ pub mod builder {
         if !project.library_values.is_empty() || !project.library_resources.is_empty() {
             let mut theirs =
                 crate::resources::Table::for_package(crate::resources::APPLICATION_PACKAGE_ID);
-            let mut carried: Vec<(String, crate::scaffold::Supplied)> = Vec::new();
+            let mut carried: Vec<(String, crate::scaffold::ProvidedFile)> = Vec::new();
             for held in &project.library_resources {
                 let entry = naming.of(format!("res/{}/{}", held.folder, held.name));
                 if files.iter().any(|(one, _)| *one == entry)
@@ -59885,12 +59954,12 @@ pub mod builder {
     pub const MOST_MENDING_FILES: usize = 4_000;
 
     #[derive(Clone, Debug, Default)]
-    pub struct Mended {
+    pub struct RepairResult {
         pub repairs: Vec<crate::compilers::java_fixer::Repair>,
         pub left: Option<Diagnostic>,
     }
 
-    impl Mended {
+    impl RepairResult {
         pub fn is_clean(&self) -> bool {
             self.left.is_none()
         }
@@ -59928,8 +59997,8 @@ pub mod builder {
         held.refusal
     }
 
-    pub fn available_repairs(root: &str) -> Mended {
-        let mut out = Mended::default();
+    pub fn available_repairs(root: &str) -> RepairResult {
+        let mut out = RepairResult::default();
         let scratch = std::env::temp_dir().join(format!(
             "builder-mend-{}-{}",
             std::process::id(),
@@ -60172,9 +60241,9 @@ public final class R {{
         out
     }
 
-    struct HeldFiles(Vec<(String, Vec<u8>)>);
+    struct InMemorySources(Vec<(String, Vec<u8>)>);
 
-    impl crate::compilers::cpp::SourceFiles for HeldFiles {
+    impl crate::compilers::cpp::SourceFiles for InMemorySources {
         fn read(&self, path: &str) -> Option<Vec<u8>> {
             self.0
                 .iter()
@@ -60310,7 +60379,7 @@ public final class R {{
         let invocation = crate::compilers::cpp::parse_compiler_arguments(&arguments);
         let mut held = vec![(name.to_string(), text.as_bytes().to_vec())];
         held.extend(headers.iter().cloned());
-        let files = HeldFiles(held);
+        let files = InMemorySources(held);
         let outcome = crate::compilers::cpp::Preprocessor::new(&files, invocation.preprocessor)
             .run(name, text.as_bytes().to_vec());
         if outcome.errors != 0 {
@@ -60989,12 +61058,12 @@ public final class R {{
     }
 
     #[derive(Default)]
-    pub struct Brought {
+    pub struct LibraryContents {
         pub values: Vec<(String, String)>,
 
         pub values_names: Vec<String>,
 
-        pub resources: Vec<crate::scaffold::Supplied>,
+        pub resources: Vec<crate::scaffold::ProvidedFile>,
         pub packages: Vec<String>,
         pub manifests: Vec<String>,
 
@@ -61014,7 +61083,7 @@ public final class R {{
     fn collect_native_libraries(
         path: &std::path::Path,
         abi: &str,
-        out: &mut Brought,
+        out: &mut LibraryContents,
     ) -> Result<(), Diagnostic> {
         let where_from = path.display().to_string();
         let bytes = std::fs::read(path).map_err(|why| {
@@ -61041,8 +61110,8 @@ public final class R {{
         Ok(())
     }
 
-    pub fn library_contents(root: &str) -> Result<Brought, Diagnostic> {
-        let mut out = Brought::default();
+    pub fn library_contents(root: &str) -> Result<LibraryContents, Diagnostic> {
+        let mut out = LibraryContents::default();
         for path in packaged_jars(root) {
             if let Some(abi) = native_abi_of(&path) {
                 collect_native_libraries(&path, abi, &mut out)?;
@@ -61124,7 +61193,7 @@ public final class R {{
                     out.values_names.push(format!("{library}: {}", entry.name));
                     continue;
                 }
-                out.resources.push(crate::scaffold::Supplied {
+                out.resources.push(crate::scaffold::ProvidedFile {
                     folder: folder.to_string(),
                     name: name.to_string(),
                     bytes: held,
@@ -61187,7 +61256,7 @@ public final class R {{
                         ));
                         continue;
                     }
-                    out.resources.push(crate::scaffold::Supplied {
+                    out.resources.push(crate::scaffold::ProvidedFile {
                         folder: named.clone(),
                         name,
                         bytes: held,
@@ -63379,7 +63448,7 @@ pub mod inspect {
     pub const MAX_PACKAGE_BYTES: u64 = 512 * 1024 * 1024;
 
     #[derive(Clone, Debug)]
-    pub struct Held {
+    pub struct ArchiveEntryInfo {
         pub name: String,
         pub stored: u64,
         pub actual: u64,
@@ -63390,7 +63459,7 @@ pub mod inspect {
     pub struct Package {
         pub bytes: u64,
         pub entries: usize,
-        pub held: Vec<Held>,
+        pub held: Vec<ArchiveEntryInfo>,
         pub package: String,
         pub version_name: String,
         pub version_code: String,
@@ -63503,10 +63572,10 @@ pub mod inspect {
             ..Package::default()
         };
 
-        let mut held: Vec<Held> = archive
+        let mut held: Vec<ArchiveEntryInfo> = archive
             .entries()
             .iter()
-            .map(|entry| Held {
+            .map(|entry| ArchiveEntryInfo {
                 name: entry.name.clone(),
                 stored: entry.compressed_size,
                 actual: entry.uncompressed_size,
@@ -64277,13 +64346,13 @@ pub mod depends {
     }
 
     #[derive(Clone, Debug, Default)]
-    pub struct Held {
+    pub struct DependencyFolder {
         pub folder: String,
         pub each: Vec<Dependency>,
         pub clashes: Vec<Clash>,
     }
 
-    impl Held {
+    impl DependencyFolder {
         pub fn write_json(&self, w: &mut Writer, key: &str) {
             w.begin_object(Some(key));
             w.field_str("folder", &self.folder);
@@ -64315,11 +64384,11 @@ pub mod depends {
 
     pub const MOST_PACKAGES: usize = 6;
 
-    pub fn read_dependencies(root: &str) -> Result<Held, Diagnostic> {
+    pub fn read_dependencies(root: &str) -> Result<DependencyFolder, Diagnostic> {
         let folder = std::path::Path::new(root).join(crate::scaffold::LIBRARY_FOLDER);
-        let mut out = Held {
+        let mut out = DependencyFolder {
             folder: crate::scaffold::LIBRARY_FOLDER.to_string(),
-            ..Held::default()
+            ..DependencyFolder::default()
         };
 
         let Ok(entries) = std::fs::read_dir(&folder) else {
@@ -64471,7 +64540,7 @@ pub mod shape {
     pub const DEEPEST: usize = 24;
 
     #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-    struct Standing {
+    struct NestingState {
         braces: usize,
         brackets: usize,
 
@@ -64480,7 +64549,7 @@ pub mod shape {
         text_block: bool,
     }
 
-    fn after(line: &str, mut held: Standing) -> Standing {
+    fn after(line: &str, mut held: NestingState) -> NestingState {
         let bytes = line.as_bytes();
         let mut at = 0usize;
         while at < bytes.len() {
@@ -64553,7 +64622,7 @@ pub mod shape {
         held
     }
 
-    fn indent_for(trimmed: &str, held: Standing) -> usize {
+    fn indent_for(trimmed: &str, held: NestingState) -> usize {
         let mut depth = held.braces;
 
         if trimmed.starts_with('}') || trimmed.starts_with(')') || trimmed.starts_with(']') {
@@ -64568,7 +64637,7 @@ pub mod shape {
 
     pub fn java(source: &str) -> String {
         let mut out = String::with_capacity(source.len() + source.len() / 8);
-        let mut held = Standing::default();
+        let mut held = NestingState::default();
 
         for line in source.lines() {
             let trimmed = line.trim();
@@ -65692,7 +65761,7 @@ pub mod git {
     }
 
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-    pub struct Written {
+    pub struct CheckoutSummary {
         pub files: u64,
         pub folders: u64,
         pub links: u64,
@@ -65715,7 +65784,7 @@ pub mod git {
         tree: &[u8; 20],
         into: &Path,
         depth: usize,
-        tally: &mut Written,
+        tally: &mut CheckoutSummary,
     ) -> Result<(), Diagnostic> {
         if depth > 64 {
             return Err(fail("EG119", "A tree nests deeper than this build walks."));
@@ -65838,7 +65907,11 @@ pub mod git {
     #[cfg(not(unix))]
     fn set_mode(_path: &Path, _mode: u32) {}
 
-    pub fn checkout(pack: &Pack, id: &[u8; 20], into: &Path) -> Result<Written, Diagnostic> {
+    pub fn checkout(
+        pack: &Pack,
+        id: &[u8; 20],
+        into: &Path,
+    ) -> Result<CheckoutSummary, Diagnostic> {
         let tree = tree_of(pack, id)?;
         std::fs::create_dir_all(into).map_err(|error| {
             fail(
@@ -65847,7 +65920,7 @@ pub mod git {
             )
             .with_context(format!("Kind: {error}"))
         })?;
-        let mut tally = Written::default();
+        let mut tally = CheckoutSummary::default();
         walk(pack, &tree, into, 0, &mut tally)?;
         Ok(tally)
     }
