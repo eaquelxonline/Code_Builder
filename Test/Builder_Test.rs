@@ -1304,6 +1304,54 @@ mod core {
     }
 
     #[test]
+    fn stray_text_inside_an_attribute_is_refused_in_a_project_and_ignored_in_a_library() {
+        let text = r#"<resources>
+    <declare-styleable name="Transition">
+        <attr name="transitionFlags">
+            <flag name="none" value="0"/>
+            />
+        </attr>
+    </declare-styleable>
+</resources>"#;
+        let (_, own) = values(text);
+        assert!(own.entries().iter().any(|one| one.code == "E9059"));
+
+        let mut table = ResourceTable::new();
+        let mut sink = Sink::new();
+        let read = table.read_values(
+            text,
+            "androidx.constraintlayout.constraintlayout-2.0.1.aar: res/values/values.xml",
+            &mut sink,
+        );
+        assert!(read, "{:?}", sink.entries());
+        assert!(!sink.has_blocking(), "{:?}", sink.entries());
+    }
+
+    #[test]
+    fn an_integer_resource_may_be_written_in_hexadecimal() {
+        let (table, sink) = values(
+            r#"<resources>
+    <integer name="text_color">0xFF000000</integer>
+    <integer name="moves">10</integer>
+</resources>"#,
+        );
+        assert!(!sink.has_blocking(), "{:?}", sink.entries());
+        let compiled = table.compile(&mut Sink::new()).expect("must compile");
+        let by_name = |name: &str| {
+            compiled
+                .entries()
+                .iter()
+                .find(|entry| entry.kind == ResourceKind::Integer && entry.name == name)
+                .map(|entry| entry.value.clone())
+        };
+        assert_eq!(
+            by_name("text_color"),
+            Some(ResourceValue::Integer(0xFF00_0000u32 as i32))
+        );
+        assert_eq!(by_name("moves"), Some(ResourceValue::Integer(10)));
+    }
+
+    #[test]
     fn a_values_file_becomes_resources() {
         let (table, sink) = values(
             r#"<resources>
@@ -16892,6 +16940,44 @@ public final class App extends Activity {
             crate::seal::authority("com.example.renamed"),
             "com.example.renamed.seal"
         );
+    }
+
+    #[test]
+    fn a_build_config_field_computed_from_the_clock_is_evaluated_when_read() {
+        let directory = temp_directory("builder-clock-gradle");
+        let root = directory.join("Clock");
+        std::fs::create_dir_all(root.join("app/src/main")).unwrap();
+        std::fs::write(root.join("settings.gradle"), "include ':app'\n").unwrap();
+        std::fs::write(
+            root.join("app/build.gradle"),
+            "apply plugin: 'com.android.application'\n\
+             android {\n    compileSdkVersion 34\n    defaultConfig {\n        \
+             applicationId \"com.example.clock\"\n        \
+             buildConfigField \"long\", \"TIMESTAMP\", System.currentTimeMillis() + \"L\"\n    }\n}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("app/src/main/AndroidManifest.xml"),
+            "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" \
+             package=\"com.example.clock\"><application /></manifest>",
+        )
+        .unwrap();
+
+        let found = crate::gradle::read(root.to_str().unwrap(), "app").expect("the build reads");
+        let stamp = found
+            .settings
+            .build_config
+            .iter()
+            .find(|one| one.name == "TIMESTAMP")
+            .expect("the field is read");
+        assert_eq!(stamp.kind, "long");
+        let digits = stamp.value.strip_suffix('L').expect("a long literal");
+        assert!(
+            digits.len() >= 13 && digits.bytes().all(|one| one.is_ascii_digit()),
+            "{}",
+            stamp.value
+        );
+        std::fs::remove_dir_all(&directory).ok();
     }
 
     #[test]
@@ -41067,6 +41153,118 @@ mod java_real_world {
         let made = compile_together(&sources, &Classpath::new())
             .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
         assert!(made.iter().any(|(name, _)| name == "a/Accessor.class"));
+    }
+
+    #[test]
+    fn a_field_of_the_enclosing_superclass_is_read_through_a_qualified_super() {
+        let names = compiles(
+            "package p; \
+             class Base { protected int owner = 7; } \
+             class Outer extends Base { \
+                 class Inner { int read() { return Outer.super.owner + 1; } } \
+             }",
+        );
+        assert!(names.iter().any(|name| name == "p/Outer$Inner.class"));
+    }
+
+    #[test]
+    fn an_inner_class_constructor_is_chosen_by_its_argument_types() {
+        let names = compiles(
+            "package p; \
+             class Pipe {} class Address {} class Signal {} \
+             class Provider { \
+                 class Transfer extends Thread { \
+                     Transfer(Pipe in, Address address, Signal signal) {} \
+                     Transfer(Address address, Pipe out, Signal signal) {} \
+                 } \
+                 void open(Address address, Signal signal) { \
+                     Pipe[] pipe = new Pipe[2]; \
+                     new Transfer(address, pipe[1], signal).start(); \
+                     new Transfer(pipe[0], address, signal).start(); \
+                 } \
+             }",
+        );
+        assert!(names.iter().any(|name| name == "p/Provider$Transfer.class"));
+    }
+
+    #[test]
+    fn a_nested_class_can_be_imported_statically() {
+        let sources = vec![
+            (
+                "p/Contract.java".to_string(),
+                "package p; public class Contract { \
+                     public static class Document { public static final String NAME = \"name\"; } \
+                     public static class Root { public static final String ID = \"id\"; } \
+                 }"
+                .to_string(),
+            ),
+            (
+                "q/Provider.java".to_string(),
+                "package q; import static p.Contract.Document; import static p.Contract.*; \
+                 public class Provider { \
+                     String column() { return Document.NAME; } \
+                     String root() { return Root.ID; } \
+                 }"
+                .to_string(),
+            ),
+        ];
+        let made = compile_together(&sources, &Classpath::new())
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        assert!(made.iter().any(|(name, _)| name == "q/Provider.class"));
+    }
+
+    #[test]
+    fn a_statically_imported_field_can_be_assigned_and_counted() {
+        let sources = vec![
+            (
+                "p/Shared.java".to_string(),
+                "package p; public class Shared { public static int counter; public static String label; }"
+                    .to_string(),
+            ),
+            (
+                "q/User.java".to_string(),
+                "package q; import static p.Shared.*; \
+                 public class User { \
+                     void enter() { counter++; counter += 2; label = \"in\"; } \
+                     void leave() { counter--; } \
+                     int seen() { return counter; } \
+                 }"
+                .to_string(),
+            ),
+        ];
+        let made = compile_together(&sources, &Classpath::new())
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        assert!(made.iter().any(|(name, _)| name == "q/User.class"));
+    }
+
+    #[test]
+    fn a_conditional_between_two_arrays_is_one_variable_arity_argument() {
+        let names = compiles(
+            "package p; \
+             class Texture { static Texture gradient(int... colors) { return new Texture(); } } \
+             class Sky { \
+                 private static final int[] DAY = {1, 2}; \
+                 private static final int[] NIGHT = {3, 4}; \
+                 private Texture texture; \
+                 Sky(boolean day) { texture = Texture.gradient(day ? DAY : NIGHT); } \
+             }",
+        );
+        assert!(names.iter().any(|name| name == "p/Sky.class"));
+    }
+
+    #[test]
+    fn an_array_used_as_a_monitor_answers_wait_and_notify() {
+        let names = compiles(
+            "package p; \
+             class Gate { \
+                 private static final Object[] WAIT = new Object[0]; \
+                 static void open() { synchronized (WAIT) { WAIT.notifyAll(); WAIT.notify(); } } \
+                 static void pause() throws InterruptedException { \
+                     synchronized (WAIT) { WAIT.wait(); WAIT.wait(10L); WAIT.wait(10L, 5); } \
+                 } \
+             }",
+        );
+        assert!(names.iter().any(|name| name == "p/Gate.class"));
     }
 
     #[test]

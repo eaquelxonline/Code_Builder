@@ -12369,7 +12369,7 @@ pub mod resources {
                     None
                 }
             },
-            Kind::Integer => match trimmed.parse::<i32>() {
+            Kind::Integer => match integer_resource_value(trimmed) {
                 Ok(number) => Some(Value::Integer(number)),
                 Err(_) => {
                     sink.emit(
@@ -12491,13 +12491,22 @@ pub mod resources {
 
     pub const BAG_ATTR_TYPE: u32 = 0x0100_0000;
 
+    pub const LIBRARY_ARCHIVE_MARK: &str = ".aar: ";
+
+    fn integer_resource_value(text: &str) -> Result<i32, std::num::ParseIntError> {
+        match text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+            Some(digits) => u32::from_str_radix(digits, 16).map(|bits| bits as i32),
+            None => text.parse::<i32>(),
+        }
+    }
+
     fn read_attr_value(
         name: &str,
         element: &Element,
         origin: &str,
         sink: &mut Sink,
     ) -> Option<(Value, Vec<String>)> {
-        if !element.text.trim().is_empty() {
+        if !element.text.trim().is_empty() && !origin.contains(LIBRARY_ARCHIVE_MARK) {
             sink.emit(
                 reject(
                     "E9059",
@@ -44466,6 +44475,15 @@ pub mod gradle {
         out
     }
 
+    pub const CURRENT_TIME_CALL: &str = "System.currentTimeMillis()";
+
+    fn milliseconds_now() -> u128 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_millis())
+            .unwrap_or(0)
+    }
+
     pub fn concatenated(
         expression: &str,
         scope: &std::collections::BTreeMap<String, String>,
@@ -45660,23 +45678,27 @@ pub mod gradle {
                     continue;
                 };
                 let mut held = literals(&said[keyword.len()..]);
-                if into == 1 {
-                    let parts = top_level_arguments(&said[keyword.len()..]);
-                    if let [kind, name, expression] = parts.as_slice() {
-                        if expression.contains('+') || unquoted(expression).is_none() {
-                            let mut scope = known.clone();
-                            for key in ["versionName", "versionCode", "applicationId"] {
-                                if let Some(text) = value_known(&default, key, &known) {
-                                    scope.insert(key.to_string(), text);
-                                }
+                let parts = top_level_arguments(&said[keyword.len()..]);
+                if let [kind, name, expression] = parts.as_slice() {
+                    if expression.contains('+') || unquoted(expression).is_none() {
+                        let mut scope = known.clone();
+                        for key in ["versionName", "versionCode", "applicationId"] {
+                            if let Some(text) = value_known(&default, key, &known) {
+                                scope.insert(key.to_string(), text);
                             }
-                            if let (Some(kind), Some(name), Some(text)) = (
-                                unquoted(kind),
-                                unquoted(name),
-                                concatenated(expression, &scope),
-                            ) {
-                                held = vec![kind, name, text];
-                            }
+                        }
+                        scope.insert(
+                            CURRENT_TIME_CALL.to_string(),
+                            milliseconds_now().to_string(),
+                        );
+                        match (
+                            unquoted(kind),
+                            unquoted(name),
+                            concatenated(expression, &scope),
+                        ) {
+                            (Some(kind), Some(name), Some(text)) => held = vec![kind, name, text],
+                            (Some(kind), Some(name), None) if into == 0 => held = vec![kind, name],
+                            _ => {}
                         }
                     }
                 }

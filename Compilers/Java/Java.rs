@@ -5125,6 +5125,21 @@ impl Parser {
                     self.take();
                     self.require_mark(".")?;
                     let name = self.require_name()?;
+                    if !self.is_mark("(") {
+                        let Some(named) = as_a_written_type(&found) else {
+                            return Err(at(
+                                "EJ122",
+                                self.line(),
+                                self.column(),
+                                "Only a class can be written in front of this.",
+                            ));
+                        };
+                        found = Expression::Field {
+                            of: Box::new(Expression::OuterThis { of: named, line }),
+                            name,
+                        };
+                        continue;
+                    }
                     let arguments = self.arguments()?;
                     found = Expression::Call {
                         on: Some(Box::new(found)),
@@ -9262,7 +9277,7 @@ fn resolve_named_within(
         }
         None
     };
-    for import in &unit.imports {
+    for import in unit.imports.iter().chain(&unit.static_imports) {
         if import.rsplit('.').next() == Some(name) {
             if let Some(internal) = nested_or_not(import) {
                 return Some(internal);
@@ -9277,7 +9292,7 @@ fn resolve_named_within(
     } else if exists(name) {
         return Some(name.to_string());
     }
-    for import in &unit.imports {
+    for import in unit.imports.iter().chain(&unit.static_imports) {
         if let Some(prefix) = import.strip_suffix(".*") {
             if let Some(candidate) = nested_or_not(&format!("{prefix}.{name}")) {
                 return Some(candidate);
@@ -14370,7 +14385,7 @@ impl Emitter<'_> {
         }
 
         let signature = if belongs.is_some() {
-            self.constructor_taking(&class, arguments.len() + 1)
+            self.inner_class_constructor(&class, arguments, line)?
         } else {
             self.signature_for(&class, "<init>", arguments, line)?
         };
@@ -14667,6 +14682,7 @@ impl Emitter<'_> {
 
         if given.len() == wanted.len() {
             if let Some(last) = given.last() {
+                self.expecting = None;
                 let peeked = self.type_of(last, line)?;
 
                 if self.is_subtype(&peeked, &Type::Array(element.clone())) {
@@ -15521,7 +15537,46 @@ impl Emitter<'_> {
         if candidates.len() <= 1 {
             return Ok(candidates.into_iter().next());
         }
+        let chosen = self.best_candidate(&candidates, arguments, line)?;
+        Ok(candidates.into_iter().nth(chosen))
+    }
 
+    fn inner_class_constructor(
+        &mut self,
+        class: &str,
+        arguments: &[Expression],
+        line: u32,
+    ) -> Result<Option<Signature>, Diagnostic> {
+        let declared = self.candidates(class, "<init>", arguments.len() + 1);
+        if declared.len() <= 1 {
+            return Ok(declared
+                .into_iter()
+                .next()
+                .or_else(|| self.constructor_taking(class, arguments.len() + 1)));
+        }
+        let visible: Vec<Signature> = declared
+            .iter()
+            .map(|one| {
+                let mut inner = one.clone();
+                if !inner.parameters.is_empty() {
+                    inner.parameters.remove(0);
+                }
+                if !inner.taken_stands_for.is_empty() {
+                    inner.taken_stands_for.remove(0);
+                }
+                inner
+            })
+            .collect();
+        let chosen = self.best_candidate(&visible, arguments, line)?;
+        Ok(declared.into_iter().nth(chosen))
+    }
+
+    fn best_candidate(
+        &mut self,
+        candidates: &[Signature],
+        arguments: &[Expression],
+        line: u32,
+    ) -> Result<usize, Diagnostic> {
         let mut anything = self.argument_flexibility_in_scope(arguments);
         let mut given = Vec::with_capacity(arguments.len());
         for (at, expression) in arguments.iter().enumerate() {
@@ -15545,21 +15600,21 @@ impl Emitter<'_> {
         }
 
         for round in 0..3 {
-            let mut best: Option<(u32, &Signature)> = None;
-            for candidate in &candidates {
+            let mut best: Option<(u32, usize)> = None;
+            for (at, candidate) in candidates.iter().enumerate() {
                 if !self.is_applicable_candidate(candidate, &given, &anything, round) {
                     continue;
                 }
                 let cost = self.conversion_cost(candidate, &given, &anything);
                 if best.is_none_or(|(held, _)| cost < held) {
-                    best = Some((cost, candidate));
+                    best = Some((cost, at));
                 }
             }
             if let Some((_, found)) = best {
-                return Ok(Some(found.clone()));
+                return Ok(found);
             }
         }
-        Ok(candidates.into_iter().next())
+        Ok(0)
     }
 
     fn resolved_return_type(
@@ -16397,6 +16452,18 @@ impl Emitter<'_> {
                         if held == Some(true) {
                             return self.assign_through_the_enclosing_instance(
                                 &holder, name, operator, value, line, wanted,
+                            );
+                        }
+                    }
+
+                    for owner in self.imported_statically(name) {
+                        let held = self
+                            .classpath
+                            .find_field(&owner, name)
+                            .map(|(_, (_, _, static_))| *static_);
+                        if held == Some(true) {
+                            return self.assign_through_the_enclosing_instance(
+                                &owner, name, operator, value, line, wanted,
                             );
                         }
                     }
@@ -20188,6 +20255,9 @@ impl Emitter<'_> {
                 "()Ljava/lang/Class;",
                 Type::Object("java/lang/Class".to_string(), Vec::new()),
             ),
+            ("notify", 0) | ("notifyAll", 0) | ("wait", 0) => ("()V", Type::Void),
+            ("wait", 1) => ("(J)V", Type::Void),
+            ("wait", 2) => ("(JI)V", Type::Void),
             _ => {
                 return Err(at(
                     "EJ226",
@@ -20202,7 +20272,10 @@ impl Emitter<'_> {
             }
         };
         if !arguments.is_empty() {
-            self.arguments_for(std::slice::from_ref(&object), arguments, line)?;
+            let parameters = read_descriptor(descriptor)
+                .map(|(parameters, _)| parameters)
+                .unwrap_or_default();
+            self.arguments_for(&parameters, arguments, line)?;
         }
         let index = self.pool.method(&owner, name, descriptor, false);
         self.op2(0xb6, index);
