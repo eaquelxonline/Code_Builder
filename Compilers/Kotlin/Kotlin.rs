@@ -24802,12 +24802,44 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         .collect();
                     let mut defaults = false;
                     let mut masks = Vec::new();
+                    let prepared = method.blocks.last().is_some_and(|held| !held.is_empty());
                     if let Some((candidate, plan)) = method.choose(constructor_candidates, &given) {
                         defaults = plan.defaults;
                         masks = mask_ints(&plan);
                         for (slot, parameter) in
                             plan.filled.iter().zip(candidate.info.parameters.iter())
                         {
+                            if let (true, ArgumentSlot::Given(at)) = (prepared, slot) {
+                                let source_argument = &entry.arguments[*at].value;
+                                let mut alone = self.method_for(cx.clone(), jvm, Some(jvm), None);
+                                alone.static_context = true;
+                                alone.spot = entry.spot;
+                                let wanted = erase_params(&parameter.ty);
+                                let value = alone.value(source_argument, Some(&parameter.ty))?;
+                                let j = alone.coerce(value, &wanted);
+                                let steps = alone.blocks.pop().unwrap_or_default();
+                                arguments.push(if steps.is_empty() {
+                                    j
+                                } else {
+                                    let helper = format!("entry${}${at}", entry.name);
+                                    let mut body = steps;
+                                    body.push(at_line(S::Return(Some(j)), entry.spot));
+                                    unit.methods.push(new_method(
+                                        &helper,
+                                        written(&wanted, true, &[], &[]),
+                                        Vec::new(),
+                                        Some(body),
+                                        java::Modifiers {
+                                            private: true,
+                                            static_: true,
+                                            ..java::Modifiers::default()
+                                        },
+                                        entry.spot.line,
+                                    ));
+                                    static_call(jvm, &helper, Vec::new())
+                                });
+                                continue;
+                            }
                             match slot {
                                 ArgumentSlot::Given(at) => {
                                     if let ArgValue::Ready(value) = &given[*at].value {
@@ -24847,7 +24879,9 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                         ));
                     }
                     let prelude = method.blocks.pop().unwrap_or_default();
-                    unit.static_setup.extend(prelude);
+                    if !prepared {
+                        unit.static_setup.extend(prelude);
+                    }
                     let body = match &entry.body {
                         Some(members) => {
                             Some(self.entry_body(&info, members, &cx, jvm, file, entry)?)

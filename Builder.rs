@@ -44553,6 +44553,44 @@ pub mod gradle {
         }
     }
 
+    pub fn abi_filters_in(text: &str) -> Vec<String> {
+        let android = merged(text, "android");
+        let default = merged(&android, "defaultConfig");
+        let release = merged(&merged(&android, "buildTypes"), "release");
+        let mut abis: Vec<String> = Vec::new();
+        for place in [&default, &release] {
+            for ndk in every_block(place, "ndk") {
+                for said in statements(&ndk) {
+                    if !said.trim_start().starts_with("abiFilters") {
+                        continue;
+                    }
+                    for one in literals(&said) {
+                        if crate::builder::PREBUILT_ABIS.contains(&one.as_str())
+                            && !abis.contains(&one)
+                        {
+                            abis.push(one);
+                        }
+                    }
+                }
+            }
+        }
+        abis
+    }
+
+    pub fn declared_abi_filters(root: &str) -> Vec<String> {
+        let here = std::path::Path::new(root);
+        let module = application_module(root).unwrap_or_default();
+        let folder = if module.is_empty() {
+            here.to_path_buf()
+        } else {
+            here.join(&module)
+        };
+        build_file(&folder)
+            .and_then(|path| text_of(&path))
+            .map(|text| abi_filters_in(&plain(&text)))
+            .unwrap_or_default()
+    }
+
     fn written_value(
         text: &str,
         key: &str,
@@ -46190,6 +46228,10 @@ pub mod gradle {
             found.settings.java.jvm = level_of(&held);
         }
 
+        let abis = abi_filters_in(&text);
+        if !abis.is_empty() {
+            found.settings.abis = abis;
+        }
         let outer = without(&android, "defaultConfig");
         if let Some(cmake) =
             block(&outer, "externalNativeBuild").and_then(|one| block(&one, "cmake"))
@@ -62047,6 +62089,21 @@ pub mod builder {
     }
 
     pub fn library_contents(root: &str) -> Result<LibraryContents, Diagnostic> {
+        let mut out = library_contents_for_every_abi(root)?;
+        let asked = crate::gradle::declared_abi_filters(root);
+        if !asked.is_empty() {
+            out.carried.retain(|(name, _)| {
+                let Some(rest) = name.strip_prefix("lib/") else {
+                    return true;
+                };
+                let abi = rest.split('/').next().unwrap_or_default();
+                !PREBUILT_ABIS.contains(&abi) || asked.iter().any(|one| one == abi)
+            });
+        }
+        Ok(out)
+    }
+
+    fn library_contents_for_every_abi(root: &str) -> Result<LibraryContents, Diagnostic> {
         let mut out = LibraryContents::default();
         for path in packaged_jars(root) {
             if let Some(abi) = native_abi_of(&path) {

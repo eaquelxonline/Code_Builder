@@ -19493,6 +19493,26 @@ impl Emitter<'_> {
                     .and_then(|path| resolve_named(self.classpath, self.unit, &path)),
             };
             let Some(owner) = named else {
+                if name == "new" || matches!(on.as_ref(), Expression::Super | Expression::This) {
+                    continue;
+                }
+                let outside = self.expecting.take();
+                let seen = self.type_of(on, 1);
+                self.expecting = outside;
+                let Ok(Type::Object(bound_owner, _)) = seen else {
+                    continue;
+                };
+                let mut counts: Vec<usize> = Vec::new();
+                for arity in 0..=8usize {
+                    if !self.classpath.find_methods(&bound_owner, name, arity).is_empty()
+                        && !counts.contains(&arity)
+                    {
+                        counts.push(arity);
+                    }
+                }
+                if !counts.is_empty() {
+                    said[at] = ArgumentFlexibility::Anywhere(counts);
+                }
                 continue;
             };
             let mut counts: Vec<usize> = Vec::new();
@@ -22630,6 +22650,23 @@ fn super_accessors_for_lambdas(unit: &Unit, classpath: &Classpath) -> Vec<Method
     made
 }
 
+fn returns_narrow(classpath: &Classpath, ours: &Type, theirs: &Type) -> bool {
+    match (ours, theirs) {
+        (_, Type::Object(above, _)) if above == "java/lang/Object" => true,
+        (Type::Object(below, _), Type::Object(above, _)) => {
+            below == above
+                || classpath.get(below).is_none()
+                || classpath.get(above).is_none()
+                || classpath.ancestors(below).iter().any(|one| one == above)
+        }
+        (Type::Array(below), Type::Array(above)) => {
+            below == above
+                || below.is_reference() && above.is_reference() && returns_narrow(classpath, below, above)
+        }
+        _ => false,
+    }
+}
+
 fn bridges_for(unit: &Unit, classpath: &Classpath) -> Vec<Method> {
     let resolve =
         |written: &TypeSyntax| -> Option<Type> { resolve_written(classpath, unit, written) };
@@ -22727,7 +22764,9 @@ fn bridges_for(unit: &Unit, classpath: &Classpath) -> Vec<Method> {
                                 && variable(at, theirs, ours))
                     })
                     && (returns == candidate.returns
-                        || (returns.is_reference() && candidate.returns.is_reference()));
+                        || (returns.is_reference()
+                            && candidate.returns.is_reference()
+                            && returns_narrow(classpath, &returns, &candidate.returns)));
                 if !fits {
                     continue;
                 }

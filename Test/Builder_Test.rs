@@ -17136,6 +17136,9 @@ android {
         targetSdk = 36
         versionCode = 4
         versionName = "1.4"
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
     buildTypes {
         named("release") {
@@ -17179,6 +17182,7 @@ android {
             "{values:?}"
         );
         assert!(found.settings.shrink, "the release block named by call is read");
+        assert_eq!(found.settings.abis, vec!["arm64-v8a"], "ndk abiFilters are read");
 
         std::fs::write(
             root.join("app/build.gradle"),
@@ -25072,6 +25076,36 @@ Viewbinding   = false
         crate::builder::compile_resources_for_test(&project, &mut sink)
             .expect("a lone @ or ? is text, the way aapt2 keeps it");
         assert!(!sink.has_blocking(), "{:?}", sink.entries());
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn prebuilt_native_libraries_follow_the_gradle_abi_filters() {
+        let directory = temp_directory("builder-abi-filter");
+        let root = directory.join("App");
+        let spec = "package=com.tr.abi;label=App;abis=arm64-v8a;minSdk=30;targetSdk=36;languages=java";
+        crate::scaffold::create(root.to_str().unwrap(), &crate::scaffold::Spec::parse(spec).unwrap())
+            .expect("the project is created");
+        let mut aar = crate::archive::Builder::new();
+        aar.add("AndroidManifest.xml", b"<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"com.some.native\"/>".to_vec()).unwrap();
+        aar.add("classes.jar", crate::archive::Builder::new().finish().unwrap()).unwrap();
+        aar.add("R.txt", Vec::new()).unwrap();
+        for abi in ["arm64-v8a", "armeabi-v7a", "x86", "x86_64"] {
+            aar.add(format!("jni/{abi}/libvision.so"), vec![0x7f, b'E', b'L', b'F']).unwrap();
+        }
+        let libraries = root.join(crate::scaffold::LIBRARY_FOLDER);
+        std::fs::create_dir_all(&libraries).unwrap();
+        std::fs::write(libraries.join("vision.aar"), aar.finish().unwrap()).unwrap();
+        let contents = crate::builder::library_contents(root.to_str().unwrap()).expect("the library reads");
+        assert_eq!(contents.carried.len(), 4, "without a Gradle abiFilters every processor is packed");
+        std::fs::write(
+            root.join("build.gradle.kts"),
+            "plugins { id(\"com.android.application\") }\nandroid {\n    defaultConfig {\n        ndk {\n            abiFilters += listOf(\"arm64-v8a\")\n        }\n    }\n}\n",
+        )
+        .unwrap();
+        let contents = crate::builder::library_contents(root.to_str().unwrap()).expect("the library reads");
+        let carried: Vec<&str> = contents.carried.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(carried, vec!["lib/arm64-v8a/libvision.so"], "{carried:?}");
         std::fs::remove_dir_all(&directory).ok();
     }
 
@@ -41772,6 +41806,53 @@ mod java_real_world {
     }
 
     #[test]
+    fn a_bound_method_reference_fits_only_the_overload_of_its_arity() {
+        let made = compile(
+            "package p; \
+             import java.util.*; \
+             public class Mapping { \
+                 interface r1<R, A> { R callback(A arg); } \
+                 interface r2<R, A, B> { R callback(A arg, B other); } \
+                 interface s1<A> { String callback(A arg); } \
+                 static <I, O> List<O> map(Collection<? extends I> in, r2<O, ? super I, Integer> op) { \
+                     List<O> out = new ArrayList<>(); int index = 0; \
+                     for (I one : in) { out.add(op.callback(one, index++)); } \
+                     return out; \
+                 } \
+                 static <I, O> List<O> map(Collection<? extends I> in, r1<O, ? super I> op) { return map(in, (v, i) -> op.callback(v)); } \
+                 static <T> List<String> names(Collection<T> items, s1<T> toString) { return map(items, toString::callback); } \
+                 public static void main(String[] args) { \
+                     System.out.println(names(Arrays.asList(1, 2, 3), one -> \"n\" + one)); \
+                 } \
+             }",
+            &Classpath::new(),
+        )
+        .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("java: no java 25 to run the classes");
+            return;
+        };
+        let directory =
+            std::env::temp_dir().join(format!("java-bound-arity-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(&directory)
+            .arg("p.Mapping")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "[n1, n2, n3]\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
     fn a_method_reference_picks_the_instance_method_when_the_static_one_does_not_fit() {
         let made = compile(
             "package p; \
@@ -42258,6 +42339,83 @@ mod kotlin_real_world {
         assert_eq!(
             String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
             "folder7 3\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
+    fn a_property_named_like_a_java_getter_without_override_keeps_its_own_type() {
+        let Some((path, library)) = super::kotlin::standard_library() else {
+            eprintln!("kotlin: no kotlin-stdlib to compile against");
+            return;
+        };
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("kotlin: no java 25 to run the classes");
+            return;
+        };
+        let kotlin = vec![(
+            "p/Board.kt".to_string(),
+            "package p\nimport q.Paint\nimport q.View\nclass Board : View() {\n    val background = Paint(\"cells\")\n    fun described(): String = background.name + \" \" + (this as View).getBackground().kind\n}\nfun main() { println(Board().described()) }\n".to_string(),
+        )];
+        let java_sources = vec![
+            ("q/Paint.java".to_string(), "package q;\npublic class Paint { public final String name; public Paint(String name) { this.name = name; } public String getName() { return name; } }\n".to_string()),
+            ("q/Drawable.java".to_string(), "package q;\npublic class Drawable { public String getKind() { return \"drawable\"; } }\n".to_string()),
+            ("q/View.java".to_string(), "package q;\npublic class View { public Drawable getBackground() { return new Drawable(); } }\n".to_string()),
+        ];
+        let made = super::kotlin::compiled(&kotlin, &java_sources, &library)
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let directory =
+            std::env::temp_dir().join(format!("kotlin-getter-shadow-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(format!("{}:{}", directory.display(), path.display()))
+            .arg("p.BoardKt")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "cells drawable\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
+    fn an_inline_call_in_enum_entries_and_defaults_keeps_its_result_in_scope() {
+        let Some((path, library)) = super::kotlin::standard_library() else {
+            eprintln!("kotlin: no kotlin-stdlib to compile against");
+            return;
+        };
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("kotlin: no java 25 to run the classes");
+            return;
+        };
+        let kotlin = vec![(
+            "p/A.kt".to_string(),
+            "package p\ninterface MenuItem { val id: Int }\nclass Play {\n    companion object {\n        enum class Items(\n            val title: Int,\n            val icon: Int = 0,\n            val shortcutKey: Char = Char(0),\n            val isAction: Boolean = false\n        ) : MenuItem {\n            SOUND(1, 2, Char(0), true),\n            RESET(3, 4, 'r'),\n            HINT(5);\n            override val id = ordinal + 1\n        }\n    }\n}\nfun main() { println(Play.Companion.Items.values().joinToString { \"${it.name}:${it.shortcutKey.code}:${it.id}:${it.isAction}\" }) }\n".to_string(),
+        )];
+        let made = super::kotlin::compiled(&kotlin, &[], &library)
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let directory =
+            std::env::temp_dir().join(format!("kotlin-enum-inline-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(format!("{}:{}", directory.display(), path.display()))
+            .arg("p.AKt")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "SOUND:0:1:true, RESET:114:2:false, HINT:0:3:false\n",
             "{}",
             String::from_utf8_lossy(&done.stderr)
         );
