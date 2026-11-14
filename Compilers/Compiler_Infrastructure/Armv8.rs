@@ -9329,6 +9329,11 @@ pub mod native {
             self.line(&format!("add {register}, {register}, :lo12:{symbol}"));
         }
 
+        fn imported_address(&mut self, symbol: &str, register: &str) {
+            self.line(&format!("adrp {register}, :got:{symbol}"));
+            self.line(&format!("ldr {register}, [{register}, :got_lo12:{symbol}]"));
+        }
+
         fn pending(&mut self, load: bool, register: &str) {
             self.line("adrp x16, __ir_pending");
             let mnemonic = if load { "ldr" } else { "str" };
@@ -9921,12 +9926,21 @@ pub mod native {
                 }
                 Operation::GlobalAddress(id) => {
                     let symbol = shared::global_symbol(self.module, id.index());
-                    self.global_address(&symbol, A);
+                    if self.module.globals[id.index()].linkage == Linkage::Import {
+                        self.imported_address(&symbol, A);
+                    } else {
+                        self.global_address(&symbol, A);
+                    }
                     self.store_result(A, result);
                 }
                 Operation::FunctionAddress(id) => {
                     let symbol = shared::function_symbol(self.module, *id);
-                    self.global_address(&symbol, A);
+                    let held = &self.module.functions[id.index()];
+                    if held.linkage == Linkage::Import || held.is_declaration() {
+                        self.imported_address(&symbol, A);
+                    } else {
+                        self.global_address(&symbol, A);
+                    }
                     self.store_result(A, result);
                 }
                 Operation::StringConstant(index) => {

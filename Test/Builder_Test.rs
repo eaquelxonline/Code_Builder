@@ -25109,6 +25109,380 @@ Viewbinding   = false
         std::fs::remove_dir_all(&directory).ok();
     }
 
+    fn joined_hex_bytes(parts: &[&str]) -> Vec<u8> {
+        let joined: String = parts.concat();
+        (0..joined.len())
+            .step_by(2)
+            .map(|at| u8::from_str_radix(&joined[at..at + 2], 16).unwrap())
+            .collect()
+    }
+
+    const XZ_TEXT_CRC64: &[&str] = &[
+            "fd377a585a000004e6d6b446020021011c00000010cf58cce051f909665d00319bc8b05776324f6a3bb29ec43055a3ef",
+            "1a1c78248bab4810785eac7a2bb3a5cec7019b47de52b9ab619abef1b568451502d1880d37a88f7d5ab362a113c4f1c6",
+            "4c96f0c4cd1dbf73688d9728331f4da0f39b2794cfcfbbd6daf0b4a87a1d07d77bd1193235be14df14765eb529902a7a",
+            "dbd6a3c9348050ece3cbab3acc2ce184aaba7118903672c9a650808cbe22d39a8e67430bd9d778a88a8b8ab3e64a972d",
+            "ec8e3c4a2d7647bcf9c41b9f2dc33e805c9d3bef3bf57f0a603484ec9030bf58e9370f8c32d37a4f62ea125cc949efac",
+            "032f83b7bffe6a2f211f063dabd9297b43105cf6cf67f4b17a6abcb5ae6a55861dd46b22045f38c0448fbf1672e93f8c",
+            "164fe013a96330b23450271540e39778fc94debd16e7070711a261fad15a550051c87c8f2684c343e9e3b469cd5d9726",
+            "74a1116653e49c108a2cec07936b19392c9de8ba9ae9c30debcf7e832f813b574b64b8f87e709d11a6b403b4d9ee81f7",
+            "6e7f4eb696a4e52d2a53dcdbbe0eda32d45618c2045c562f94925ebaa8f340a39d542f53027dc324615e63cd92e05456",
+            "148392bbb3177c57f20be3bc098c3f8cd5e0aeb0b46815b581d629b99cfd59d0aa0fdf676775bd83bdd531d28c7a343e",
+            "b9c1db51e072064757e94a348badc8fa07188ed96d0c466b3ee4ec15ec6ab84dd1325edaec3fd8c7f8de70ea4840b0c0",
+            "4ee5c86374d93c52f5b83007e289b6878b1eb3675a5520813b59c351de825923014cfa2d8f8f7c64217eb1c79f1f7fa6",
+            "70911e993395a12e7df9e29429418982f7edcead12e1002b40889d96bb81770afab25b29ceef2604116e53ce9b6f19f3",
+            "4a62cf50985e499c58133c263ac0efe10abe9b74e8ba4b57b2590158dd2d1562115732ee208cbdafa6728933557eef14",
+            "96dd65041b76e67af31ab28d44b86ab74183233755551c14b7772c30a984c6ebe3766c5e7a76d94f48a78bf9bbf6a561",
+            "9809ee5d3149a165f7e4db7de7db93c45156e8d85c04e88b9a089b269f3e9e3bfc545842d16d9075c00c4f3b70e6e7d5",
+            "343ea117823fcfece5544786ad6add42445d952efd04d4a95b53a611c84f3cdacf88cb557ae6bda7df0346f9d4e8a59e",
+            "c60553c4ae410290c6cc2bd50fc9e280677239a121eea0ed50833e2ec61a654e27671b2b841f18e9ecdd30c930f23273",
+            "45ec4b99deacd79d7ec166de56e04450f528b00433236baa09e230958532a5ddf25f3367242e338abd3676f249740b06",
+            "fee13941e769191be16c7d7ab875239b6d0239953065926194b3eee1b1758658b54a637230251835efc357e462494f8b",
+            "f3e8d61f2034848711ed67bd614c501f4a9e7dc114c6879e0c9e9d9ab40c117d166e68152adba46c417ce7d7b528c1a7",
+            "9015fd2ed61d99e4274f89a03c22b9813a69a8405c959d205a8238b0d22a5d4aa0456a2c62f63298c230480743d28a7e",
+            "877177c7a024aa2f4e75af104e413a14cebbf67411d4b1a5a149f1fd8452fd77f5d5c75809bfb28966dff08117e438d5",
+            "8f8af04a751153cc4c45996b426f867eb414690792f82428ff31a5bcb3565a7b44aa81d9746eddc95257c433b74a64ab",
+            "85e0be491570a28d88be7da86822404074e8b82d11bd14e592034b72a95b67da0d47a04aa1bff18cb0b4501572328a9b",
+            "2c35fe2e5a8ecce7837cbe7ea84d61aae4d4548f1f3729d7c02cba6c197967d635136adc42b5a79c69c8e1414b8e7e0b",
+            "c3ed4fe98c0ca621032bd55bd5502795b1a1c0484db7cf9ac01d5b277ba240d373b6944d799565c6488fad5d23b22ae2",
+            "1d82312a46bc38772ede5d5c4413158a625b77eb7a78c4903b0614bac516e8f4eaa3d5afe1c3f45043910d54cf61dd22",
+            "cd78712d3bd180dd5c62f8d35a796df703e7761b8eb55aa1c6f0632a2bc0b384663d06e992d281ab1905a0c3ab8bf5a5",
+            "5d7f5c2243b6acb874d818c57b8c16650cd8f20bb168dd136cf73c010b1ffeda3fc25602dc2e04d2594d2aae41816adb",
+            "e10fc5dbb1febc527b6cef39df3aa44874ef50367736a9f1e71aaa3147ebf4c35acdefb0ac64f5674fa1a1c5720e86f4",
+            "a18b6d0e64d3ab94d4c29b463714e5234e9986ab6ab5b65ffeb7ea41b691d4f17d22ea97db7bc7989d66f40bc8d7096d",
+            "bbda8c92da0c11d29c7dd264e033dcec9a435578928640b037de5bb5150b6cfe699ee4fa7cb3a3433363e480fe0d3b0c",
+            "04805cb95a1ad735791e6316c215d808bbf3ffbf2abb5ff6dc760863e96920847e13392d01c15ef37405ae20bcb54772",
+            "6d8c8acfe7bae283fa4c7366b9b6bf6ca3d95070179e7ad30cc6f51f813165dd59f03669552867e6dee4fe9449834565",
+            "6546ac5e004baa7a22771c382eef23d51960d75289ac3a314f56bf9e74483f2d21df263b1acf55dc8b0fdd488ff93e89",
+            "771ee2cfbb747a999b5950bdf5595f501913ba59d0af1ea4291b786ab48e6a5f97f40856c072a31da09eb7d775729ad8",
+            "c855c0e7cd4d5946792110527324888a34220f69a530239ffa52a836c47cd1a45a2a55fb9a193fa0b9c9b1b2b99d23da",
+            "35df98a3f2f732225af271ed3db0a317144ef4544cd9f713a1747b6c334addbe98a287b21039da9799a5bef804c3c84e",
+            "4e89ba5040196e4d410f988f55b60166c51fcfcc3beaa87906345473a4db36b84cd9cb643b573ed6fdcb9c672c60941e",
+            "9166ed3edc78931e11ed5ae447485e060c1eeed54270be61588f317362fae61bcf4aa51677c3e1af409658841134e8ef",
+            "0fc601c743fc125a0d1b74b687d286de851e36c5c97a1db7f78eb123d243a2afe4cd925ec7a1c050e681d059f8d93988",
+            "810a17faea7618d9599af803ecbc4b5b72e2ad21a5a032886393fd825b203ec556d8f9f6f65178f3e94bb1ce591f1b24",
+            "afce365e419889ed041e03d05968cb286e92fc03cb58633fee3eaa5fecaaa839c38fb737d3cc728f8e14731c6cae010e",
+            "9de0dd005124088f31f66bcc140d0258411ac4d97db7e2d5514981a8771c9783e219ef4fc2ba3852d6652fe4ada964c3",
+            "9481607d0e43bd3a2ab6568ae8f9c926dd9bb9c4ddef62b6b3d55f53bfc560e48607d0f881e0fe1ca4ea53e86da792f0",
+            "bec727754c5795e2c4d6e07c8f41bf7ace2a298f2cc068e5b0308425a1c528ba0005019c1e8b0ba2bce6670d4b82636f",
+            "542618cd0f42547f47f0b631f455a3a973a1c790a2a008543287747bc2b1c57e09e8accf5af602d862a10df0faa4babf",
+            "43eae10fc750e0da31f8f96540a69b42526599e4134f44ae239073530bbf87a37f952cec5af8a214d57f8d94c059f87c",
+            "940efaf8f93127b9e68da60224e22713d70a9d16a07440fb81641207fbe4ad7b3910ee36890b8c2f9ee988c51c287bd8",
+            "f1d9f2520d5a51ae62d0535813f0c32430aaddecb56606e19ecf6009d5659bd6a444ec023500000038b08b21546f1594",
+            "00018213faa30100e7a8939cb1c467fb020000000004595a",
+    ];
+
+    const XZ_NOISE_CRC32: &[&str] = &[
+            "fd377a585a0000016922de36020021010c0000008f98419c0102bbd43847861759f2f36c71ee57b180bdb0d4d6a0a073",
+            "820dadb2346dac83d8edc7207dc3300bf3b3d3ce8f422c8b29f8c7a33c8b423ff60f2b5b58691733a24f2322afb47cab",
+            "7b3cb43d0183b17122efa459b24c22e2b52496903d55a1d01e8c6cc2f02badaa2799fa76d6c467d4341db04a035c7c34",
+            "0b0fe5474d321cb34f72f61c29537177915c4a2b8e120b0277fdfac07c15bfb754fabd90431ba57df46f7d30c88b5202",
+            "5beb17a449a09defbba7b340a73e1423bf0706c665d6254b5e2ff6a386d8e5edae2b1ac8b8d44fbe9d53612fa5d35b51",
+            "3a5e228deb5ed6d4403d0e0a1b91cda0ebd1ffb467e70cf1377e6c7fbb28fe4c9a94a01424b03a292371a3f86616fa0a",
+            "d9707a3037b95f0008d79cdad5c9826c244812a90e83b56be356107002aaf4d32de7b92a604b0171cd90ac5991327815",
+            "8a5284756df888e8a0dd27f966f69b9e14cfcf0fb9ad549ba84c90926bf35e7ba8a5234cdd5787e2a207d93038adbd72",
+            "b01525a9945f8e94f16a5c873d907065421d3a2ef7e3338cbf1c38dcd640a6183087ab40b57d3a8d75398a92b21cbc83",
+            "e8969114d968ad12cc7022dd808c81b6d6c1f21da0fdf5b8831a75d4af648b2bf7f5319079c617235fc69e0e673c0c5f",
+            "0a03b398f436754c1eb5226de8e3169ffddf33901deabade5a2b5dbed757cdc3bcae02d3411f3d5f83bc86f25bb87d0b",
+            "d19a5a195b8c53cd9a1c08ece9ac3e415a31b17205d6fd94701dca057c1c12cc422f268dee4adfafab61d62496e04089",
+            "ffb0c2ce44f271030657fe267c807bdf08ccd609132e9ed1a5ad9964d779f728b1d872643adff59c84135c5487374fe4",
+            "21969f0b362bd15cba7754937763ef5a500155947b553a053f75e0fc9b0ba125baab244562451080fd435b91928795f4",
+            "23fdb208ea8fe7c518df33c66da292a2195cca48cbcb3cdfcbf024ae124df6c357bd5c82daa23e59df8cb767550fb456",
+            "ab52e2fdc87b8000e8f9a8840001d005bc0500004b74e4483e300d8b020000000001595a",
+    ];
+
+    const XZ_TEXT_SHA256: &[&str] = &[
+            "fd377a585a00000ae1fb0ca10200210116000000742fe5a3e051f909375d00319bc8b05776324f6a3bb29ec43055a3ef",
+            "1a1c78248bab4810785eac7a2bb3a5cec7019b47de52b9ab619abef1b568451502d1880d37a88f7d5ab362a113c4f1c6",
+            "4c96f0c4cd1dbf73688d9728331f4da0f39b2794cfcfbbd6daf0b4a87a1d07d77bd1193235be14df14765eb529902a7a",
+            "dbd6a3c9348050ece3cbab3acc2ce184aaba7118903672c9a650808cbe22d39a8e67430bd9d778a88a8b8ab3e64a972d",
+            "ec8e3c4a2d7647bcf9c41b9f2dc33e805c9d3bef3bf57f0a603484ec9030bf58e9370f8c32d37a4f62ea125cc949efac",
+            "032f83b7bffe6a2f211f063dabd9297b43105cf6cf67f4b17a6abcb5ae6a55861dd46b22045f38c0448fbf1672e93f8c",
+            "164fe013a96330b23450271540e39778fc94debd16e7070711a261fad15a550051c87c8f2684c343e9e3b469cd5d9726",
+            "74a1116653e49c108a2cec07936b19392c9de8ba9ae9c30debcf7e832f813b574b64b8f87e709d11a6b403b4d9ee81f7",
+            "6e7f4eb696a4e52d2a53dcdbbe0eda32d45618c2045c562f94925ebaa8f340a39d542f53027dc324615e63cd92e05456",
+            "148392bbb3177c57f20be3bc098c3f8cd5e0aeb0b46815b581d629b99cfd59d0aa0fdf676775bd83bdd531d28c7a343e",
+            "b9c1db51e072064757e94a348badc8fa07188ed96d0c466b3ee4ec15ec6ab84dd1325edaec3fd8c7f8de70ea4840b0c0",
+            "4ee5c86374d93c52f5b83007e289b6878b1eb3675a5520813b59c351de825923014cfa2d8f8f7c64217eb1c79f1f7fa6",
+            "70911e993395a12e7df9e29429418982f7edcead12e1002b40889d96bb81770afab25b29ceef2604116e53ce9b6f19f3",
+            "4a62cf50985e499c58133c263ac0efe10abe9b74e8ba4b57b2590158dd2d1562115732ee208cbdafa6728933557eef14",
+            "96dd65041b76e67af31ab28d44b86ab7418328128221fbcbba0ac225ca38ed2e684c26636aabf8357b684526e3ac09fc",
+            "da8faf58f1a9d8c481e09c1919d9d6c8752fb8dee4e51cb1220c17349c321a6c1f637533a0d9b90ca8b799b7bd315b73",
+            "6c8f72bec7dc6595d0bdc56a7529c42ce9db3ca5fc4fa0aa454ac2a26d675c358fc72609229fed282e71a15a50645775",
+            "931039e29fe646585b16557848c91a119e4facc30c734587af4ea0751fa71ecede5fa3713c817e246dd63b220c35a5ba",
+            "1ad081ad75464f36b0fdd456ac0620de673d0dc33a91ec4dbcc4acc8b538f98084d32b60a50b7013e2a45cdd01fe4e80",
+            "75f2589be3af3b9ba0c66a09ba5bef9cc2fcd1dc2e4c6758558ba15cec391cc67fc2615f101c6393736d8594d7c2085c",
+            "51d97008cbd99dad0b2d6cb7327bda6d2f8252fe960fb50ad6be8cfe707fbfe3500a37e3312a1a71c4af842721d86962",
+            "5c692c69524b499fa5e2f6ce181bbcad7b9b937b9fb4ae4fce1163fb80d2adee78f166376ee9a742a94f490b781a0822",
+            "ba3191725af1438681847a1ccd282fc5fb230a6c331542f80c0a3d3c800067ca4b23f42ec27242e80ba7f73c7cd1aeaa",
+            "6f4c1dc489042d249214719daf6d4ce069326c6c37a49d06ffbe4b66a2f0e071f382dab018e7b17d211fa7dbd6d22326",
+            "70ac5c5a5ce10343dcd2b8f77a5d03526604c6c4cca41fab47f24f63acdb7a7430424f180f5e695cb2651a6f06527a35",
+            "094bb9959b23a50e4d74c604a943d0f36d50feb90c3f474707bd8bbf1b0f2b98e65c5c08ec2c4faa3a5bddf9d2a7cac4",
+            "b5209b4aef718e269d90183dd015f4e83867c69bd92af0f3a829bed8b90966b7a21654cf532739277013e0224010b9e3",
+            "b4c9857d7e47b4b7009860c153c27469bb308f7719db8842dc43489cf1005cccd8c8067d4332ffb7a89a5e2cf84fb8d6",
+            "a73afab4587c7fc6f80f6eec8755290900e48471aa8a4e0a94c84c8654861092cb431569a4b82db0bcc75021463bb6e8",
+            "4b367068873d6895ed4c7b079a078404aa7b875914c6e9000c97a8ab7c2eeb0ccf2828f011c52ab1bf45e2794c937a4a",
+            "8c894dc22e73a66e71c81ff611ff82bd588d89e595a1645f292c2a18c6cea7fbad167ec3fffb77e0b62112c2ff59c859",
+            "3f812321b55a954902f1d4f59065588ad1c9ebd94dc128bfd049df55ae4dff85b837d8369ccd9624623c4328a3352896",
+            "13d66fbe5dba586268b9a18d34137468ac4649e6ea66d1e4ab8bc3531c9e4df5cf6bd4c6a62a34a60ceeaeff51ea9872",
+            "829f5df5e1db896d7b0a8e20883db3bb079ee52563bc47d7c96659e3a9622ad0f9027458838a4b71bc703b2ed54f1015",
+            "15d19fc1f52b843d683a6bfce2f174741754fd59dc3d3d1b5d81d4064cae9da0974ddd7a567a8074f9b2fb85c210e9ca",
+            "fe498b83330e046e6ba4f9c2f0b081ddfcd138c11b0386af29c314ce231266ab88e6032b84e531dc2135dac5c2b9ded5",
+            "f88b3ff6aef7e1b966e62bb97585da9832641b5fa8669a5e90cd6dfecd5b089e40d5aab93514676af1dcc284278c7ce8",
+            "405526226751045aa2f91fc56688c4fd4285619beac0d4a4f2ea609b3206da8ab6c520d25d02ebaf61da546c89f1080a",
+            "61d88d7ed2c398a084a6ffcf8122c830ac1b6db871f01e5ae4435a98069f129fc38762a1a58f8c5de0a63e04eb5ab90e",
+            "601acf268687571169c855a64537b27c08e249d88842c587f58b52cef16a62a92593bc82c621eca62035e307039f3686",
+            "068e14c2672f52254f6b91ffc2daf929408631cf6b908ad4502f1b010955b37336ea7cb924992b865b2a7bbee7fef4cb",
+            "5ddf3db03ceacde9bcbd603a69d60ba0a54ba7073234c9d0cacc9bf21752d6c97a9d7fc44d1df379fb59e00e62ea272d",
+            "6b91327572d503a9626ca337dd8b3127b324498eb6f78724db203792b976b387e4e954a9f42a58a945b3587276bd4f37",
+            "07099728fcfb84e5613c56759f02a6203515937e1f8e7f8a0a35bf6b85009a525840376c050ebe92968835e9563438d8",
+            "2e9006bc1fae406fee2484af57c6250f1a89dd71b1089f1403cd0ed43530a0f5d239e0e2dded79262c3057085a9ae013",
+            "9ac1a101b0c82b39c77e82905837b7999ea605eb99c423217b6676f873fd68af2a7633be794e6b675a6c1d60f8ae4d14",
+            "9c7e3d6e29f53de6a455ce241b112ac697f738c8345791c267424e8c6e6547146bee3ffd3038d783a8d6ae639e7862bd",
+            "12eb0d50d04dce5d5ecb63a2cefaa21c73737c45e2e94d2518e930b9fb3449287f1d0e07525a45a0ab42203752ee64ae",
+            "39bbb2ba6389b951ff2cb1e3ccead98c87f114483713a97b818d84cba10a876acda6a7c32f1bbc84af418d8e9aa2ac3c",
+            "e2a816092684c71098564e055847986136115ffc1a2baa150b6645dfead8cde6a41b4affbe680000e0f4f3b8317d7bec",
+            "4c522916251f28cdd4b8f01d4eacd2e7de7b173a96ccff450001eb12faa30100c5df088eb6e9df1c02000000000a595a",
+    ];
+
+    #[test]
+    fn xz_streams_unpack_the_way_the_reference_tool_packed_them() {
+        let text = joined_hex_bytes(XZ_TEXT_CRC64);
+        let noise = joined_hex_bytes(XZ_NOISE_CRC32);
+        let checked = joined_hex_bytes(XZ_TEXT_SHA256);
+        let plain = crate::xz::decompress(&text).expect("an LZMA2 stream with a CRC64 check unpacks");
+        assert_eq!(plain.len(), 20986);
+        assert_eq!(
+            crate::hash::sha256(&plain).to_hex(),
+            "e0f4f3b8317d7bec4c522916251f28cdd4b8f01d4eacd2e7de7b173a96ccff45"
+        );
+        let stored = crate::xz::decompress(&noise).expect("a stored chunk with a CRC32 check unpacks");
+        assert_eq!(
+            crate::hash::sha256(&stored).to_hex(),
+            "fc9a3c609b94834d76c82c4d57c1ba118032f122303cad1c6effa64eb09ffa54"
+        );
+        assert_eq!(
+            crate::xz::decompress(&checked).expect("a SHA-256 checked stream unpacks"),
+            plain
+        );
+        let mut both = text.clone();
+        both.extend_from_slice(&noise);
+        let joined = crate::xz::decompress(&both).expect("two streams one after the other unpack");
+        assert_eq!(joined.len(), plain.len() + stored.len());
+
+        let mut damaged = text.clone();
+        let middle = damaged.len() / 2;
+        damaged[middle] ^= 0x40;
+        assert!(crate::xz::decompress(&damaged).is_err(), "a flipped bit is caught");
+        assert!(crate::xz::decompress(&text[..text.len() - 20]).is_err(), "a cut stream is refused");
+        assert!(crate::xz::decompress(b"not xz at all").is_err());
+        assert_eq!(crate::xz::crc32(b"123456789"), 0xcbf4_3926);
+        assert_eq!(crate::xz::crc64(b"123456789"), 0x995d_c9bb_df19_39fa);
+    }
+
+    fn tar_header(path: &str, kind: u8, link: &str, size: usize) -> Vec<u8> {
+        let mut header = vec![0u8; 512];
+        header[..path.len()].copy_from_slice(path.as_bytes());
+        header[100..108].copy_from_slice(b"0000644\0");
+        header[124..136].copy_from_slice(format!("{size:011o}\0").as_bytes());
+        header[156] = kind;
+        header[157..157 + link.len()].copy_from_slice(link.as_bytes());
+        header[257..263].copy_from_slice(b"ustar\0");
+        header[148..156].copy_from_slice(b"        ");
+        let sum: usize = header.iter().map(|byte| usize::from(*byte)).sum();
+        header[148..156].copy_from_slice(format!("{sum:06o}\0 ").as_bytes());
+        header
+    }
+
+    #[test]
+    fn a_debian_package_opens_into_its_files() {
+        let mut tar = Vec::new();
+        let body = b"#define HELD 1\n";
+        tar.extend(tar_header("./usr/include/held.h", b'0', "", body.len()));
+        tar.extend_from_slice(body);
+        tar.resize(tar.len().div_ceil(512) * 512, 0);
+        tar.extend(tar_header("./usr/include/alias.h", b'2', "held.h", 0));
+        let long_name = format!("./usr/include/{}.h", "deep/".repeat(30));
+        tar.extend(tar_header("././@LongLink", b'L', "", long_name.len() + 1));
+        tar.extend_from_slice(long_name.as_bytes());
+        tar.push(0);
+        tar.resize(tar.len().div_ceil(512) * 512, 0);
+        tar.extend(tar_header("short", b'0', "", 2));
+        tar.extend_from_slice(b"ok");
+        tar.resize(tar.len().div_ceil(512) * 512, 0);
+        tar.extend(vec![0u8; 1024]);
+        let entries = crate::unix_archive::tar_entries(&tar).expect("the tar reads");
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0].path, "./usr/include/held.h");
+        assert_eq!(entries[0].data, body.to_vec());
+        assert_eq!((entries[1].kind, entries[1].link.as_str()), (b'2', "held.h"));
+        assert_eq!(entries[2].path, long_name);
+        let mut broken = tar.clone();
+        broken[10] ^= 1;
+        assert!(crate::unix_archive::tar_entries(&broken).is_err(), "a bad header checksum is refused");
+
+        let mut ar = b"!<arch>\n".to_vec();
+        for (name, data) in [("debian-binary", b"2.0\n".to_vec()), ("data.tar.xz", vec![1, 2, 3])] {
+            ar.extend(format!("{:<16}{:<12}{:<6}{:<6}{:<8}{:<10}`\n", name, 0, 0, 0, 100644, data.len()).as_bytes());
+            ar.extend_from_slice(&data);
+            if data.len() % 2 == 1 {
+                ar.push(b'\n');
+            }
+        }
+        let members = crate::unix_archive::ar_members(&ar).expect("the ar reads");
+        assert_eq!(members.len(), 2);
+        assert_eq!(members[1].0, "data.tar.xz");
+        assert_eq!(members[1].1, &[1, 2, 3]);
+        assert!(crate::unix_archive::ar_members(b"plain").is_err());
+    }
+
+    #[test]
+    fn cmake_targets_name_the_libraries_their_sources_and_links() {
+        let text = "cmake_minimum_required(VERSION 3.6)\nproject(MaterialFiles C)\n# a comment ( with a paren\nadd_library(hiddenapi SHARED\n        src/main/jni/hiddenapi.c)\nfind_library(LOG_LIBRARY log)\nset(SYSCALL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/main/jni/syscall.c)\nadd_library(syscall SHARED ${SYSCALL_SOURCES})\nadd_library(helpers STATIC src/main/jni/helpers.c)\nfile(GLOB EXTRA src/main/jni/extra/*.c)\ntarget_sources(syscall PRIVATE ${EXTRA})\ntarget_link_libraries(syscall PRIVATE ${LOG_LIBRARY} helpers android)\n";
+        let targets = crate::builder::cmake_targets(text);
+        assert_eq!(targets.len(), 3, "{targets:?}");
+        assert_eq!(targets[0].name, "hiddenapi");
+        assert_eq!(targets[0].files, vec!["src/main/jni/hiddenapi.c"]);
+        assert_eq!(targets[1].files, vec!["src/main/jni/syscall.c", "glob:src/main/jni/extra/*.c"]);
+        assert_eq!(targets[1].links, vec!["log", "helpers", "android"]);
+        assert!(!targets[2].shared);
+
+        let root = temp_directory("builder-cmake-targets");
+        std::fs::create_dir_all(root.join("Native/extra")).unwrap();
+        std::fs::write(root.join("CMakeLists.txt"), text).unwrap();
+        let sources = crate::builder::NativeSources {
+            c: ["hiddenapi.c", "syscall.c", "helpers.c", "extra/more.c"]
+                .iter()
+                .map(|name| (name.to_string(), "int x;".to_string()))
+                .collect(),
+            ..crate::builder::NativeSources::default()
+        };
+        let built = crate::builder::native_build_targets(root.to_str().unwrap(), &sources);
+        assert_eq!(built.len(), 2, "{built:?}");
+        assert_eq!(built[0].files, vec!["hiddenapi.c"]);
+        let mut syscall_files = built[1].files.clone();
+        syscall_files.sort();
+        assert_eq!(syscall_files, vec!["extra/more.c", "helpers.c", "syscall.c"]);
+        assert_eq!(built[1].links, vec!["android", "log"]);
+        assert_eq!(
+            crate::builder::needed_system_libraries(&built[1].links),
+            vec!["libc.so", "libm.so", "libdl.so", "libandroid.so", "liblog.so"]
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn bionic_style_declarations_compile_and_imported_addresses_use_the_got() {
+        let source = "typedef unsigned long size_t;\n\
+            struct file_like { char opaque[84]; } __attribute__((__aligned__(sizeof(void*))));\n\
+            int lstat_like(const char* _Nonnull path, void* _Nullable out) __attribute__((__availability__(android, introduced=21)));\n\
+            int stat_like(const char* _Nonnull path, void* _Nullable out) __attribute__((__nomerge__));\n\
+            int call(int which, const char* path) { return (which ? lstat_like : stat_like)(path, 0); }\n";
+        let made = crate::compilers::cpp::compile_c(
+            &[("bionic.c".to_string(), source.to_string())],
+            &[],
+            &["-triple".to_string(), "aarch64-linux-android30".to_string()],
+        )
+        .unwrap_or_else(|why| panic!("{} {:?}", why.message, why.context));
+        use crate::compilers::x86_64::{armv8, codegen};
+        let text = armv8::native::emit_assembly(&codegen::prepared(&made.module))
+            .unwrap_or_else(|why| panic!("{} {:?}", why.message, why.context));
+        assert!(text.contains(":got:lstat_like"), "{text}");
+        assert!(text.contains(":got_lo12:stat_like"), "{text}");
+        armv8::native::assemble(&text).unwrap_or_else(|why| panic!("{} {:?}", why.message, why.context));
+    }
+
+    #[test]
+    fn a_thread_local_on_android_is_reached_through_the_emulation_runtime() {
+        assert!(crate::builder::uses_thread_locals("static __thread int seen;"));
+        assert!(crate::builder::uses_thread_locals("_Thread_local long held;"));
+        assert!(!crate::builder::uses_thread_locals("int my__threads_count;"));
+        let source = "static __thread int counter = 41;\nint next(void) { counter += 1; return counter; }\nint *where(void) { return &counter; }\n";
+        let made = crate::compilers::cpp::compile_c(
+            &[("tls.c".to_string(), source.to_string())],
+            &[],
+            &["-triple".to_string(), "aarch64-linux-android24".to_string()],
+        )
+        .unwrap_or_else(|why| panic!("{} {:?}", why.message, why.context));
+        let module = &made.module;
+        let control = module
+            .globals
+            .iter()
+            .find(|one| one.name == "__emutls_v.counter")
+            .expect("a control object stands for the variable");
+        assert!(!control.thread_local);
+        assert_eq!(control.size, 32);
+        assert_eq!(control.relocations.len(), 1, "the control points at the template");
+        assert!(module.globals.iter().any(|one| one.name == "__emutls_t.counter"));
+        assert!(module
+            .functions
+            .iter()
+            .any(|one| one.name == "__emutls_get_address" && one.is_declaration()));
+        let host = crate::compilers::cpp::compile_c(
+            &[("tls.c".to_string(), source.to_string())],
+            &[],
+            &["-triple".to_string(), "x86_64-linux-gnu".to_string()],
+        );
+        assert!(
+            host.map_or(true, |made| !made.module.globals.iter().any(|one| one.name.starts_with("__emutls_v."))),
+            "emulation is only for Android"
+        );
+        assert!(crate::builder::EMULATED_TLS_SOURCE.contains("void *__emutls_get_address("));
+    }
+
+    #[test]
+    fn the_ndk_header_parts_are_planned_as_ranges_and_read_as_entries() {
+        let root = temp_directory("builder-ndk-plan");
+        let spec = "package=com.tr.ndk;label=App;abis=arm64-v8a;minSdk=30;targetSdk=36;languages=java";
+        crate::scaffold::create(root.to_str().unwrap(), &crate::scaffold::Spec::parse(spec).unwrap())
+            .expect("the project is created");
+        std::fs::create_dir_all(root.join("Native")).unwrap();
+        std::fs::write(root.join("Native/probe.c"), "#include <jni.h>\nint probe(void) { return 1; }\n").unwrap();
+        let plan = crate::maven::plan(root.to_str().unwrap()).expect("the plan is made");
+        let ranged: Vec<&crate::maven::DownloadRequest> =
+            plan.wanted.iter().filter(|one| one.kind == "ndk").collect();
+        assert_eq!(ranged.len(), crate::ndk::SPANS.len());
+        for (one, span) in ranged.iter().zip(crate::ndk::SPANS) {
+            assert_eq!(one.urls, vec![crate::ndk::ARCHIVE_URL.to_string()]);
+            assert_eq!(one.range, Some((span.first, span.first + span.length - 1)));
+            assert!(one.path.ends_with(span.file));
+            assert!(span.first + span.length <= crate::ndk::ARCHIVE_BYTES);
+        }
+        let mut written = crate::json::Writer::new();
+        written.begin_object(None);
+        crate::maven::write_json(&plan, &mut written);
+        written.end_object();
+        let text = written.finish();
+        assert!(text.contains("\"rangeFirst\""), "{text}");
+        assert!(!plan.done);
+        assert!(crate::ndk::headers(root.to_str().unwrap()).expect("no error").is_none());
+
+        let mut zip = crate::archive::Builder::new();
+        zip.add("ndk/include/", Vec::new()).unwrap();
+        zip.add("ndk/include/jni.h", b"#define JNI_VERSION_1_6 0x00010006\n".repeat(20)).unwrap();
+        zip.add("ndk/include/sys/types.h", b"typedef int pid_t;\n".to_vec()).unwrap();
+        let bytes = zip.finish().unwrap();
+        let end = bytes
+            .windows(4)
+            .position(|window| window == [0x50, 0x4b, 0x01, 0x02])
+            .expect("a central directory");
+        let entries = crate::ndk::entries_of_span(&bytes[..end], "ndk/include/").expect("the entries read");
+        let names: Vec<&str> = entries.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names, vec!["jni.h", "sys/types.h"]);
+        assert!(entries[0].1.starts_with(b"#define JNI_VERSION_1_6"));
+        assert!(crate::ndk::entries_of_span(&bytes[..end], "elsewhere/").is_err());
+        let mut damaged = bytes[..end].to_vec();
+        let last = damaged.len() - 3;
+        damaged[last] ^= 0x55;
+        assert!(crate::ndk::entries_of_span(&damaged, "ndk/include/").is_err());
+        std::fs::create_dir_all(root.join("Libraries/Ndk")).unwrap();
+        for span in crate::ndk::SPANS {
+            std::fs::write(crate::ndk::stored_at(root.to_str().unwrap(), span), b"not the part").unwrap();
+        }
+        assert!(crate::ndk::headers(root.to_str().unwrap()).is_err(), "a part that is not the pinned one is refused");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
     #[test]
     fn a_dependency_with_a_repeated_entry_reads_but_a_package_does_not() {
         let mut built = crate::archive::Builder::new();
@@ -42416,6 +42790,42 @@ mod kotlin_real_world {
         assert_eq!(
             String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
             "SOUND:0:1:true, RESET:114:2:false, HINT:0:3:false\n",
+            "{}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+
+    #[test]
+    fn an_empty_collection_argument_takes_its_element_type_from_the_lambda() {
+        let Some((path, library)) = super::kotlin::standard_library() else {
+            eprintln!("kotlin: no kotlin-stdlib to compile against");
+            return;
+        };
+        let Some(java) = super::kotlin::find_java() else {
+            eprintln!("kotlin: no java 25 to run the classes");
+            return;
+        };
+        let kotlin = vec![(
+            "p/A.kt".to_string(),
+            "package p\nclass Node(val name: String, val parent: Node?) { val nameCount: Int get() = name.length }\nfun describe(files: List<Node>): String {\n    val parent = files.mapTo(mutableSetOf()) { it.parent }.singleOrNull()\n    val names = files.mapTo(ArrayList()) { it.name }\n    val byName = files.associateTo(mutableMapOf()) { it.name to it }\n    val count = if (parent != null && parent.nameCount > 0) parent.name else \"none\"\n    return count + \" \" + names.joinToString(\",\") { it.uppercase() } + \" \" + byName.values.first().name.length\n}\nfun main() {\n    val root = Node(\"root\", null)\n    println(describe(listOf(Node(\"a\", root), Node(\"bb\", root))))\n}\n".to_string(),
+        )];
+        let made = super::kotlin::compiled(&kotlin, &[], &library)
+            .unwrap_or_else(|why| panic!("{} {} {:?}", why.code, why.message, why.context));
+        let directory =
+            std::env::temp_dir().join(format!("kotlin-empty-collection-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        super::kotlin::written(&directory, &made);
+        let done = std::process::Command::new(&java)
+            .env_remove("JAVA_TOOL_OPTIONS")
+            .arg("-cp")
+            .arg(format!("{}:{}", directory.display(), path.display()))
+            .arg("p.AKt")
+            .output()
+            .expect("java runs");
+        std::fs::remove_dir_all(&directory).ok();
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout).replace("\r\n", "\n"),
+            "root A,BB 1\n",
             "{}",
             String::from_utf8_lossy(&done.stderr)
         );

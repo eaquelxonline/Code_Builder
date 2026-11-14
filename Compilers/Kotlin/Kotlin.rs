@@ -10859,6 +10859,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
         pub early: bool,
         pub arguments_expected: bool,
         pub free_return: bool,
+        pub open_return: bool,
         pub safe_path: Option<String>,
         pub safe_defs: HashMap<String, Vec<String>>,
         pub suspend_lambda: bool,
@@ -10912,6 +10913,7 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 early: false,
                 arguments_expected: false,
                 free_return: false,
+                open_return: false,
                 safe_path: None,
                 safe_defs: HashMap::new(),
                 suspend_lambda: false,
@@ -17853,7 +17855,30 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                 }
                 let mut mark = self.mark();
                 self.free_return = false;
+                self.open_return = false;
                 let mut value = self.value(&argument.value, None)?;
+                if std::mem::take(&mut self.open_return)
+                    && matches!(argument.value.unparenthesized(), Expr::Call { .. })
+                {
+                    if let Ty::Class { name, arguments, null } = &value.ty {
+                        let opened: Vec<Arg> = arguments
+                            .iter()
+                            .map(|one| {
+                                let held = one.ty();
+                                if held.is(OBJECT) || held.is("kotlin/Any") {
+                                    Arg::Is(Ty::Error)
+                                } else {
+                                    one.clone()
+                                }
+                            })
+                            .collect();
+                        value.ty = Ty::Class {
+                            name: name.clone(),
+                            arguments: opened,
+                            null: *null,
+                        };
+                    }
+                }
                 if std::mem::take(&mut self.free_return)
                     && (matches!(argument.value.unparenthesized(), Expr::Call { .. })
                         || matches!(
@@ -19343,6 +19368,54 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
     }
 
     impl<'c, 'w, 'a> Method<'c, 'w, 'a> {
+        pub fn fill_open_arguments(
+            &self,
+            declared: &[TypeParam],
+            vars: &[String],
+            subst: &mut HashMap<String, Ty>,
+        ) {
+            for parameter in declared {
+                let Some(Ty::Class { name, arguments, null }) = subst.get(&parameter.name).cloned()
+                else {
+                    continue;
+                };
+                if !arguments.iter().any(|one| one.ty().is_error()) {
+                    continue;
+                }
+                let Some(Ty::Class { arguments: bounded, .. }) =
+                    parameter.bounds.first().map(|bound| bound.substitute(subst))
+                else {
+                    continue;
+                };
+                if bounded.len() != arguments.len() {
+                    continue;
+                }
+                let filled: Vec<Arg> = arguments
+                    .iter()
+                    .zip(bounded.iter())
+                    .map(|(had, from_bound)| {
+                        let wanted = from_bound.ty();
+                        if had.ty().is_error()
+                            && !wanted.is_error()
+                            && !wanted.mentions_any_param(vars)
+                        {
+                            Arg::Is(wanted)
+                        } else {
+                            had.clone()
+                        }
+                    })
+                    .collect();
+                subst.insert(
+                    parameter.name.clone(),
+                    Ty::Class {
+                        name,
+                        arguments: filled,
+                        null,
+                    },
+                );
+            }
+        }
+
         pub fn emit_call(
             &mut self,
             candidate: Candidate,
@@ -19434,6 +19507,17 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     }
                 }
             }
+            if expected.is_none()
+                && !matches!(declared_returns, Ty::Param { .. })
+                && vars
+                    .iter()
+                    .any(|var| !subst.contains_key(var) && declared_returns.mentions_param(var))
+                && !plan.filled.iter().any(|slot| {
+                    matches!(slot, ArgumentSlot::Given(at) if matches!(given[*at].value, ArgValue::Deferred(_)))
+                })
+            {
+                self.open_return = true;
+            }
             if info.inline
                 && info.source.is_some()
                 && candidate.invoke_on.is_none()
@@ -19478,6 +19562,13 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     }
                 }
             }
+            let declared_parameters: Vec<TypeParam> = info
+                .type_parameters
+                .iter()
+                .chain(class_params.iter())
+                .cloned()
+                .collect();
+            self.fill_open_arguments(&declared_parameters, &vars, &mut subst);
             for var in &vars {
                 if !subst.contains_key(var) {
                     let bound = info
@@ -22152,6 +22243,18 @@ public final class BlockingContinuation implements kotlin.coroutines.Continuatio
                     vars.contains(&name.to_string())
                         .then(|| Ty::any().nullable())
                 })
+            } else if matches!(&returns, Ty::Class { arguments, .. } if arguments.iter().any(|one| one.ty().is_error())) {
+                let mut known = subst.clone();
+                for made in &made_lambdas {
+                    for (name, ty) in made.learned.borrow().iter() {
+                        known.entry(name.clone()).or_insert_with(|| ty.clone());
+                    }
+                }
+                self.fill_open_arguments(&info.type_parameters, &vars, &mut known);
+                match self.returns_of(&info) {
+                    Ok(declared) => declared.substitute(&known),
+                    Err(_) => returns,
+                }
             } else {
                 returns
             };

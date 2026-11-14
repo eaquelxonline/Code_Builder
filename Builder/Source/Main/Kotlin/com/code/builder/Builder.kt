@@ -18042,6 +18042,9 @@ class BuilderActivity : Activity() {
         val coordinate: String = held.optString("coordinate")
         val kind: String = held.optString("kind")
         val path: String = held.optString("path")
+        val rangeFirst: Long = held.optLong("rangeFirst", -1L)
+        val rangeLast: Long = held.optLong("rangeLast", -1L)
+        val ranged: Boolean get() = rangeFirst >= 0L && rangeLast >= rangeFirst
         val urls: List<String> = buildList {
             held.optJSONArray("urls")?.let { array ->
                 for (index in 0 until array.length()) {
@@ -18075,6 +18078,9 @@ class BuilderActivity : Activity() {
             link.readTimeout = LIBRARY_READ_MILLIS
             link.instanceFollowRedirects = true
             link.setRequestProperty("User-Agent", "code-builder")
+            if (one.ranged) {
+                link.setRequestProperty("Range", "bytes=" + one.rangeFirst + "-" + one.rangeLast)
+            }
             val code = runCatching { link.responseCode }.getOrElse { -1 }
             if (code == HttpURLConnection.HTTP_NOT_FOUND && one.kind == LIBRARY_METADATA) {
                 link.disconnect()
@@ -18082,7 +18088,8 @@ class BuilderActivity : Activity() {
                     return ""
                 }
             }
-            if (code != 200) {
+            val expected = if (one.ranged) HttpURLConnection.HTTP_PARTIAL else HttpURLConnection.HTTP_OK
+            if (code != expected) {
                 last = one.coordinate + "  " + code
                 link.disconnect()
                 continue

@@ -27720,6 +27720,8 @@ pub struct Parser<'session, 'files> {
     variable_array_counter: u32,
     vla_bounds: HashMap<u32, Expression>,
     release_function: Option<ir::FunctionId>,
+    emulated_tls_function: Option<ir::FunctionId>,
+    emulated_tls_controls: BTreeMap<String, ir::GlobalId>,
     fold_notes: HashMap<u32, Vec<Place>>,
     parenthesis_depth: i32,
     bracket_depth: i32,
@@ -27781,6 +27783,8 @@ impl<'session, 'files> Parser<'session, 'files> {
             variable_array_counter: 0,
             vla_bounds: HashMap::new(),
             release_function: None,
+            emulated_tls_function: None,
+            emulated_tls_controls: BTreeMap::new(),
             fold_notes: HashMap::new(),
             parenthesis_depth: 0,
             bracket_depth: 0,
@@ -29867,6 +29871,10 @@ impl<'session, 'files> Parser<'session, 'files> {
                     return;
                 }
                 "_Nonnull" | "_Nullable" | "_Nullable_result" | "_Null_unspecified" => {
+                    if self.compiling {
+                        self.consume();
+                        continue;
+                    }
                     self.unsupported("nullability specifier");
                     return;
                 }
@@ -30242,6 +30250,12 @@ impl<'session, 'files> Parser<'session, 'files> {
                     }
                     self.unsupported("GNU attributes");
                     return;
+                }
+                Some("_Nonnull" | "_Nullable" | "_Nullable_result" | "_Null_unspecified")
+                    if self.compiling =>
+                {
+                    self.consume();
+                    continue;
                 }
                 Some(
                     "_Nonnull" | "_Nullable" | "_Nullable_result" | "_Null_unspecified"
@@ -40267,7 +40281,7 @@ impl<'session, 'files> Parser<'session, 'files> {
                 let harmless_alignment = name == "aligned"
                     && match first_word.as_deref() {
                         None => true,
-                        Some("__alignof__" | "_Alignof" | "alignof") => true,
+                        Some("__alignof__" | "_Alignof" | "alignof" | "sizeof") => true,
                         Some(word) => word.parse::<u64>().is_ok_and(|bytes| bytes <= 16),
                     };
                 if !harmless_alignment && !IGNORABLE_GNU_ATTRIBUTES.contains(&name.as_str()) {
@@ -46126,7 +46140,7 @@ impl<'session, 'files> Parser<'session, 'files> {
             return;
         }
         if data.storage == StorageClass::Static
-            && data.thread == ThreadStorage::None
+            && (data.thread == ThreadStorage::None || self.emulates_thread_locals())
             && !data.invalid
         {
             return;
@@ -47649,8 +47663,85 @@ impl<'session, 'files> Parser<'session, 'files> {
             let function = self.reserve_or_get_function(declaration)?;
             return Ok(state.builder.function_address(function));
         }
+        if self.declarations[declaration].thread != ThreadStorage::None {
+            return self.emulated_thread_local_address(state, declaration);
+        }
         let global = self.reserve_or_get_global(declaration)?;
         Ok(state.builder.global_address(global))
+    }
+
+    fn emulates_thread_locals(&self) -> bool {
+        self.target().triple.is_android()
+    }
+
+    fn emulated_thread_local_address(
+        &mut self,
+        state: &mut LowerState,
+        declaration: usize,
+    ) -> Lowered<ir::Value> {
+        let template = self.reserve_or_get_global(declaration)?;
+        let template_name = self.module.globals[template.index()].name.clone();
+        let control_name = template_name.replacen("__emutls_t.", "__emutls_v.", 1);
+        let control = match self.emulated_tls_controls.get(&control_name) {
+            Some(id) => *id,
+            None => {
+                let information = &self.declarations[declaration];
+                let ty = information.ty.clone();
+                let internal = information.storage == StorageClass::Static;
+                let (size, align) = self.memory_layout(&ty)?;
+                let word = u64::from(self.target().pointer_width / 8);
+                let mut bytes = vec![0u8; (word * 4) as usize];
+                bytes[..word as usize]
+                    .copy_from_slice(&u64::from(size).to_le_bytes()[..word as usize]);
+                bytes[word as usize..(word * 2) as usize]
+                    .copy_from_slice(&u64::from(align).to_le_bytes()[..word as usize]);
+                let id = self.module.add_global(ir::Global {
+                    name: control_name.clone(),
+                    size: (word * 4) as u32,
+                    align: word as u32,
+                    mutable: true,
+                    thread_local: false,
+                    linkage: if internal {
+                        ir::Linkage::Internal
+                    } else {
+                        ir::Linkage::Export
+                    },
+                    content: ir::GlobalContent::Bytes(bytes),
+                    relocations: vec![ir::Relocation {
+                        offset: (word * 3) as u32,
+                        target: ir::Symbol::Global(template),
+                        addend: 0,
+                    }],
+                });
+                self.emulated_tls_controls.insert(control_name, id);
+                id
+            }
+        };
+        if let Some(function) = self.current_function {
+            self.global_users.push((control, function));
+        }
+        let function = match self.emulated_tls_function {
+            Some(id) => id,
+            None => {
+                let id = self.module.add_function(ir::Function::new(
+                    "__emutls_get_address",
+                    ir::Signature {
+                        parameters: vec![ir::Type::POINTER],
+                        result: Some(ir::Type::POINTER),
+                        convention: None,
+                        variadic: false,
+                    },
+                    ir::Linkage::Import,
+                ));
+                self.emulated_tls_function = Some(id);
+                id
+            }
+        };
+        let address = state.builder.global_address(control);
+        state
+            .builder
+            .call(function, Some(ir::Type::POINTER), vec![address])
+            .ok_or_else(|| "a thread-local address that could not be computed".to_string())
     }
 
     fn reserve_or_get_global(&mut self, declaration: usize) -> Lowered<ir::GlobalId> {
@@ -47663,7 +47754,8 @@ impl<'session, 'files> Parser<'session, 'files> {
         {
             return Err("variables that are not locals".to_string());
         }
-        if information.thread != ThreadStorage::None {
+        let emulated = information.thread != ThreadStorage::None;
+        if emulated && !self.emulates_thread_locals() {
             return Err("thread-local variables".to_string());
         }
         if information.invalid {
@@ -47671,7 +47763,18 @@ impl<'session, 'files> Parser<'session, 'files> {
         }
         let mut name =
             String::from_utf8_lossy(information.name.as_deref().unwrap_or(b"")).into_owned();
-        if static_local {
+        if emulated {
+            if static_local {
+                let owner = self
+                    .current_function
+                    .map(|function| self.module.functions[function.index()].name.clone())
+                    .unwrap_or_default();
+                name = format!("{owner}.{name}.{declaration}");
+            }
+            name = format!("__emutls_t.{name}");
+            self.static_local_declarations
+                .insert(name.clone(), declaration);
+        } else if static_local {
             let owner = self
                 .current_function
                 .map(|function| self.module.functions[function.index()].name.clone())
@@ -50481,6 +50584,13 @@ impl<'session, 'files> Parser<'session, 'files> {
 }
 
 const IGNORABLE_GNU_ATTRIBUTES: &[&str] = &[
+    "availability",
+    "nomerge",
+    "trivial_abi",
+    "no_destroy",
+    "abi_tag",
+    "type_visibility",
+    "diagnose_if",
     "alloc_align",
     "alloc_size",
     "no_stack_protector",

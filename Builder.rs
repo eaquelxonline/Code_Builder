@@ -47123,6 +47123,7 @@ pub mod maven {
     pub const MODULE: &str = "module";
     pub const ALIGNED_FAMILIES: &[&str] = &["org.jetbrains.kotlin:kotlin-stdlib"];
     pub const KOTLIN_STANDARD_LIBRARY: &str = "org.jetbrains.kotlin:kotlin-stdlib:2.4.10";
+    pub const KOTLIN_PARCELIZE_RUNTIME: &str = "org.jetbrains.kotlin:kotlin-parcelize-runtime:2.4.10";
     pub const GRADLE_METADATA: &str = "published-with-gradle-metadata";
     pub const JAR: &str = "jar";
     pub const AAR: &str = "aar";
@@ -47293,6 +47294,7 @@ pub mod maven {
         pub kind: String,
         pub urls: Vec<String>,
         pub path: String,
+        pub range: Option<(u64, u64)>,
     }
 
     #[derive(Clone, Debug, Default)]
@@ -48126,6 +48128,18 @@ pub mod maven {
                 });
             }
         }
+        let parcelize_named = roots
+            .iter()
+            .any(|held| held.coordinate.named() == "org.jetbrains.kotlin:kotlin-parcelize-runtime");
+        if writes_kotlin && !parcelize_named && crate::builder::sources_mention(root, "kotlinx.parcelize") {
+            if let Some(found) = Coordinate::parse(KOTLIN_PARCELIZE_RUNTIME) {
+                roots.push(DependencyRequest {
+                    coordinate: found,
+                    strictly: false,
+                    excluded: Vec::new(),
+                });
+            }
+        }
         Ok(Some((roots, unresolved)))
     }
 
@@ -48150,13 +48164,16 @@ pub mod maven {
 
     pub fn plan(root: &str) -> Result<DependencyPlan, Diagnostic> {
         let mut out = DependencyPlan::default();
+        if crate::builder::has_c_sources(root) {
+            out.wanted.extend(crate::ndk::wanted(root));
+        }
         let extra = crate::settings::read_settings(root)
             .ok()
             .flatten()
             .map(|one| one.repositories)
             .unwrap_or_default();
         let Some((roots, unresolved)) = root_dependencies(root)? else {
-            out.done = true;
+            out.done = out.wanted.is_empty();
             return Ok(out);
         };
         out.unresolved = unresolved;
@@ -48170,6 +48187,7 @@ pub mod maven {
                 kind: JAR.to_string(),
                 urls: one.urls_in(JAR, &extra),
                 path: format!("{}/{}", crate::scaffold::LIBRARY_FOLDER, one.stored(JAR)),
+                range: None,
             });
         }
         let resolved = resolve(root, &roots);
@@ -48184,6 +48202,7 @@ pub mod maven {
                 kind: kind.to_string(),
                 urls: one.urls_in(kind, &extra),
                 path: format!("{}/{}/{}", crate::scaffold::LIBRARY_FOLDER, CACHE, file),
+                range: None,
             });
         }
         if !out.wanted.is_empty() {
@@ -48212,6 +48231,7 @@ pub mod maven {
                 kind: kind.to_string(),
                 urls: one.urls_in(kind, &extra),
                 path: format!("{}/{}", crate::scaffold::LIBRARY_FOLDER, one.stored(kind)),
+                range: None,
             });
         }
         out.unresolved.sort();
@@ -48247,6 +48267,10 @@ pub mod maven {
             w.field_str("coordinate", &one.coordinate);
             w.field_str("kind", &one.kind);
             w.field_str("path", &one.path);
+            if let Some((first, last)) = one.range {
+                w.field_u64("rangeFirst", first);
+                w.field_u64("rangeLast", last);
+            }
             w.begin_array(Some("urls"));
             for url in &one.urls {
                 w.element_str(url);
@@ -50115,6 +50139,903 @@ pub mod inflate {
             .with_context(format!("Computed: 0x{computed:08x}")));
         }
         Ok((out, end + 4))
+    }
+}
+
+pub mod ndk {
+    use crate::diag::{Diagnostic, Severity};
+    use crate::FailureClass;
+
+    pub const ARCHIVE_URL: &str = "https://dl.google.com/android/repository/android-ndk-r30-linux.zip";
+    pub const ARCHIVE_BYTES: u64 = 738_633_529;
+    pub const FOLDER: &str = "Ndk";
+
+    pub struct Span {
+        pub file: &'static str,
+        pub first: u64,
+        pub length: u64,
+        pub sha256: &'static str,
+        pub prefix: &'static str,
+        pub mount: &'static str,
+    }
+
+    pub const SPANS: &[Span] = &[
+        Span {
+            file: "r30-sysroot-include.part",
+            first: 76_590_306,
+            length: 5_591_684,
+            sha256: "83564dd4732783597826d24c6413d86d81859b0296e46d3da45a2a32a8619c90",
+            prefix: "android-ndk-r30/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/",
+            mount: "/ndk/sysroot/include",
+        },
+        Span {
+            file: "r30-clang-include.part",
+            first: 638_125_034,
+            length: 1_253_892,
+            sha256: "ef1735f84f3ca6c713412531beb28132e88c8e4ddebb490f6911570253ec7dd6",
+            prefix: "android-ndk-r30/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/21/include/",
+            mount: "/ndk/clang/include",
+        },
+    ];
+
+    fn fail(code: &str, message: &str) -> Diagnostic {
+        Diagnostic::new(
+            code,
+            Severity::Error,
+            FailureClass::UserError,
+            "core.builder",
+            message,
+        )
+    }
+
+    pub fn stored_at(root: &str, span: &Span) -> std::path::PathBuf {
+        std::path::Path::new(root)
+            .join(crate::scaffold::LIBRARY_FOLDER)
+            .join(FOLDER)
+            .join(span.file)
+    }
+
+    pub fn wanted(root: &str) -> Vec<crate::maven::DownloadRequest> {
+        SPANS
+            .iter()
+            .filter(|span| !stored_at(root, span).is_file())
+            .map(|span| crate::maven::DownloadRequest {
+                coordinate: format!("android-ndk-r30:{}", span.file),
+                kind: "ndk".to_string(),
+                urls: vec![ARCHIVE_URL.to_string()],
+                path: format!(
+                    "{}/{}/{}",
+                    crate::scaffold::LIBRARY_FOLDER,
+                    FOLDER,
+                    span.file
+                ),
+                range: Some((span.first, span.first + span.length - 1)),
+            })
+            .collect()
+    }
+
+    pub fn entries_of_span(data: &[u8], prefix: &str) -> Result<Vec<(String, Vec<u8>)>, String> {
+        let mut out = Vec::new();
+        let mut at = 0usize;
+        let small = |from: usize| -> Result<u16, String> {
+            data.get(from..from + 2)
+                .map(|held| u16::from_le_bytes([held[0], held[1]]))
+                .ok_or_else(|| "an entry header is cut short".to_string())
+        };
+        let large = |from: usize| -> Result<u32, String> {
+            data.get(from..from + 4)
+                .map(|held| u32::from_le_bytes([held[0], held[1], held[2], held[3]]))
+                .ok_or_else(|| "an entry header is cut short".to_string())
+        };
+        while at < data.len() {
+            if large(at)? != 0x0403_4b50 {
+                return Err("the span holds something other than archive entries".to_string());
+            }
+            let flags = small(at + 6)?;
+            let method = small(at + 8)?;
+            let crc = large(at + 14)?;
+            let packed = large(at + 18)? as usize;
+            let unpacked = large(at + 22)? as usize;
+            let name_length = usize::from(small(at + 26)?);
+            let extra_length = usize::from(small(at + 28)?);
+            if flags & 0x0009 != 0 {
+                return Err("an entry is encrypted or carries a data descriptor".to_string());
+            }
+            let name_at = at + 30;
+            let name = data
+                .get(name_at..name_at + name_length)
+                .ok_or("an entry name is cut short")?;
+            let name = String::from_utf8_lossy(name).to_string();
+            let body_at = name_at + name_length + extra_length;
+            let body = data
+                .get(body_at..body_at + packed)
+                .ok_or("an entry body is cut short")?;
+            at = body_at + packed;
+            if name.ends_with('/') {
+                continue;
+            }
+            let Some(relative) = name.strip_prefix(prefix) else {
+                return Err(format!("an entry lies outside the expected folder: {name}"));
+            };
+            if relative.split('/').any(|part| part == ".." || part.is_empty()) {
+                return Err(format!("an entry names an unsafe path: {name}"));
+            }
+            let content = match method {
+                0 => body.to_vec(),
+                8 => crate::inflate::raw(body).map_err(|why| why.message.clone())?,
+                _ => return Err(format!("an entry is packed in a way this does not read: {name}")),
+            };
+            if content.len() != unpacked || crate::xz::crc32(&content) != crc {
+                return Err(format!("an entry fails its check: {name}"));
+            }
+            out.push((relative.to_string(), content));
+        }
+        Ok(out)
+    }
+
+    pub fn headers(root: &str) -> Result<Option<Vec<(String, String)>>, Diagnostic> {
+        let mut out = Vec::new();
+        for span in SPANS {
+            let path = stored_at(root, span);
+            if !path.is_file() {
+                return Ok(None);
+            }
+            let refused = |why: String| {
+                fail("EB045", "A dependency could not be read.")
+                    .with_context(format!("Path: {}", path.display()))
+                    .with_context(format!("Reason: {why}"))
+            };
+            let bytes = std::fs::read(&path).map_err(|why| refused(why.to_string()))?;
+            if bytes.len() as u64 != span.length
+                || crate::hash::sha256(&bytes).to_hex() != span.sha256
+            {
+                return Err(refused(
+                    "the downloaded part of the NDK is not the one this build expects".to_string(),
+                ));
+            }
+            for (relative, content) in entries_of_span(&bytes, span.prefix).map_err(refused)? {
+                out.push((
+                    format!("{}/{relative}", span.mount),
+                    String::from_utf8_lossy(&content).to_string(),
+                ));
+            }
+        }
+        Ok(Some(out))
+    }
+
+    pub fn compile_arguments(triple: &str, min_sdk: u32) -> Vec<String> {
+        let api = min_sdk.max(21);
+        [
+            "-triple".to_string(),
+            format!("{triple}{api}"),
+            "-DBIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD".to_string(),
+            "-isystem".to_string(),
+            "/ndk/clang/include".to_string(),
+            "-isystem".to_string(),
+            format!("/ndk/sysroot/include/{triple}"),
+            "-isystem".to_string(),
+            "/ndk/sysroot/include".to_string(),
+        ]
+        .to_vec()
+    }
+}
+
+pub mod xz {
+    pub const MOST_OUTPUT_BYTES: usize = 512 * 1024 * 1024;
+
+    const STREAM_MAGIC: [u8; 6] = [0xfd, b'7', b'z', b'X', b'Z', 0x00];
+    const FOOTER_MAGIC: [u8; 2] = [b'Y', b'Z'];
+    const LZMA2_FILTER: u64 = 0x21;
+
+    pub fn crc32(data: &[u8]) -> u32 {
+        let mut crc = 0xffff_ffffu32;
+        for byte in data {
+            crc ^= u32::from(*byte);
+            for _ in 0..8 {
+                let mask = (crc & 1).wrapping_neg();
+                crc = (crc >> 1) ^ (0xedb8_8320 & mask);
+            }
+        }
+        !crc
+    }
+
+    pub fn crc64(data: &[u8]) -> u64 {
+        let mut table = [0u64; 256];
+        for (at, slot) in table.iter_mut().enumerate() {
+            let mut crc = at as u64;
+            for _ in 0..8 {
+                let mask = (crc & 1).wrapping_neg();
+                crc = (crc >> 1) ^ (0xc96c_5795_d787_0f42 & mask);
+            }
+            *slot = crc;
+        }
+        let mut crc = !0u64;
+        for byte in data {
+            crc = table[((crc ^ u64::from(*byte)) & 0xff) as usize] ^ (crc >> 8);
+        }
+        !crc
+    }
+
+    fn varint(data: &[u8], at: &mut usize) -> Result<u64, String> {
+        let mut value = 0u64;
+        for shift in 0..9 {
+            let byte = *data.get(*at).ok_or("a number runs past the end")?;
+            *at += 1;
+            value |= u64::from(byte & 0x7f) << (shift * 7);
+            if byte & 0x80 == 0 {
+                if shift > 0 && byte == 0 {
+                    return Err("a number is written with a needless trailing byte".to_string());
+                }
+                return Ok(value);
+            }
+        }
+        Err("a number is longer than nine bytes".to_string())
+    }
+
+    pub fn decompress(data: &[u8]) -> Result<Vec<u8>, String> {
+        let mut out = Vec::new();
+        let mut at = 0usize;
+        while at < data.len() {
+            if data[at..].iter().all(|byte| *byte == 0) {
+                break;
+            }
+            at = stream(data, at, &mut out)?;
+        }
+        if out.is_empty() && data.is_empty() {
+            return Err("there is no stream".to_string());
+        }
+        Ok(out)
+    }
+
+    fn stream(data: &[u8], start: usize, out: &mut Vec<u8>) -> Result<usize, String> {
+        let header = data.get(start..start + 12).ok_or("the stream header is cut short")?;
+        if header[..6] != STREAM_MAGIC {
+            return Err("this is not an xz stream".to_string());
+        }
+        if crc32(&header[6..8]) != u32::from_le_bytes([header[8], header[9], header[10], header[11]]) {
+            return Err("the stream header fails its check".to_string());
+        }
+        if header[6] != 0 || header[7] & 0xf0 != 0 {
+            return Err("the stream flags are not ones this reads".to_string());
+        }
+        let check = header[7] & 0x0f;
+        let check_bytes = match check {
+            0x00 => 0usize,
+            0x01 => 4,
+            0x04 => 8,
+            0x0a => 32,
+            _ => return Err("the integrity check is not one this reads".to_string()),
+        };
+        let mut at = start + 12;
+        let mut blocks = 0usize;
+        loop {
+            let first = *data.get(at).ok_or("the stream ends inside a block")?;
+            if first == 0 {
+                break;
+            }
+            let header_bytes = (usize::from(first) + 1) * 4;
+            let header = data
+                .get(at..at + header_bytes)
+                .ok_or("a block header is cut short")?;
+            let stored = u32::from_le_bytes([
+                header[header_bytes - 4],
+                header[header_bytes - 3],
+                header[header_bytes - 2],
+                header[header_bytes - 1],
+            ]);
+            if crc32(&header[..header_bytes - 4]) != stored {
+                return Err("a block header fails its check".to_string());
+            }
+            let flags = header[1];
+            if flags & 0x3c != 0 {
+                return Err("a block header sets flags this does not know".to_string());
+            }
+            let filters = usize::from(flags & 0x03) + 1;
+            let mut inside = 2usize;
+            let compressed_size = if flags & 0x40 != 0 {
+                Some(varint(header, &mut inside)?)
+            } else {
+                None
+            };
+            let uncompressed_size = if flags & 0x80 != 0 {
+                Some(varint(header, &mut inside)?)
+            } else {
+                None
+            };
+            let mut dictionary = 0usize;
+            for at_filter in 0..filters {
+                let id = varint(header, &mut inside)?;
+                let size = varint(header, &mut inside)? as usize;
+                let properties = header
+                    .get(inside..inside + size)
+                    .ok_or("filter properties run past the header")?;
+                inside += size;
+                if at_filter + 1 != filters || id != LZMA2_FILTER {
+                    return Err("the block uses a filter this does not read".to_string());
+                }
+                if properties.len() != 1 || properties[0] > 40 {
+                    return Err("the dictionary size is not one this reads".to_string());
+                }
+                let bits = u32::from(properties[0]);
+                dictionary = if bits == 40 {
+                    u32::MAX as usize
+                } else {
+                    ((2 | (bits & 1)) << (bits / 2 + 11)) as usize
+                };
+            }
+            let _ = dictionary;
+            if header[inside..header_bytes - 4].iter().any(|byte| *byte != 0) {
+                return Err("a block header is padded with something other than zeros".to_string());
+            }
+            at += header_bytes;
+            let began = out.len();
+            let used = lzma2(&data[at..], out)?;
+            if let Some(expected) = compressed_size {
+                if expected as usize != used {
+                    return Err("a block is not the size its header says".to_string());
+                }
+            }
+            if let Some(expected) = uncompressed_size {
+                if expected as usize != out.len() - began {
+                    return Err("a block unpacks to a size other than its header says".to_string());
+                }
+            }
+            at += used;
+            while (at - start) % 4 != 0 {
+                if *data.get(at).ok_or("block padding runs past the end")? != 0 {
+                    return Err("block padding holds something other than zeros".to_string());
+                }
+                at += 1;
+            }
+            let stored = data.get(at..at + check_bytes).ok_or("a block check is cut short")?;
+            let produced = &out[began..];
+            let fits = match check {
+                0x01 => crc32(produced).to_le_bytes().as_slice() == stored,
+                0x04 => crc64(produced).to_le_bytes().as_slice() == stored,
+                0x0a => crate::hash::sha256(produced).as_bytes().as_slice() == stored,
+                _ => true,
+            };
+            if !fits {
+                return Err("a block fails its integrity check".to_string());
+            }
+            at += check_bytes;
+            blocks += 1;
+        }
+        let index_start = at;
+        at += 1;
+        let records = varint(data, &mut at)? as usize;
+        if records != blocks {
+            return Err("the index counts a different number of blocks".to_string());
+        }
+        for _ in 0..records {
+            varint(data, &mut at)?;
+            varint(data, &mut at)?;
+        }
+        while (at - index_start) % 4 != 0 {
+            if *data.get(at).ok_or("index padding runs past the end")? != 0 {
+                return Err("index padding holds something other than zeros".to_string());
+            }
+            at += 1;
+        }
+        let stored = data.get(at..at + 4).ok_or("the index check is cut short")?;
+        if crc32(&data[index_start..at]).to_le_bytes().as_slice() != stored {
+            return Err("the index fails its check".to_string());
+        }
+        at += 4;
+        let footer = data.get(at..at + 12).ok_or("the stream footer is cut short")?;
+        if footer[10..12] != FOOTER_MAGIC || footer[8..10] != [0, check] {
+            return Err("the stream footer does not match its header".to_string());
+        }
+        if crc32(&footer[4..10]) != u32::from_le_bytes([footer[0], footer[1], footer[2], footer[3]]) {
+            return Err("the stream footer fails its check".to_string());
+        }
+        let backward = (u32::from_le_bytes([footer[4], footer[5], footer[6], footer[7]]) as usize + 1) * 4;
+        if backward != at - index_start {
+            return Err("the stream footer points at the wrong index".to_string());
+        }
+        at += 12;
+        while at < data.len() && data[at..].starts_with(&[0, 0, 0, 0]) {
+            at += 4;
+        }
+        Ok(at)
+    }
+
+    const STATES: usize = 12;
+    const POSITION_STATES: usize = 1 << 4;
+    const ALIGN_BITS: u32 = 4;
+    const END_POSITION_SLOT: u32 = 14;
+    const FULL_DISTANCES: usize = 1 << (END_POSITION_SLOT / 2);
+    const PROBABILITY_START: u16 = 1 << 10;
+
+    struct Range<'a> {
+        data: &'a [u8],
+        at: usize,
+        range: u32,
+        code: u32,
+    }
+
+    impl<'a> Range<'a> {
+        fn new(data: &'a [u8]) -> Result<Range<'a>, String> {
+            if data.len() < 5 || data[0] != 0 {
+                return Err("a chunk does not open its range coder properly".to_string());
+            }
+            let code = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
+            Ok(Range {
+                data,
+                at: 5,
+                range: 0xffff_ffff,
+                code,
+            })
+        }
+
+        fn normalize(&mut self) -> Result<(), String> {
+            if self.range < 1 << 24 {
+                let byte = *self.data.get(self.at).ok_or("a chunk ends inside its coded data")?;
+                self.at += 1;
+                self.range <<= 8;
+                self.code = (self.code << 8) | u32::from(byte);
+            }
+            Ok(())
+        }
+
+        fn bit(&mut self, probability: &mut u16) -> Result<u32, String> {
+            let bound = (self.range >> 11) * u32::from(*probability);
+            let bit = if self.code < bound {
+                self.range = bound;
+                *probability += ((1 << 11) - *probability) >> 5;
+                0
+            } else {
+                self.range -= bound;
+                self.code -= bound;
+                *probability -= *probability >> 5;
+                1
+            };
+            self.normalize()?;
+            Ok(bit)
+        }
+
+        fn tree(&mut self, probabilities: &mut [u16], bits: u32) -> Result<u32, String> {
+            let mut at = 1usize;
+            for _ in 0..bits {
+                at = (at << 1) | self.bit(&mut probabilities[at])? as usize;
+            }
+            Ok(at as u32 - (1 << bits))
+        }
+
+        fn reverse_tree(&mut self, probabilities: &mut [u16], bits: u32) -> Result<u32, String> {
+            let mut at = 1usize;
+            let mut value = 0u32;
+            for shift in 0..bits {
+                let bit = self.bit(&mut probabilities[at])?;
+                at = (at << 1) | bit as usize;
+                value |= bit << shift;
+            }
+            Ok(value)
+        }
+
+        fn direct(&mut self, bits: u32) -> Result<u32, String> {
+            let mut value = 0u32;
+            for _ in 0..bits {
+                self.range >>= 1;
+                let taken = if self.code >= self.range {
+                    self.code -= self.range;
+                    1
+                } else {
+                    0
+                };
+                value = (value << 1) | taken;
+                self.normalize()?;
+            }
+            Ok(value)
+        }
+    }
+
+    struct Lengths {
+        choice: u16,
+        choice2: u16,
+        low: Vec<[u16; 8]>,
+        mid: Vec<[u16; 8]>,
+        high: [u16; 256],
+    }
+
+    impl Lengths {
+        fn new() -> Lengths {
+            Lengths {
+                choice: PROBABILITY_START,
+                choice2: PROBABILITY_START,
+                low: vec![[PROBABILITY_START; 8]; POSITION_STATES],
+                mid: vec![[PROBABILITY_START; 8]; POSITION_STATES],
+                high: [PROBABILITY_START; 256],
+            }
+        }
+
+        fn decode(&mut self, range: &mut Range, position_state: usize) -> Result<usize, String> {
+            if range.bit(&mut self.choice)? == 0 {
+                return Ok(range.tree(&mut self.low[position_state], 3)? as usize + 2);
+            }
+            if range.bit(&mut self.choice2)? == 0 {
+                return Ok(range.tree(&mut self.mid[position_state], 3)? as usize + 10);
+            }
+            Ok(range.tree(&mut self.high, 8)? as usize + 18)
+        }
+    }
+
+    struct Lzma {
+        literal_context: u32,
+        literal_position: u32,
+        position_bits: u32,
+        literals: Vec<u16>,
+        is_match: Vec<u16>,
+        is_rep: [u16; STATES],
+        is_rep0: [u16; STATES],
+        is_rep1: [u16; STATES],
+        is_rep2: [u16; STATES],
+        is_rep0_long: Vec<u16>,
+        slots: Vec<[u16; 64]>,
+        special: Vec<u16>,
+        align: [u16; 16],
+        lengths: Lengths,
+        rep_lengths: Lengths,
+        state: usize,
+        reps: [usize; 4],
+    }
+
+    impl Lzma {
+        fn new(properties: u8) -> Result<Lzma, String> {
+            if properties >= 9 * 5 * 5 {
+                return Err("the coder properties are out of range".to_string());
+            }
+            let literal_context = u32::from(properties % 9);
+            let rest = properties / 9;
+            let literal_position = u32::from(rest % 5);
+            let position_bits = u32::from(rest / 5);
+            if literal_context + literal_position > 4 {
+                return Err("the literal context is wider than LZMA2 allows".to_string());
+            }
+            Ok(Lzma {
+                literal_context,
+                literal_position,
+                position_bits,
+                literals: vec![PROBABILITY_START; 0x300 << (literal_context + literal_position)],
+                is_match: vec![PROBABILITY_START; STATES * POSITION_STATES],
+                is_rep: [PROBABILITY_START; STATES],
+                is_rep0: [PROBABILITY_START; STATES],
+                is_rep1: [PROBABILITY_START; STATES],
+                is_rep2: [PROBABILITY_START; STATES],
+                is_rep0_long: vec![PROBABILITY_START; STATES * POSITION_STATES],
+                slots: vec![[PROBABILITY_START; 64]; 4],
+                special: vec![PROBABILITY_START; FULL_DISTANCES - END_POSITION_SLOT as usize + 1],
+                align: [PROBABILITY_START; 16],
+                lengths: Lengths::new(),
+                rep_lengths: Lengths::new(),
+                state: 0,
+                reps: [0; 4],
+            })
+        }
+
+        fn decode(
+            &mut self,
+            data: &[u8],
+            out: &mut Vec<u8>,
+            window_start: usize,
+            unpacked: usize,
+        ) -> Result<usize, String> {
+            let mut range = Range::new(data)?;
+            let goal = out.len() + unpacked;
+            let position_mask = (1usize << self.position_bits) - 1;
+            while out.len() < goal {
+                let position = out.len() - window_start;
+                let position_state = position & position_mask;
+                let at = (self.state << 4) + position_state;
+                if range.bit(&mut self.is_match[at])? == 0 {
+                    let previous = if position > 0 { out[out.len() - 1] } else { 0 };
+                    let base = 0x300
+                        * (((position & ((1 << self.literal_position) - 1)) << self.literal_context)
+                            + (usize::from(previous) >> (8 - self.literal_context)));
+                    let probabilities = &mut self.literals[base..base + 0x300];
+                    let mut symbol = 1usize;
+                    if self.state >= 7 {
+                        let distance = self.reps[0] + 1;
+                        if distance > position {
+                            return Err("a match reaches before the start of the window".to_string());
+                        }
+                        let mut matched = usize::from(out[out.len() - distance]);
+                        while symbol < 0x100 {
+                            let match_bit = (matched >> 7) & 1;
+                            matched <<= 1;
+                            let bit = range.bit(&mut probabilities[((1 + match_bit) << 8) + symbol])? as usize;
+                            symbol = (symbol << 1) | bit;
+                            if match_bit != bit {
+                                break;
+                            }
+                        }
+                    }
+                    while symbol < 0x100 {
+                        symbol = (symbol << 1) | range.bit(&mut probabilities[symbol])? as usize;
+                    }
+                    out.push((symbol - 0x100) as u8);
+                    self.state = if self.state < 4 {
+                        0
+                    } else if self.state < 10 {
+                        self.state - 3
+                    } else {
+                        self.state - 6
+                    };
+                    continue;
+                }
+                let length;
+                if range.bit(&mut self.is_rep[self.state])? != 0 {
+                    if position == 0 {
+                        return Err("a repeated match comes before any data".to_string());
+                    }
+                    if range.bit(&mut self.is_rep0[self.state])? == 0 {
+                        if range.bit(&mut self.is_rep0_long[at])? == 0 {
+                            self.state = if self.state < 7 { 9 } else { 11 };
+                            let distance = self.reps[0] + 1;
+                            let byte = out[out.len() - distance];
+                            out.push(byte);
+                            continue;
+                        }
+                    } else {
+                        let distance;
+                        if range.bit(&mut self.is_rep1[self.state])? == 0 {
+                            distance = self.reps[1];
+                        } else {
+                            if range.bit(&mut self.is_rep2[self.state])? == 0 {
+                                distance = self.reps[2];
+                            } else {
+                                distance = self.reps[3];
+                                self.reps[3] = self.reps[2];
+                            }
+                            self.reps[2] = self.reps[1];
+                        }
+                        self.reps[1] = self.reps[0];
+                        self.reps[0] = distance;
+                    }
+                    length = self.rep_lengths.decode(&mut range, position_state)?;
+                    self.state = if self.state < 7 { 8 } else { 11 };
+                } else {
+                    self.reps[3] = self.reps[2];
+                    self.reps[2] = self.reps[1];
+                    self.reps[1] = self.reps[0];
+                    length = self.lengths.decode(&mut range, position_state)?;
+                    self.state = if self.state < 7 { 7 } else { 10 };
+                    let length_state = (length - 2).min(3);
+                    let slot = range.tree(&mut self.slots[length_state], 6)?;
+                    let distance = if slot < 4 {
+                        slot as usize
+                    } else {
+                        let direct_bits = (slot >> 1) - 1;
+                        let mut distance = ((2 | (slot & 1)) << direct_bits) as usize;
+                        if slot < END_POSITION_SLOT {
+                            let base = distance - slot as usize;
+                            distance += range.reverse_tree(&mut self.special[base..], direct_bits)? as usize;
+                        } else {
+                            distance += (range.direct(direct_bits - ALIGN_BITS)? as usize) << ALIGN_BITS;
+                            distance += range.reverse_tree(&mut self.align, ALIGN_BITS)? as usize;
+                        }
+                        distance
+                    };
+                    if distance == u32::MAX as usize {
+                        return Err("an end marker sits inside an LZMA2 chunk".to_string());
+                    }
+                    self.reps[0] = distance;
+                }
+                let distance = self.reps[0] + 1;
+                if distance > out.len() - window_start {
+                    return Err("a match reaches before the start of the window".to_string());
+                }
+                if out.len() + length > goal {
+                    return Err("a match runs past the end of its chunk".to_string());
+                }
+                for _ in 0..length {
+                    let byte = out[out.len() - distance];
+                    out.push(byte);
+                }
+                if out.len() > MOST_OUTPUT_BYTES {
+                    return Err("the data unpacks to more than this accepts".to_string());
+                }
+            }
+            Ok(range.at)
+        }
+    }
+
+    fn lzma2(data: &[u8], out: &mut Vec<u8>) -> Result<usize, String> {
+        let mut at = 0usize;
+        let mut coder: Option<Lzma> = None;
+        let mut window_start = out.len();
+        let mut needs_dictionary_reset = true;
+        loop {
+            let control = *data.get(at).ok_or("an LZMA2 stream ends without its end mark")?;
+            at += 1;
+            if control == 0 {
+                return Ok(at);
+            }
+            if control == 1 || control == 2 {
+                if control == 1 {
+                    window_start = out.len();
+                    needs_dictionary_reset = false;
+                } else if needs_dictionary_reset {
+                    return Err("an LZMA2 stream does not reset its dictionary first".to_string());
+                }
+                let size = data.get(at..at + 2).ok_or("a stored chunk is cut short")?;
+                let size = usize::from(u16::from_be_bytes([size[0], size[1]])) + 1;
+                at += 2;
+                let body = data.get(at..at + size).ok_or("a stored chunk is cut short")?;
+                out.extend_from_slice(body);
+                at += size;
+                continue;
+            }
+            if control < 0x80 {
+                return Err("an LZMA2 chunk starts with a control byte this does not know".to_string());
+            }
+            let sizes = data.get(at..at + 4).ok_or("an LZMA2 chunk header is cut short")?;
+            let unpacked = ((usize::from(control & 0x1f) << 16)
+                | usize::from(u16::from_be_bytes([sizes[0], sizes[1]])))
+                + 1;
+            let packed = usize::from(u16::from_be_bytes([sizes[2], sizes[3]])) + 1;
+            at += 4;
+            let reset = (control >> 5) & 0x03;
+            if reset == 3 {
+                window_start = out.len();
+                needs_dictionary_reset = false;
+            } else if needs_dictionary_reset {
+                return Err("an LZMA2 stream does not reset its dictionary first".to_string());
+            }
+            if reset >= 2 {
+                let properties = *data.get(at).ok_or("an LZMA2 chunk header is cut short")?;
+                at += 1;
+                coder = Some(Lzma::new(properties)?);
+            } else if reset == 1 {
+                let properties = match &coder {
+                    Some(held) => {
+                        ((held.position_bits * 5 + held.literal_position) * 9 + held.literal_context) as u8
+                    }
+                    None => return Err("an LZMA2 chunk resets state before naming its properties".to_string()),
+                };
+                coder = Some(Lzma::new(properties)?);
+            }
+            let Some(held) = coder.as_mut() else {
+                return Err("an LZMA2 chunk comes before its properties".to_string());
+            };
+            let body = data.get(at..at + packed).ok_or("an LZMA2 chunk is cut short")?;
+            let used = held.decode(body, out, window_start, unpacked)?;
+            if used > packed {
+                return Err("an LZMA2 chunk reads past its packed size".to_string());
+            }
+            at += packed;
+        }
+    }
+}
+
+pub mod unix_archive {
+    pub fn ar_members(data: &[u8]) -> Result<Vec<(String, &[u8])>, String> {
+        if !data.starts_with(b"!<arch>\n") {
+            return Err("this is not an ar archive".to_string());
+        }
+        let mut out = Vec::new();
+        let mut at = 8usize;
+        while at + 60 <= data.len() {
+            let header = &data[at..at + 60];
+            if &header[58..60] != b"`\n" {
+                return Err("an ar member header is damaged".to_string());
+            }
+            let name = String::from_utf8_lossy(&header[..16])
+                .trim_end()
+                .trim_end_matches('/')
+                .to_string();
+            let size: usize = String::from_utf8_lossy(&header[48..58])
+                .trim()
+                .parse()
+                .map_err(|_| "an ar member size is not a number".to_string())?;
+            at += 60;
+            let body = data.get(at..at + size).ok_or("an ar member is cut short")?;
+            out.push((name, body));
+            at += size + (size & 1);
+        }
+        Ok(out)
+    }
+
+    pub struct TarEntry {
+        pub path: String,
+        pub kind: u8,
+        pub link: String,
+        pub data: Vec<u8>,
+    }
+
+    fn field(bytes: &[u8]) -> String {
+        let end = bytes.iter().position(|byte| *byte == 0).unwrap_or(bytes.len());
+        String::from_utf8_lossy(&bytes[..end]).to_string()
+    }
+
+    fn octal(bytes: &[u8]) -> Result<usize, String> {
+        if bytes.first().is_some_and(|byte| byte & 0x80 != 0) {
+            let mut value = 0usize;
+            for byte in &bytes[1..] {
+                value = value.checked_mul(256).ok_or("a tar size overflows")? + usize::from(*byte);
+            }
+            return Ok(value);
+        }
+        let text = field(bytes);
+        let text = text.trim();
+        if text.is_empty() {
+            return Ok(0);
+        }
+        usize::from_str_radix(text, 8).map_err(|_| "a tar number is not octal".to_string())
+    }
+
+    pub fn tar_entries(data: &[u8]) -> Result<Vec<TarEntry>, String> {
+        let mut out = Vec::new();
+        let mut at = 0usize;
+        let mut long_name: Option<String> = None;
+        let mut long_link: Option<String> = None;
+        let mut pax_path: Option<String> = None;
+        let mut pax_link: Option<String> = None;
+        while at + 512 <= data.len() {
+            let header = &data[at..at + 512];
+            if header.iter().all(|byte| *byte == 0) {
+                break;
+            }
+            let stored: usize = octal(&header[148..156])?;
+            let summed: usize = header
+                .iter()
+                .enumerate()
+                .map(|(spot, byte)| if (148..156).contains(&spot) { 32 } else { usize::from(*byte) })
+                .sum();
+            if stored != summed {
+                return Err("a tar header fails its checksum".to_string());
+            }
+            let size = octal(&header[124..136])?;
+            let kind = header[156];
+            at += 512;
+            let body = data.get(at..at + size).ok_or("a tar entry is cut short")?;
+            at += size.div_ceil(512) * 512;
+            match kind {
+                b'L' => {
+                    long_name = Some(field(body));
+                    continue;
+                }
+                b'K' => {
+                    long_link = Some(field(body));
+                    continue;
+                }
+                b'x' => {
+                    let text = String::from_utf8_lossy(body).to_string();
+                    for line in text.lines() {
+                        let Some((_, record)) = line.split_once(' ') else {
+                            continue;
+                        };
+                        if let Some(value) = record.strip_prefix("path=") {
+                            pax_path = Some(value.to_string());
+                        } else if let Some(value) = record.strip_prefix("linkpath=") {
+                            pax_link = Some(value.to_string());
+                        }
+                    }
+                    continue;
+                }
+                b'g' => continue,
+                _ => {}
+            }
+            let mut path = field(&header[..100]);
+            if &header[257..262] == b"ustar" {
+                let prefix = field(&header[345..500]);
+                if !prefix.is_empty() {
+                    path = format!("{prefix}/{path}");
+                }
+            }
+            let path = pax_path.take().or(long_name.take()).unwrap_or(path);
+            let link = pax_link
+                .take()
+                .or(long_link.take())
+                .unwrap_or_else(|| field(&header[157..257]));
+            out.push(TarEntry {
+                path,
+                kind,
+                link,
+                data: body.to_vec(),
+            });
+        }
+        Ok(out)
     }
 }
 
@@ -61203,11 +62124,445 @@ pub mod builder {
 
     pub const NATIVE_FOLDER: &str = "Native";
 
-    #[derive(Default)]
+    #[derive(Default, Clone)]
     pub struct NativeSources {
         pub c: Vec<(String, String)>,
         pub assembly: Vec<(String, String)>,
         pub headers: Vec<(String, String)>,
+        pub system: Vec<(String, String)>,
+        pub min_sdk: u32,
+    }
+
+    #[derive(Clone, Debug, Default, PartialEq, Eq)]
+    pub struct CmakeTarget {
+        pub name: String,
+        pub shared: bool,
+        pub files: Vec<String>,
+        pub links: Vec<String>,
+    }
+
+    pub const EMULATED_TLS_SOURCE: &str = "#include <pthread.h>\n\
+#include <stdint.h>\n\
+#include <stdlib.h>\n\
+#include <string.h>\n\
+struct code_builder_emutls_control {\n\
+    size_t size;\n\
+    size_t align;\n\
+    uintptr_t index;\n\
+    void *templ;\n\
+};\n\
+struct code_builder_emutls_slots {\n\
+    uintptr_t count;\n\
+    void **objects;\n\
+};\n\
+static pthread_mutex_t code_builder_emutls_lock = PTHREAD_MUTEX_INITIALIZER;\n\
+static pthread_key_t code_builder_emutls_key;\n\
+static int code_builder_emutls_ready;\n\
+static uintptr_t code_builder_emutls_issued;\n\
+static void code_builder_emutls_release(void *held) {\n\
+    struct code_builder_emutls_slots *slots = (struct code_builder_emutls_slots *)held;\n\
+    uintptr_t at;\n\
+    for (at = 0; at < slots->count; ++at) {\n\
+        free(slots->objects[at]);\n\
+    }\n\
+    free(slots->objects);\n\
+    free(slots);\n\
+}\n\
+void *__emutls_get_address(struct code_builder_emutls_control *control) {\n\
+    uintptr_t index;\n\
+    struct code_builder_emutls_slots *slots;\n\
+    void *object;\n\
+    pthread_mutex_lock(&code_builder_emutls_lock);\n\
+    if (!code_builder_emutls_ready) {\n\
+        pthread_key_create(&code_builder_emutls_key, code_builder_emutls_release);\n\
+        code_builder_emutls_ready = 1;\n\
+    }\n\
+    if (control->index == 0) {\n\
+        code_builder_emutls_issued += 1;\n\
+        control->index = code_builder_emutls_issued;\n\
+    }\n\
+    index = control->index;\n\
+    pthread_mutex_unlock(&code_builder_emutls_lock);\n\
+    slots = (struct code_builder_emutls_slots *)pthread_getspecific(code_builder_emutls_key);\n\
+    if (slots == NULL) {\n\
+        slots = (struct code_builder_emutls_slots *)calloc(1, sizeof(struct code_builder_emutls_slots));\n\
+        if (slots == NULL) {\n\
+            abort();\n\
+        }\n\
+        pthread_setspecific(code_builder_emutls_key, slots);\n\
+    }\n\
+    if (slots->count < index) {\n\
+        uintptr_t wanted = index + 8;\n\
+        void **grown = (void **)realloc(slots->objects, wanted * sizeof(void *));\n\
+        if (grown == NULL) {\n\
+            abort();\n\
+        }\n\
+        memset(grown + slots->count, 0, (wanted - slots->count) * sizeof(void *));\n\
+        slots->objects = grown;\n\
+        slots->count = wanted;\n\
+    }\n\
+    object = slots->objects[index - 1];\n\
+    if (object == NULL) {\n\
+        size_t align = control->align < sizeof(void *) ? sizeof(void *) : control->align;\n\
+        if (posix_memalign(&object, align, control->size == 0 ? 1 : control->size) != 0) {\n\
+            abort();\n\
+        }\n\
+        if (control->templ != NULL) {\n\
+            memcpy(object, control->templ, control->size);\n\
+        } else {\n\
+            memset(object, 0, control->size);\n\
+        }\n\
+        slots->objects[index - 1] = object;\n\
+    }\n\
+    return object;\n\
+}\n";
+
+    pub fn uses_thread_locals(text: &str) -> bool {
+        ["__thread", "_Thread_local", "thread_local"]
+            .iter()
+            .any(|word| {
+                text.match_indices(word).any(|(at, _)| {
+                    let before = text[..at].chars().last();
+                    let after = text[at + word.len()..].chars().next();
+                    before.is_none_or(|one| !(one.is_alphanumeric() || one == '_'))
+                        && after.is_none_or(|one| !(one.is_alphanumeric() || one == '_'))
+                })
+            })
+    }
+
+    pub fn cmake_targets(text: &str) -> Vec<CmakeTarget> {
+        let mut plain = String::with_capacity(text.len());
+        for line in text.lines() {
+            let mut quoted = false;
+            for letter in line.chars() {
+                if letter == '"' {
+                    quoted = !quoted;
+                }
+                if letter == '#' && !quoted {
+                    break;
+                }
+                plain.push(letter);
+            }
+            plain.push('\n');
+        }
+        let mut commands: Vec<(String, Vec<String>)> = Vec::new();
+        let held: Vec<char> = plain.chars().collect();
+        let mut at = 0usize;
+        while at < held.len() {
+            if !(held[at].is_alphabetic() || held[at] == '_') {
+                at += 1;
+                continue;
+            }
+            let start = at;
+            while at < held.len() && (held[at].is_alphanumeric() || held[at] == '_') {
+                at += 1;
+            }
+            let name: String = held[start..at].iter().collect::<String>().to_ascii_lowercase();
+            let mut look = at;
+            while look < held.len() && held[look].is_whitespace() {
+                look += 1;
+            }
+            if look >= held.len() || held[look] != '(' {
+                continue;
+            }
+            let mut depth = 0usize;
+            let mut end = look;
+            while end < held.len() {
+                match held[end] {
+                    '(' => depth += 1,
+                    ')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                end += 1;
+            }
+            let inside: String = held[look + 1..end.min(held.len())].iter().collect();
+            let mut arguments = Vec::new();
+            let mut current = String::new();
+            let mut quoted = false;
+            for letter in inside.chars() {
+                match letter {
+                    '"' => quoted = !quoted,
+                    one if one.is_whitespace() && !quoted => {
+                        if !current.is_empty() {
+                            arguments.push(std::mem::take(&mut current));
+                        }
+                    }
+                    one => current.push(one),
+                }
+            }
+            if !current.is_empty() {
+                arguments.push(current);
+            }
+            commands.push((name, arguments));
+            at = end + 1;
+        }
+        let mut variables: std::collections::BTreeMap<String, Vec<String>> =
+            std::collections::BTreeMap::new();
+        let expand = |word: &str, variables: &std::collections::BTreeMap<String, Vec<String>>| -> Vec<String> {
+            let mut text = word.to_string();
+            for _ in 0..8 {
+                let Some(open) = text.find("${") else {
+                    break;
+                };
+                let Some(close) = text[open..].find('}') else {
+                    break;
+                };
+                let key = text[open + 2..open + close].to_string();
+                let value = match key.as_str() {
+                    "CMAKE_CURRENT_SOURCE_DIR" | "CMAKE_SOURCE_DIR" | "PROJECT_SOURCE_DIR"
+                    | "CMAKE_CURRENT_LIST_DIR" => ".".to_string(),
+                    _ => variables.get(&key).map(|held| held.join(";")).unwrap_or_default(),
+                };
+                text.replace_range(open..open + close + 1, &value);
+            }
+            text.split(';')
+                .map(|one| one.trim().trim_start_matches("./").to_string())
+                .filter(|one| !one.is_empty())
+                .collect()
+        };
+        let mut targets: Vec<CmakeTarget> = Vec::new();
+        for (name, arguments) in &commands {
+            match name.as_str() {
+                "set" if !arguments.is_empty() => {
+                    let values: Vec<String> = arguments[1..]
+                        .iter()
+                        .filter(|one| !matches!(one.as_str(), "CACHE" | "PARENT_SCOPE" | "FORCE"))
+                        .flat_map(|one| expand(one, &variables))
+                        .collect();
+                    variables.insert(arguments[0].clone(), values);
+                }
+                "list" if arguments.len() >= 2 && arguments[0] == "APPEND" => {
+                    let values: Vec<String> = arguments[2..]
+                        .iter()
+                        .flat_map(|one| expand(one, &variables))
+                        .collect();
+                    variables.entry(arguments[1].clone()).or_default().extend(values);
+                }
+                "find_library" if arguments.len() >= 2 => {
+                    let wanted = arguments[1..]
+                        .iter()
+                        .find(|one| !matches!(one.as_str(), "NAMES" | "REQUIRED"))
+                        .cloned()
+                        .unwrap_or_default();
+                    variables.insert(arguments[0].clone(), vec![wanted]);
+                }
+                "file" if arguments.len() >= 3
+                    && (arguments[0] == "GLOB" || arguments[0] == "GLOB_RECURSE") =>
+                {
+                    let patterns: Vec<String> = arguments[2..]
+                        .iter()
+                        .filter(|one| !matches!(one.as_str(), "CONFIGURE_DEPENDS" | "LIST_DIRECTORIES" | "true" | "false"))
+                        .flat_map(|one| expand(one, &variables))
+                        .map(|one| format!("glob:{one}"))
+                        .collect();
+                    variables.insert(arguments[1].clone(), patterns);
+                }
+                "add_library" if !arguments.is_empty() => {
+                    let mut rest: Vec<String> = arguments[1..].to_vec();
+                    let mut shared = true;
+                    if let Some(first) = rest.first() {
+                        match first.as_str() {
+                            "STATIC" | "OBJECT" => {
+                                shared = false;
+                                rest.remove(0);
+                            }
+                            "SHARED" | "MODULE" => {
+                                rest.remove(0);
+                            }
+                            "INTERFACE" | "IMPORTED" | "ALIAS" => continue,
+                            _ => {}
+                        }
+                    }
+                    let files = rest
+                        .iter()
+                        .filter(|one| one.as_str() != "EXCLUDE_FROM_ALL")
+                        .flat_map(|one| expand(one, &variables))
+                        .collect();
+                    targets.push(CmakeTarget {
+                        name: arguments[0].clone(),
+                        shared,
+                        files,
+                        links: Vec::new(),
+                    });
+                }
+                "target_sources" if arguments.len() >= 2 => {
+                    let files: Vec<String> = arguments[1..]
+                        .iter()
+                        .filter(|one| !matches!(one.as_str(), "PRIVATE" | "PUBLIC" | "INTERFACE"))
+                        .flat_map(|one| expand(one, &variables))
+                        .collect();
+                    if let Some(target) = targets.iter_mut().find(|one| one.name == arguments[0]) {
+                        target.files.extend(files);
+                    }
+                }
+                "target_link_libraries" if arguments.len() >= 2 => {
+                    let links: Vec<String> = arguments[1..]
+                        .iter()
+                        .filter(|one| !matches!(one.as_str(), "PRIVATE" | "PUBLIC" | "INTERFACE"))
+                        .flat_map(|one| expand(one, &variables))
+                        .map(|one| one.trim_start_matches("-l").to_string())
+                        .collect();
+                    if let Some(target) = targets.iter_mut().find(|one| one.name == arguments[0]) {
+                        for link in links {
+                            if !target.links.contains(&link) {
+                                target.links.push(link);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        targets
+    }
+
+    fn cmake_file_matches(written: &str, source: &str, prefixes: &[String]) -> bool {
+        if let Some(pattern) = written.strip_prefix("glob:") {
+            let leaf = pattern.rsplit('/').next().unwrap_or(pattern);
+            let folder = pattern[..pattern.len() - leaf.len()].trim_end_matches('/');
+            let source_leaf = source.rsplit('/').next().unwrap_or(source);
+            let (head, tail) = leaf.split_once('*').unwrap_or((leaf, ""));
+            let leaf_fits = source_leaf.starts_with(head)
+                && source_leaf.ends_with(tail)
+                && source_leaf.len() >= head.len() + tail.len();
+            let source_folder = source[..source.len() - source_leaf.len()].trim_end_matches('/');
+            let folder_fits = if prefixes.is_empty() {
+                folder == source_folder
+                    || (!source_folder.is_empty() && folder.ends_with(&format!("/{source_folder}")))
+            } else {
+                prefixes.iter().any(|prefix| {
+                    let joined = match (prefix.is_empty(), source_folder.is_empty()) {
+                        (true, _) => source_folder.to_string(),
+                        (false, true) => prefix.clone(),
+                        (false, false) => format!("{prefix}/{source_folder}"),
+                    };
+                    joined == folder
+                })
+            };
+            return leaf_fits && folder_fits;
+        }
+        written == source || written.ends_with(&format!("/{source}"))
+    }
+
+    fn native_cmake_file(root: &str) -> Option<String> {
+        let here = std::path::Path::new(root);
+        let declared = crate::settings::read_settings(root)
+            .ok()
+            .flatten()
+            .map(|held| held.native.path)
+            .unwrap_or_default();
+        let mut candidates = vec![here.join(NATIVE_FOLDER).join("CMakeLists.txt")];
+        if !declared.is_empty() {
+            candidates.push(here.join(&declared));
+            if let Ok(entries) = std::fs::read_dir(here) {
+                let mut folders: Vec<std::path::PathBuf> = entries
+                    .flatten()
+                    .map(|entry| entry.path())
+                    .filter(|path| path.is_dir())
+                    .collect();
+                folders.sort();
+                for folder in folders {
+                    candidates.push(folder.join(&declared));
+                }
+            }
+        }
+        candidates.push(here.join("CMakeLists.txt"));
+        candidates
+            .into_iter()
+            .find(|path| path.is_file())
+            .and_then(|path| std::fs::read_to_string(path).ok())
+    }
+
+    pub fn native_build_targets(root: &str, sources: &NativeSources) -> Vec<CmakeTarget> {
+        let mut out = Vec::new();
+        if let Some(text) = native_cmake_file(root) {
+            let declared = cmake_targets(&text);
+            let names: Vec<String> = sources
+                .c
+                .iter()
+                .chain(sources.assembly.iter())
+                .map(|(name, _)| name.clone())
+                .collect();
+            let mut prefixes: Vec<String> = Vec::new();
+            for written in declared.iter().flat_map(|one| one.files.iter()) {
+                if written.starts_with("glob:") {
+                    continue;
+                }
+                for name in &names {
+                    if cmake_file_matches(written, name, &[]) {
+                        let prefix = written[..written.len() - name.len()]
+                            .trim_end_matches('/')
+                            .to_string();
+                        if !prefixes.contains(&prefix) {
+                            prefixes.push(prefix);
+                        }
+                    }
+                }
+            }
+            let take = |target: &CmakeTarget| -> Vec<String> {
+                names
+                    .iter()
+                    .filter(|name| {
+                        target
+                            .files
+                            .iter()
+                            .any(|written| cmake_file_matches(written, name, &prefixes))
+                    })
+                    .cloned()
+                    .collect()
+            };
+            for target in declared.iter().filter(|one| one.shared) {
+                let mut files = take(target);
+                let mut links = Vec::new();
+                let mut waiting = target.links.clone();
+                let mut seen: Vec<String> = Vec::new();
+                while let Some(link) = waiting.pop() {
+                    if seen.contains(&link) {
+                        continue;
+                    }
+                    seen.push(link.clone());
+                    match declared.iter().find(|one| one.name == link) {
+                        Some(inner) if !inner.shared => {
+                            for file in take(inner) {
+                                if !files.contains(&file) {
+                                    files.push(file);
+                                }
+                            }
+                            waiting.extend(inner.links.iter().cloned());
+                        }
+                        Some(_) => links.push(format!("lib{link}.so")),
+                        None => links.push(link),
+                    }
+                }
+                if !files.is_empty() {
+                    out.push(CmakeTarget {
+                        name: target.name.clone(),
+                        shared: true,
+                        files,
+                        links,
+                    });
+                }
+            }
+        }
+        if out.is_empty() {
+            out.push(CmakeTarget {
+                name: native_library_name(root),
+                shared: true,
+                files: sources
+                    .c
+                    .iter()
+                    .chain(sources.assembly.iter())
+                    .map(|(name, _)| name.clone())
+                    .collect(),
+                links: Vec::new(),
+            });
+        }
+        out
     }
 
     impl NativeSources {
@@ -61227,6 +62582,29 @@ pub mod builder {
             .with_context(format!("Stage: {stage}"))
             .with_context(format!("Target: {triple}"))
             .with_context(format!("Detail: {what}"))
+    }
+
+    pub fn sources_mention(root: &str, needle: &str) -> bool {
+        let mut paths = Vec::new();
+        for folder in [crate::scaffold::KOTLIN_FOLDER, crate::scaffold::JAVA_FOLDER] {
+            let base = std::path::Path::new(root).join(folder);
+            gather_by_suffix(&base, ".kt", &mut paths);
+            gather_by_suffix(&base, ".java", &mut paths);
+        }
+        paths.sort();
+        paths
+            .iter()
+            .any(|path| std::fs::read_to_string(path).is_ok_and(|text| text.contains(needle)))
+    }
+
+    pub fn has_c_sources(root: &str) -> bool {
+        let mut paths = Vec::new();
+        gather_by_suffix(
+            &std::path::Path::new(root).join(NATIVE_FOLDER),
+            ".c",
+            &mut paths,
+        );
+        !paths.is_empty()
     }
 
     pub fn native_sources(root: &str) -> Result<NativeSources, Diagnostic> {
@@ -61261,6 +62639,14 @@ pub mod builder {
                     _ => out.headers.push((named, text)),
                 }
             }
+        }
+        if !out.c.is_empty() {
+            if let Some(found) = crate::ndk::headers(root)? {
+                out.system = found;
+            }
+            out.min_sdk = crate::settings::read_settings(root)?
+                .map(|held| held.min_sdk)
+                .unwrap_or(24);
         }
         Ok(out)
     }
@@ -61366,11 +62752,21 @@ pub mod builder {
         use crate::compilers::x86_64::{armv8, codegen};
         let mut objects = Vec::new();
         if !sources.c.is_empty() {
-            let compiled = crate::compilers::cpp::compile_c(
-                &sources.c,
-                &sources.headers,
-                &["-triple".to_string(), triple.to_string()],
-            )
+            let mut units = sources.c.clone();
+            let mut headers = sources.headers.clone();
+            let arguments = if sources.system.is_empty() {
+                vec!["-triple".to_string(), triple.to_string()]
+            } else {
+                headers.extend(sources.system.iter().cloned());
+                if units.iter().any(|(_, text)| uses_thread_locals(text)) {
+                    units.push((
+                        "code_builder_emulated_tls.c".to_string(),
+                        EMULATED_TLS_SOURCE.to_string(),
+                    ));
+                }
+                crate::ndk::compile_arguments(triple, sources.min_sdk)
+            };
+            let compiled = crate::compilers::cpp::compile_c(&units, &headers, &arguments)
             .map_err(|why| {
                 native_refusal(
                     "EB068",
@@ -61428,12 +62824,94 @@ pub mod builder {
         Ok(objects)
     }
 
+    fn stub_shared_library(triple: &str, file: &str) -> Result<Vec<u8>, Diagnostic> {
+        use crate::compilers::x86_64::{armv8, codegen};
+        let empty = if triple.starts_with("aarch64") {
+            armv8::native::assemble("")
+        } else {
+            codegen::assemble("")
+        }
+        .map_err(|why| {
+            native_refusal(
+                "EB069",
+                "The native objects did not link into a shared library.",
+                "link",
+                triple,
+                &format!("{} {:?}", why.message, why.context),
+            )
+        })?;
+        let arguments: Vec<String> = ["-shared", "--soname", file, "-o", file, "stub.o"]
+            .iter()
+            .map(|one| one.to_string())
+            .collect();
+        let reader = |path: &str| (path == "stub.o").then(|| empty.clone());
+        let outcome = crate::compilers::linker::link(&arguments, &reader);
+        outcome
+            .outputs
+            .into_iter()
+            .find(|(name, _)| name == file)
+            .map(|(_, bytes)| bytes)
+            .ok_or_else(|| {
+                native_refusal(
+                    "EB069",
+                    "The link wrote no shared library.",
+                    "link",
+                    triple,
+                    file,
+                )
+            })
+    }
+
+    pub fn needed_system_libraries(links: &[String]) -> Vec<String> {
+        let mut out: Vec<String> = ["libc.so", "libm.so", "libdl.so"]
+            .iter()
+            .map(|one| one.to_string())
+            .collect();
+        for link in links {
+            let name = link.rsplit('/').next().unwrap_or(link);
+            let file = if name.starts_with("lib") && name.ends_with(".so") {
+                name.to_string()
+            } else if name.chars().all(|one| one.is_alphanumeric() || one == '_' || one == '-' || one == '+') && !name.is_empty() {
+                format!("lib{name}.so")
+            } else {
+                continue;
+            };
+            if !out.contains(&file) {
+                out.push(file);
+            }
+        }
+        out
+    }
+
     pub fn native_shared_object(
         sources: &NativeSources,
         triple: &str,
         file: &str,
     ) -> Result<Vec<u8>, Diagnostic> {
-        let objects = compiled_native_objects(sources, triple)?;
+        native_shared_object_needing(sources, triple, file, &[])
+    }
+
+    pub fn native_shared_object_needing(
+        sources: &NativeSources,
+        triple: &str,
+        file: &str,
+        links: &[String],
+    ) -> Result<Vec<u8>, Diagnostic> {
+        let mut objects = compiled_native_objects(sources, triple)?;
+        let needed = if sources.system.is_empty() {
+            Vec::new()
+        } else {
+            needed_system_libraries(links)
+        };
+        let mut stubs = Vec::new();
+        for name in &needed {
+            if name == file {
+                continue;
+            }
+            let stub_name = format!("stub/{name}");
+            objects.push((stub_name.clone(), stub_shared_library(triple, name)?));
+            stubs.push(stub_name);
+        }
         let mut arguments: Vec<String> = [
             "-shared",
             "-Bsymbolic",
@@ -61447,7 +62925,13 @@ pub mod builder {
         .iter()
         .map(|argument| argument.to_string())
         .collect();
-        arguments.extend(objects.iter().map(|(name, _)| name.clone()));
+        arguments.extend(
+            objects
+                .iter()
+                .map(|(name, _)| name.clone())
+                .filter(|name| !stubs.contains(name)),
+        );
+        arguments.extend(stubs.iter().cloned());
         let reader = |path: &str| {
             objects
                 .iter()
@@ -61515,11 +62999,23 @@ pub mod builder {
             )));
         }
         let mut out = Vec::new();
-        for (abi, triple) in targets {
-            out.push((
-                format!("lib/{abi}/{file}"),
-                native_shared_object(&sources, triple, &file)?,
-            ));
+        let built = native_build_targets(root, &sources);
+        let single = built.len() == 1;
+        for target in &built {
+            let file = if single && target.links.is_empty() && native_cmake_file(root).is_none() {
+                file.clone()
+            } else {
+                format!("lib{}.so", target.name)
+            };
+            let mut part = sources.clone();
+            part.c.retain(|(name, _)| target.files.contains(name));
+            part.assembly.retain(|(name, _)| target.files.contains(name));
+            for (abi, triple) in &targets {
+                out.push((
+                    format!("lib/{abi}/{file}"),
+                    native_shared_object_needing(&part, triple, &file, &target.links)?,
+                ));
+            }
         }
         Ok(out)
     }
